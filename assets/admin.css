@@ -1,0 +1,213 @@
+/**
+ * Integrity Admin Styles
+ */
+
+.integrity-admin .integrity-section {
+    background: #fff;
+    padding: 20px;
+    margin: 20px 0;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.integrity-admin .integrity-section h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+/* New API Key Display */
+.integrity-new-key {
+    display: block;
+    padding: 15px;
+    background: #f0f6fc;
+    border: 1px solid #c3c4c7;
+    font-size: 16px;
+    margin: 10px 0;
+    word-break: break-all;
+    user-select: all;
+}
+
+/* Status Badges */
+.integrity-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.integrity-status.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.integrity-status.revoked,
+.integrity-status.expired {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Permission Badges */
+.integrity-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    margin: 1px;
+    background: #e2e4e7;
+    border-radius: 3px;
+    font-size: 11px;
+}
+
+.integrity-badge.full {
+    background: #ffc107;
+    color: #856404;
+}
+
+/* Revoked Row Style */
+.integrity-revoked {
+    opacity: 0.6;
+}
+
+/* Stats Grid */
+.integrity-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.integrity-stat-box {
+    background: #fff;
+    padding: 20px;
+    text-align: center;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+}
+
+.integrity-stat-box h3 {
+    margin: 0 0 5px 0;
+    font-size: 28px;
+    color: #1d2327;
+}
+
+.integrity-stat-box p {
+    margin: 0;
+    color: #646970;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.integrity-stat-box.success h3 {
+    color: #00a32a;
+}
+
+.integrity-stat-box.warning h3 {
+    color: #dba617;
+}
+
+.integrity-stat-box.danger h3 {
+    color: #d63638;
+}
+
+/* Filters */
+.integrity-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end;
+}
+
+.integrity-filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.integrity-filters input[type="text"],
+.integrity-filters input[type="date"],
+.integrity-filters select {
+    min-width: 150px;
+}
+
+/* Status Code Colors */
+.integrity-status-code {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-weight: 600;
+}
+
+.integrity-status-code.status-2xx {
+    background: #d4edda;
+    color: #155724;
+}
+
+.integrity-status-code.status-3xx {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.integrity-status-code.status-4xx {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.integrity-status-code.status-5xx {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Documentation */
+.integrity-docs pre {
+    background: #23282d;
+    color: #fff;
+    padding: 15px;
+    overflow-x: auto;
+    border-radius: 4px;
+}
+
+.integrity-docs code {
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.integrity-docs pre code {
+    background: transparent;
+    padding: 0;
+}
+
+/* Table Improvements */
+.integrity-admin .wp-list-table code {
+    background: #f0f0f1;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+/* Form Table */
+.integrity-admin .form-table th {
+    width: 200px;
+}
+
+/* Responsive */
+@media screen and (max-width: 782px) {
+    .integrity-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .integrity-filters {
+        flex-direction: column;
+    }
+    
+    .integrity-filters label {
+        width: 100%;
+    }
+    
+    .integrity-filters input,
+    .integrity-filters select {
+        width: 100%;
+    }
+}
