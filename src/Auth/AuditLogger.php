@@ -297,4 +297,45 @@ class AuditLogger
             'period_days' => $days,
         ];
     }
+
+    /**
+     * Clear audit logs
+     * 
+     * @param int|null $olderThanDays Only clear logs older than this many days (null = all logs)
+     * @param int|null $apiKeyId Only clear logs for a specific API key (null = all keys)
+     * @return int Number of rows deleted
+     */
+    public static function clearLogs(?int $olderThanDays = null, ?int $apiKeyId = null): int
+    {
+        global $wpdb;
+        $tableName = $wpdb->prefix . 'integrity_audit_log';
+
+        $where = [];
+        $values = [];
+
+        if ($olderThanDays !== null) {
+            $where[] = 'created_at < DATE_SUB(NOW(), INTERVAL %d DAY)';
+            $values[] = $olderThanDays;
+        }
+
+        if ($apiKeyId !== null) {
+            $where[] = 'api_key_id = %d';
+            $values[] = $apiKeyId;
+        }
+
+        if (empty($where)) {
+            // Clear all logs
+            $wpdb->query("TRUNCATE TABLE {$tableName}");
+            return $wpdb->rows_affected ?? 0;
+        }
+
+        $sql = "DELETE FROM {$tableName} WHERE " . implode(' AND ', $where);
+        
+        if (!empty($values)) {
+            $sql = $wpdb->prepare($sql, ...$values);
+        }
+
+        $wpdb->query($sql);
+        return $wpdb->rows_affected ?? 0;
+    }
 }

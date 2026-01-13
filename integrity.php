@@ -6,15 +6,14 @@ declare(strict_types=1);
  * Plugin Name: Integrity
  * Plugin URI: https://example.com/integrity
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: The Bleeding Deacons
  * Author URI: thebleedingdeacons@gmail.com
- * License: GPL v2 or later
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: integrity
+ * License: MIT (Modified)
  */
+
 
 // Prevent direct access
 if (!defined('ABSPATH')) {

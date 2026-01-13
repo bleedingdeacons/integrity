@@ -28,6 +28,7 @@ class SettingsPage
         add_action('admin_post_integrity_create_key', [self::class, 'handleCreateKey']);
         add_action('admin_post_integrity_revoke_key', [self::class, 'handleRevokeKey']);
         add_action('admin_post_integrity_delete_key', [self::class, 'handleDeleteKey']);
+        add_action('admin_post_integrity_clear_logs', [self::class, 'handleClearLogs']);
         add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
     }
 
@@ -263,6 +264,34 @@ class SettingsPage
         } else {
             wp_redirect(add_query_arg('error', 'delete_failed', admin_url('admin.php?page=' . self::MENU_SLUG)));
         }
+        exit;
+    }
+
+    /**
+     * Handle clearing audit logs
+     */
+    public static function handleClearLogs(): void
+    {
+        if (!current_user_can(self::CAPABILITY)) {
+            wp_die(__('You do not have permission to perform this action.', 'integrity'));
+        }
+
+        check_admin_referer(self::NONCE_ACTION);
+
+        $olderThanDays = isset($_POST['older_than_days']) && $_POST['older_than_days'] !== '' 
+            ? (int) $_POST['older_than_days'] 
+            : null;
+        
+        $apiKeyId = isset($_POST['api_key_id']) && $_POST['api_key_id'] !== '' 
+            ? (int) $_POST['api_key_id'] 
+            : null;
+
+        $deleted = AuditLogger::clearLogs($olderThanDays, $apiKeyId);
+
+        wp_redirect(add_query_arg(
+            ['logs_cleared' => $deleted],
+            admin_url('admin.php?page=' . self::MENU_SLUG . '-audit')
+        ));
         exit;
     }
 

@@ -206,11 +206,13 @@ class RestController
             );
         }
 
-        // Check rate limits
-        $rateLimitResult = RateLimiter::checkLimit($keyData['id'], $keyData['rate_limit']);
+        // Check rate limits (cast to int as database returns strings)
+        $apiKeyId = (int) $keyData['id'];
+        $rateLimit = (int) $keyData['rate_limit'];
+        $rateLimitResult = RateLimiter::checkLimit($apiKeyId, $rateLimit);
         
         if (!$rateLimitResult['allowed']) {
-            self::logFailedRequest($request, 429, $startTime, $keyData['id']);
+            self::logFailedRequest($request, 429, $startTime, $apiKeyId);
             
             $response = new WP_Error(
                 'rate_limit_exceeded',
@@ -219,9 +221,9 @@ class RestController
             );
             
             // Add rate limit headers
-            add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $keyData) {
+            add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $rateLimit) {
                 if ($result instanceof WP_REST_Response) {
-                    foreach (RateLimiter::getHeaders($keyData['rate_limit'], $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
+                    foreach (RateLimiter::getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
                         $result->header($header, $value);
                     }
                 }
@@ -232,14 +234,14 @@ class RestController
         }
 
         // Increment rate limit counter
-        RateLimiter::incrementCount($keyData['id']);
+        RateLimiter::incrementCount($apiKeyId);
 
         // Check endpoint-specific permissions
         $endpoint = $request->get_route();
         $requiredPermission = self::getRequiredPermission($endpoint);
         
         if ($requiredPermission && !in_array($requiredPermission, $keyData['permissions'], true) && !in_array('*', $keyData['permissions'], true)) {
-            self::logFailedRequest($request, 403, $startTime, $keyData['id']);
+            self::logFailedRequest($request, 403, $startTime, $apiKeyId);
             return new WP_Error(
                 'insufficient_permissions',
                 "This API key does not have permission to access: {$requiredPermission}",
@@ -247,15 +249,16 @@ class RestController
             );
         }
 
-        // Store key data for use in callbacks
+        // Store key data for use in callbacks (cast id to int for type safety)
+        $keyData['api_key_id'] = $apiKeyId;
         $request->set_param('_integrity_key_data', $keyData);
         $request->set_param('_integrity_start_time', $startTime);
         $request->set_param('_integrity_rate_limit', $rateLimitResult);
 
         // Add rate limit headers to successful responses
-        add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $keyData) {
+        add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $rateLimit) {
             if ($result instanceof WP_REST_Response) {
-                foreach (RateLimiter::getHeaders($keyData['rate_limit'], $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
+                foreach (RateLimiter::getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
                     $result->header($header, $value);
                 }
             }
@@ -357,7 +360,7 @@ class RestController
             
             // Log successful request
             AuditLogger::log(
-                $keyData['id'],
+                $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
                 ['per_page' => $args['posts_per_page'], 'page' => $args['paged']],
@@ -377,7 +380,7 @@ class RestController
             
         } catch (\Exception $e) {
             AuditLogger::log(
-                $keyData['id'],
+                $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
                 null,
@@ -412,7 +415,7 @@ class RestController
             
             if (!$group || !$group->isValid()) {
                 AuditLogger::log(
-                    $keyData['id'],
+                    $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
                     ['id' => $id],
@@ -430,7 +433,7 @@ class RestController
             }
             
             AuditLogger::log(
-                $keyData['id'],
+                $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
                 ['id' => $id],
@@ -445,7 +448,7 @@ class RestController
             
         } catch (\Exception $e) {
             AuditLogger::log(
-                $keyData['id'],
+                $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
                 ['id' => $id],
@@ -516,7 +519,7 @@ class RestController
             $data = array_map([self::class, 'transformMeeting'], $meetings);
             
             AuditLogger::log(
-                $keyData['id'],
+                $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
                 ['per_page' => $perPage, 'page' => $page],
@@ -537,7 +540,7 @@ class RestController
             
         } catch (\Exception $e) {
             AuditLogger::log(
-                $keyData['id'],
+                $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
                 null,
@@ -572,7 +575,7 @@ class RestController
             
             if (!$meeting) {
                 AuditLogger::log(
-                    $keyData['id'],
+                    $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
                     ['id' => $id],
@@ -590,7 +593,7 @@ class RestController
             }
             
             AuditLogger::log(
-                $keyData['id'],
+                $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
                 ['id' => $id],
@@ -605,7 +608,7 @@ class RestController
             
         } catch (\Exception $e) {
             AuditLogger::log(
-                $keyData['id'],
+                $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
                 ['id' => $id],
