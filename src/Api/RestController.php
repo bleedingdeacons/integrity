@@ -657,16 +657,7 @@ class RestController
             'district_id' => $group->getDistrictId(),
             'last_contact' => $group->getLastContact(),
             'meeting_ids' => $group->getMeetingIds(),
-            'contacts' => array_map(function ($contact) {
-                if ($contact instanceof \Unity\Meetings\Contact) {
-                    return [
-                        'name' => $contact->getName(),
-                        'email' => $contact->getEmail(),
-                        'phone' => $contact->getPhone(),
-                    ];
-                }
-                return $contact;
-            }, $group->getContacts()),
+            'contacts' => array_map([self::class, 'transformContact'], $group->getContacts()),
             'contribution_options' => [
                 'venmo' => $group->getVenmo(),
                 'paypal' => $group->getPaypal(),
@@ -696,17 +687,40 @@ class RestController
             'is_online' => $meeting->isOnline(),
             'online_link' => $meeting->getOnlineLink(),
             'online_notes' => $meeting->getOnlineNotes(),
-            'contacts' => array_map(function ($contact) {
-                if ($contact instanceof \Unity\Meetings\Contact) {
-                    return [
-                        'name' => $contact->getName(),
-                        'email' => $contact->getEmail(),
-                        'phone' => $contact->getPhone(),
-                    ];
-                }
-                return $contact;
-            }, $meeting->getContacts()),
+            'contacts' => array_map([self::class, 'transformContact'], $meeting->getContacts()),
             'meta' => $meeting->getMeta(),
+        ];
+    }
+
+    /**
+     * Transform a Contact object to API response format
+     * 
+     * @param \Unity\Contact\Interfaces\ContactInterface|array $contact
+     * @return array
+     */
+    private static function transformContact($contact): array
+    {
+        if ($contact instanceof \Unity\Contact\Interfaces\ContactInterface) {
+            return [
+                'name' => $contact->getName(),
+                'email' => $contact->getEmail(),
+                'phone' => $contact->getPhone(),
+            ];
+        }
+        
+        // Handle legacy array format for backwards compatibility
+        if (is_array($contact)) {
+            return [
+                'name' => $contact['name'] ?? '',
+                'email' => $contact['email'] ?? '',
+                'phone' => $contact['phone'] ?? '',
+            ];
+        }
+        
+        return [
+            'name' => '',
+            'email' => '',
+            'phone' => '',
         ];
     }
 }
