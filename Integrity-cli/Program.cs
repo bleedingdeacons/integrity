@@ -7,9 +7,9 @@ using var client = new IntegrityClient(
     "int_4b933f9dcfef5c90b59be21c8c603c6ae94f1817367d51297c54a075e416a51a"
 );
 
-//var status = await client.CheckHealthAsync();
+var status = await client.CheckHealthAsync();
 
-//Console.WriteLine(status.UnityAvailable);
+Console.WriteLine(status.UnityAvailable);
 
 //var groups = await client.GetGroupsAsync();
 

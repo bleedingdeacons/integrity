@@ -365,7 +365,7 @@ public sealed class Meeting
     public int Id { get; init; }
     public string Name { get; init; } = string.Empty;
     public string Slug { get; init; } = string.Empty;
-    public string Location { get; init; } = string.Empty;
+    public Location? Location { get; init; }
     public string Url { get; init; } = string.Empty;
     public int Day { get; init; }
     public string DayOfWeek { get; init; } = string.Empty;
@@ -378,6 +378,27 @@ public sealed class Meeting
     public string OnlineNotes { get; init; } = string.Empty;
     public List<Contact> Contacts { get; init; } = [];
     public Dictionary<string, object>? Meta { get; init; }
+}
+
+/// <summary>
+/// Represents a location in the Unity system.
+/// </summary>
+public sealed class Location
+{
+    public int Id { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string Address { get; init; } = string.Empty;
+    public string City { get; init; } = string.Empty;
+    public string State { get; init; } = string.Empty;
+    public string PostalCode { get; init; } = string.Empty;
+    public string Country { get; init; } = string.Empty;
+    public string Region { get; init; } = string.Empty;
+    public string Notes { get; init; } = string.Empty;
+    public string Link { get; init; } = string.Empty;
+    public double? Latitude { get; init; }
+    public double? Longitude { get; init; }
+    public string Timezone { get; init; } = string.Empty;
+    public string FormattedAddress { get; init; } = string.Empty;
 }
 
 /// <summary>

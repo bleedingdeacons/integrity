@@ -646,6 +646,8 @@ class RestController
      */
     private static function transformGroup(\Unity\Groups\Interfaces\GroupInterface $group): array
     {
+        $contacts = $group->getContacts();
+        
         return [
             'id' => $group->getId(),
             'title' => $group->getTitle(),
@@ -657,7 +659,7 @@ class RestController
             'district_id' => $group->getDistrictId(),
             'last_contact' => $group->getLastContact(),
             'meeting_ids' => $group->getMeetingIds(),
-            'contacts' => array_map([self::class, 'transformContact'], $group->getContacts()),
+            'contacts' => !empty($contacts) ? array_map([self::class, 'transformContact'], $contacts) : [],
             'contribution_options' => [
                 'venmo' => $group->getVenmo(),
                 'paypal' => $group->getPaypal(),
@@ -672,11 +674,14 @@ class RestController
      */
     private static function transformMeeting(\Unity\Meetings\Interfaces\MeetingInterface $meeting): array
     {
+        $contacts = $meeting->getContacts();
+        $location = $meeting->getLocation();
+        
         return [
             'id' => $meeting->getId(),
             'name' => $meeting->getName(),
             'slug' => $meeting->getSlug(),
-            'location' => $meeting->getLocation(),
+            'location' => $location !== null ? self::transformLocation($location) : null,
             'url' => $meeting->getUrl(),
             'day' => $meeting->getDay(),
             'day_of_week' => $meeting->getDayOfWeek(),
@@ -687,8 +692,34 @@ class RestController
             'is_online' => $meeting->isOnline(),
             'online_link' => $meeting->getOnlineLink(),
             'online_notes' => $meeting->getOnlineNotes(),
-            'contacts' => array_map([self::class, 'transformContact'], $meeting->getContacts()),
+            'contacts' => !empty($contacts) ? array_map([self::class, 'transformContact'], $contacts) : [],
             'meta' => $meeting->getMeta(),
+        ];
+    }
+
+    /**
+     * Transform a Location object to API response format
+     * 
+     * @param \Unity\Locations\Interfaces\LocationInterface $location
+     * @return array
+     */
+    private static function transformLocation(\Unity\Locations\Interfaces\LocationInterface $location): array
+    {
+        return [
+            'id' => $location->getId(),
+            'name' => $location->getName(),
+            'address' => $location->getAddress(),
+            'city' => $location->getCity(),
+            'state' => $location->getState(),
+            'postal_code' => $location->getPostalCode(),
+            'country' => $location->getCountry(),
+            'region' => $location->getRegion(),
+            'notes' => $location->getNotes(),
+            'link' => $location->getLink(),
+            'latitude' => $location->getLatitude(),
+            'longitude' => $location->getLongitude(),
+            'timezone' => $location->getTimezone(),
+            'formatted_address' => $location->getFormattedAddress(),
         ];
     }
 
