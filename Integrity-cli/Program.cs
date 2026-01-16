@@ -11,9 +11,14 @@ var status = await client.CheckHealthAsync();
 
 Console.WriteLine(status.UnityAvailable);
 
-//var groups = await client.GetGroupsAsync();
+var groups = await client.GetGroupsAsync();
 
-//Console.WriteLine(groups.StatusCode);
+Console.WriteLine(groups.StatusCode);
+
+foreach (var group in groups.Data)
+{
+    Console.WriteLine(group.Title);
+}
 
 var onlineMeetings = await client.GetMeetingsAsync(day: null, online: true);
 
