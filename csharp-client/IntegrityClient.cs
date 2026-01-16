@@ -53,11 +53,18 @@ public sealed class IntegrityClient : IDisposable
     /// <summary>
     /// Gets all groups with optional filtering.
     /// </summary>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="perPage">Results per page (default: 100, max: 500)</param>
+    /// <param name="search">Search term to filter groups</param>
+    /// <param name="districtId">Filter by district ID</param>
+    /// <param name="expandMeetings">When true, includes full meeting data instead of just IDs</param>
+    /// <param name="cancellationToken">Cancellation token</param>
     public async Task<ApiResponse<List<Group>>> GetGroupsAsync(
         int page = 1,
         int perPage = 100,
         string? search = null,
         int? districtId = null,
+        bool expandMeetings = false,
         CancellationToken cancellationToken = default)
     {
         var queryParams = new List<string>
@@ -68,9 +75,12 @@ public sealed class IntegrityClient : IDisposable
 
         if (!string.IsNullOrEmpty(search))
             queryParams.Add($"search={Uri.EscapeDataString(search)}");
-        
+
         if (districtId.HasValue)
             queryParams.Add($"district_id={districtId.Value}");
+
+        if (expandMeetings)
+            queryParams.Add("expand=meetings");
 
         var url = $"{_baseUrl}/wp-json/integrity/v1/groups?{string.Join("&", queryParams)}";
         return await GetAsync<List<Group>>(url, cancellationToken);
@@ -79,9 +89,19 @@ public sealed class IntegrityClient : IDisposable
     /// <summary>
     /// Gets a single group by ID.
     /// </summary>
-    public async Task<ApiResponse<Group>> GetGroupAsync(int id, CancellationToken cancellationToken = default)
+    /// <param name="id">Group ID</param>
+    /// <param name="expandMeetings">When true, includes full meeting data instead of just IDs</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<Group>> GetGroupAsync(
+        int id,
+        bool expandMeetings = false,
+        CancellationToken cancellationToken = default)
     {
         var url = $"{_baseUrl}/wp-json/integrity/v1/groups/{id}";
+
+        if (expandMeetings)
+            url += "?expand=meetings";
+
         return await GetAsync<Group>(url, cancellationToken);
     }
 
@@ -109,13 +129,13 @@ public sealed class IntegrityClient : IDisposable
 
         if (day.HasValue)
             queryParams.Add($"day={day.Value}");
-        
+
         if (online.HasValue)
             queryParams.Add($"online={online.Value.ToString().ToLowerInvariant()}");
-        
+
         if (groupId.HasValue)
             queryParams.Add($"group_id={groupId.Value}");
-        
+
         if (!string.IsNullOrEmpty(search))
             queryParams.Add($"search={Uri.EscapeDataString(search)}");
 
@@ -142,7 +162,7 @@ public sealed class IntegrityClient : IDisposable
     public async Task<HealthResponse?> CheckHealthAsync(CancellationToken cancellationToken = default)
     {
         var url = $"{_baseUrl}/wp-json/integrity/v1/health";
-        
+
         try
         {
             return await _httpClient.GetFromJsonAsync<HealthResponse>(url, _jsonOptions, cancellationToken);
@@ -178,10 +198,10 @@ public sealed class IntegrityClient : IDisposable
                 return new ApiResponse<T>
                 {
                     Success = false,
-                    Error = errorResponse?.Error ?? new ApiError 
-                    { 
-                        Code = "unknown_error", 
-                        Message = $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}" 
+                    Error = errorResponse?.Error ?? new ApiError
+                    {
+                        Code = "unknown_error",
+                        Message = $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}"
                     },
                     StatusCode = (int)response.StatusCode,
                     RateLimit = rateLimit
@@ -189,7 +209,7 @@ public sealed class IntegrityClient : IDisposable
             }
 
             var apiResponse = JsonSerializer.Deserialize<ApiDataResponse<T>>(content, _jsonOptions);
-            
+
             return new ApiResponse<T>
             {
                 Success = apiResponse?.Success ?? false,
@@ -319,7 +339,7 @@ public sealed class RateLimitInfo
     public int Limit { get; init; }
     public int Remaining { get; init; }
     public long Reset { get; init; }
-    
+
     public DateTime ResetDateTime => DateTimeOffset.FromUnixTimeSeconds(Reset).LocalDateTime;
 }
 
@@ -352,9 +372,27 @@ public sealed class Group
     public string Notes { get; init; } = string.Empty;
     public int? DistrictId { get; init; }
     public string? LastContact { get; init; }
+
+    /// <summary>
+    /// Meeting IDs associated with this group (when expand=meetings is not used).
+    /// This will be populated when the API returns meeting_ids.
+    /// </summary>
     public List<int> MeetingIds { get; init; } = [];
+
+    /// <summary>
+    /// Full meeting objects associated with this group (when expand=meetings is used).
+    /// This will be populated when the API returns meetings.
+    /// </summary>
+    public List<Meeting> Meetings { get; init; } = [];
+
     public List<Contact> Contacts { get; init; } = [];
     public ContributionOptions? ContributionOptions { get; init; }
+
+    /// <summary>
+    /// Gets whether this group has expanded meeting data.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasExpandedMeetings => Meetings.Count > 0;
 }
 
 /// <summary>

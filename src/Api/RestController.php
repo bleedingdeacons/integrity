@@ -13,13 +13,13 @@ use WP_Error;
 
 /**
  * REST API Controller
- * 
+ *
  * Handles all REST API routes with authentication, rate limiting, and audit logging.
  */
 class RestController
 {
     private const NAMESPACE = 'integrity/v1';
-    
+
     /**
      * Register REST API routes
      */
@@ -32,7 +32,7 @@ class RestController
             'permission_callback' => [self::class, 'checkPermission'],
             'args' => self::getGroupsArgs(),
         ]);
-        
+
         register_rest_route(self::NAMESPACE, '/groups/(?P<id>\d+)', [
             'methods' => 'GET',
             'callback' => [self::class, 'getGroup'],
@@ -44,6 +44,15 @@ class RestController
                         return is_numeric($param) && $param > 0;
                     },
                 ],
+                'expand' => [
+                    'default' => '',
+                    'validate_callback' => function ($param) {
+                        $allowed = ['meetings'];
+                        $requested = array_filter(array_map('trim', explode(',', $param)));
+                        return empty(array_diff($requested, $allowed));
+                    },
+                    'sanitize_callback' => 'sanitize_text_field',
+                ],
             ],
         ]);
 
@@ -54,7 +63,7 @@ class RestController
             'permission_callback' => [self::class, 'checkPermission'],
             'args' => self::getMeetingsArgs(),
         ]);
-        
+
         register_rest_route(self::NAMESPACE, '/meetings/(?P<id>\d+)', [
             'methods' => 'GET',
             'callback' => [self::class, 'getMeeting'],
@@ -110,6 +119,15 @@ class RestController
                     return $param === null ? null : absint($param);
                 },
             ],
+            'expand' => [
+                'default' => '',
+                'validate_callback' => function ($param) {
+                    $allowed = ['meetings'];
+                    $requested = array_filter(array_map('trim', explode(',', $param)));
+                    return empty(array_diff($requested, $allowed));
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
         ];
     }
 
@@ -163,14 +181,14 @@ class RestController
 
     /**
      * Check permission and authenticate request
-     * 
+     *
      * @param WP_REST_Request $request
      * @return bool|WP_Error
      */
     public static function checkPermission(WP_REST_Request $request)
     {
         $startTime = microtime(true);
-        
+
         // Require HTTPS in production
         if (get_option('integrity_require_https', true) && !is_ssl() && !defined('WP_DEBUG') || !WP_DEBUG) {
             self::logFailedRequest($request, 403, $startTime);
@@ -183,7 +201,7 @@ class RestController
 
         // Get API key from header
         $apiKey = self::extractApiKey($request);
-        
+
         if (!$apiKey) {
             self::logFailedRequest($request, 401, $startTime);
             return new WP_Error(
@@ -196,7 +214,7 @@ class RestController
         // Validate API key
         $clientIp = AuditLogger::getClientIp();
         $keyData = ApiKeyManager::validateKey($apiKey, $clientIp);
-        
+
         if (!$keyData) {
             self::logFailedRequest($request, 401, $startTime);
             return new WP_Error(
@@ -210,16 +228,16 @@ class RestController
         $apiKeyId = (int) $keyData['id'];
         $rateLimit = (int) $keyData['rate_limit'];
         $rateLimitResult = RateLimiter::checkLimit($apiKeyId, $rateLimit);
-        
+
         if (!$rateLimitResult['allowed']) {
             self::logFailedRequest($request, 429, $startTime, $apiKeyId);
-            
+
             $response = new WP_Error(
                 'rate_limit_exceeded',
                 'Rate limit exceeded. Try again later.',
                 ['status' => 429]
             );
-            
+
             // Add rate limit headers
             add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $rateLimit) {
                 if ($result instanceof WP_REST_Response) {
@@ -229,7 +247,7 @@ class RestController
                 }
                 return $result;
             });
-            
+
             return $response;
         }
 
@@ -239,7 +257,7 @@ class RestController
         // Check endpoint-specific permissions
         $endpoint = $request->get_route();
         $requiredPermission = self::getRequiredPermission($endpoint);
-        
+
         if ($requiredPermission && !in_array($requiredPermission, $keyData['permissions'], true) && !in_array('*', $keyData['permissions'], true)) {
             self::logFailedRequest($request, 403, $startTime, $apiKeyId);
             return new WP_Error(
@@ -275,17 +293,17 @@ class RestController
     {
         // Try Authorization header first (preferred)
         $authHeader = $request->get_header('Authorization');
-        
+
         if ($authHeader && preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
             return trim($matches[1]);
         }
-        
+
         // Fallback to X-API-Key header
         $apiKeyHeader = $request->get_header('X-API-Key');
         if ($apiKeyHeader) {
             return trim($apiKeyHeader);
         }
-        
+
         return null;
     }
 
@@ -297,11 +315,11 @@ class RestController
         if (strpos($endpoint, '/groups') !== false) {
             return 'groups:read';
         }
-        
+
         if (strpos($endpoint, '/meetings') !== false) {
             return 'meetings:read';
         }
-        
+
         return null;
     }
 
@@ -327,26 +345,26 @@ class RestController
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
-        
+
         try {
             // Get Unity container
             $container = \Unity\Plugin::getContainer();
             $groupRepo = $container->get(\Unity\Groups\Interfaces\GroupRepositoryInterface::class);
-            
+
             // Build query args
             $args = [
                 'posts_per_page' => $request->get_param('per_page'),
                 'paged' => $request->get_param('page'),
             ];
-            
+
             $search = $request->get_param('search');
             if (!empty($search)) {
                 $args['s'] = $search;
             }
-            
+
             // Get groups
             $groups = $groupRepo->findAll($args);
-            
+
             // Filter by district if specified
             $districtId = $request->get_param('district_id');
             if ($districtId !== null) {
@@ -354,10 +372,16 @@ class RestController
                     return $group->getDistrictId() === $districtId;
                 });
             }
-            
+
+            // Parse expand parameter
+            $expandParam = $request->get_param('expand');
+            $expand = !empty($expandParam) ? array_filter(array_map('trim', explode(',', $expandParam))) : [];
+
             // Transform to API response format
-            $data = array_map([self::class, 'transformGroup'], $groups);
-            
+            $data = array_map(function($group) use ($expand) {
+                return self::transformGroup($group, $expand);
+            }, $groups);
+
             // Log successful request
             AuditLogger::log(
                 $keyData['api_key_id'],
@@ -367,7 +391,7 @@ class RestController
                 200,
                 microtime(true) - $startTime
             );
-            
+
             return new WP_REST_Response([
                 'success' => true,
                 'data' => array_values($data),
@@ -377,7 +401,7 @@ class RestController
                     'per_page' => $request->get_param('per_page'),
                 ],
             ], 200);
-            
+
         } catch (\Exception $e) {
             AuditLogger::log(
                 $keyData['api_key_id'],
@@ -387,7 +411,7 @@ class RestController
                 500,
                 microtime(true) - $startTime
             );
-            
+
             return new WP_REST_Response([
                 'success' => false,
                 'error' => [
@@ -406,13 +430,13 @@ class RestController
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
         $id = (int) $request->get_param('id');
-        
+
         try {
             $container = \Unity\Plugin::getContainer();
             $groupRepo = $container->get(\Unity\Groups\Interfaces\GroupRepositoryInterface::class);
-            
+
             $group = $groupRepo->findById($id);
-            
+
             if (!$group || !$group->isValid()) {
                 AuditLogger::log(
                     $keyData['api_key_id'],
@@ -422,7 +446,7 @@ class RestController
                     404,
                     microtime(true) - $startTime
                 );
-                
+
                 return new WP_REST_Response([
                     'success' => false,
                     'error' => [
@@ -431,7 +455,7 @@ class RestController
                     ],
                 ], 404);
             }
-            
+
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
@@ -440,12 +464,16 @@ class RestController
                 200,
                 microtime(true) - $startTime
             );
-            
+
+            // Parse expand parameter
+            $expandParam = $request->get_param('expand');
+            $expand = !empty($expandParam) ? array_filter(array_map('trim', explode(',', $expandParam))) : [];
+
             return new WP_REST_Response([
                 'success' => true,
-                'data' => self::transformGroup($group),
+                'data' => self::transformGroup($group, $expand),
             ], 200);
-            
+
         } catch (\Exception $e) {
             AuditLogger::log(
                 $keyData['api_key_id'],
@@ -455,7 +483,7 @@ class RestController
                 500,
                 microtime(true) - $startTime
             );
-            
+
             return new WP_REST_Response([
                 'success' => false,
                 'error' => [
@@ -473,32 +501,32 @@ class RestController
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
-        
+
         try {
             $container = \Unity\Plugin::getContainer();
             $meetingRepo = $container->get(\Unity\Meetings\Interfaces\MeetingRepositoryInterface::class);
-            
+
             // Build query args
             $args = [];
-            
+
             $day = $request->get_param('day');
             if ($day !== null) {
                 $args['day'] = (int) $day;
             }
-            
+
             $groupId = $request->get_param('group_id');
             if ($groupId !== null) {
                 $args['group_id'] = (int) $groupId;
             }
-            
+
             $search = $request->get_param('search');
             if (!empty($search)) {
                 $args['s'] = $search;
             }
-            
+
             // Get meetings
             $meetings = $meetingRepo->findAll($args);
-            
+
             // Filter by online status if specified
             $online = $request->get_param('online');
             if ($online !== null) {
@@ -507,17 +535,17 @@ class RestController
                     return $meeting->isOnline() === $onlineFilter;
                 });
             }
-            
+
             // Apply pagination
             $perPage = $request->get_param('per_page');
             $page = $request->get_param('page');
             $total = count($meetings);
             $offset = ($page - 1) * $perPage;
             $meetings = array_slice($meetings, $offset, $perPage);
-            
+
             // Transform to API response format
             $data = array_map([self::class, 'transformMeeting'], $meetings);
-            
+
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
@@ -526,7 +554,7 @@ class RestController
                 200,
                 microtime(true) - $startTime
             );
-            
+
             return new WP_REST_Response([
                 'success' => true,
                 'data' => array_values($data),
@@ -537,7 +565,7 @@ class RestController
                     'total_pages' => (int) ceil($total / $perPage),
                 ],
             ], 200);
-            
+
         } catch (\Exception $e) {
             AuditLogger::log(
                 $keyData['api_key_id'],
@@ -547,7 +575,7 @@ class RestController
                 500,
                 microtime(true) - $startTime
             );
-            
+
             return new WP_REST_Response([
                 'success' => false,
                 'error' => [
@@ -566,13 +594,13 @@ class RestController
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
         $id = (int) $request->get_param('id');
-        
+
         try {
             $container = \Unity\Plugin::getContainer();
             $meetingRepo = $container->get(\Unity\Meetings\Interfaces\MeetingRepositoryInterface::class);
-            
+
             $meeting = $meetingRepo->find($id);
-            
+
             if (!$meeting) {
                 AuditLogger::log(
                     $keyData['api_key_id'],
@@ -582,7 +610,7 @@ class RestController
                     404,
                     microtime(true) - $startTime
                 );
-                
+
                 return new WP_REST_Response([
                     'success' => false,
                     'error' => [
@@ -591,7 +619,7 @@ class RestController
                     ],
                 ], 404);
             }
-            
+
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
@@ -600,12 +628,12 @@ class RestController
                 200,
                 microtime(true) - $startTime
             );
-            
+
             return new WP_REST_Response([
                 'success' => true,
                 'data' => self::transformMeeting($meeting),
             ], 200);
-            
+
         } catch (\Exception $e) {
             AuditLogger::log(
                 $keyData['api_key_id'],
@@ -615,7 +643,7 @@ class RestController
                 500,
                 microtime(true) - $startTime
             );
-            
+
             return new WP_REST_Response([
                 'success' => false,
                 'error' => [
@@ -632,7 +660,7 @@ class RestController
     public static function healthCheck(WP_REST_Request $request): WP_REST_Response
     {
         $unityAvailable = class_exists('Unity\\Plugin');
-        
+
         return new WP_REST_Response([
             'status' => $unityAvailable ? 'healthy' : 'degraded',
             'timestamp' => gmdate('c'),
@@ -643,11 +671,29 @@ class RestController
 
     /**
      * Transform a Group object to API response format
+     *
+     * @param \Unity\Groups\Interfaces\GroupInterface $group
+     * @param array $expand Array of fields to expand (e.g., ['meetings'])
+     * @return array
      */
-    private static function transformGroup(\Unity\Groups\Interfaces\GroupInterface $group): array
+    private static function transformGroup(\Unity\Groups\Interfaces\GroupInterface $group, array $expand = []): array
     {
         $contacts = $group->getContacts();
-        
+        $meetings = $group->getMeetings();
+
+        // Check if meetings should be expanded with full data
+        $expandMeetings = in_array('meetings', $expand, true);
+
+        if ($expandMeetings) {
+            // Return full meeting data
+            $meetingData = array_map([self::class, 'transformMeeting'], $meetings);
+        } else {
+            // Return just meeting IDs for backwards compatibility
+            $meetingData = array_map(function($meeting) {
+                return $meeting->getId();
+            }, $meetings);
+        }
+
         return [
             'id' => $group->getId(),
             'title' => $group->getTitle(),
@@ -658,7 +704,7 @@ class RestController
             'notes' => $group->getGroupNotes(),
             'district_id' => $group->getDistrictId(),
             'last_contact' => $group->getLastContact(),
-            'meeting_ids' => $group->getMeetingIds(),
+            $expandMeetings ? 'meetings' : 'meeting_ids' => $meetingData,
             'contacts' => !empty($contacts) ? array_map([self::class, 'transformContact'], $contacts) : [],
             'contribution_options' => [
                 'venmo' => $group->getVenmo(),
@@ -676,7 +722,7 @@ class RestController
     {
         $contacts = $meeting->getContacts();
         $location = $meeting->getLocation();
-        
+
         return [
             'id' => $meeting->getId(),
             'name' => $meeting->getName(),
@@ -699,7 +745,7 @@ class RestController
 
     /**
      * Transform a Location object to API response format
-     * 
+     *
      * @param \Unity\Locations\Interfaces\LocationInterface $location
      * @return array
      */
@@ -725,7 +771,7 @@ class RestController
 
     /**
      * Transform a Contact object to API response format
-     * 
+     *
      * @param \Unity\Contact\Interfaces\ContactInterface|array $contact
      * @return array
      */
@@ -738,7 +784,7 @@ class RestController
                 'phone' => $contact->getPhone(),
             ];
         }
-        
+
         // Handle legacy array format for backwards compatibility
         if (is_array($contact)) {
             return [
@@ -747,7 +793,7 @@ class RestController
                 'phone' => $contact['phone'] ?? '',
             ];
         }
-        
+
         return [
             'name' => '',
             'email' => '',

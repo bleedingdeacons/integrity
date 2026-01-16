@@ -17,7 +17,7 @@ Console.WriteLine(groups.StatusCode);
 
 foreach (var group in groups.Data)
 {
-    Console.WriteLine(group.Title);
+    Console.WriteLine(group.Meetings.Count);
 }
 
 var onlineMeetings = await client.GetMeetingsAsync(day: null, online: true);
