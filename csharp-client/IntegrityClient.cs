@@ -7,7 +7,7 @@ namespace Integrity.Client;
 
 /// <summary>
 /// Client for the Integrity WordPress API.
-/// Provides secure access to Groups and Meetings from the Unity plugin.
+/// Provides secure access to Groups, Meetings, Positions, and Members from the Unity plugin.
 /// </summary>
 public sealed class IntegrityClient : IDisposable
 {
@@ -29,16 +29,16 @@ public sealed class IntegrityClient : IDisposable
 
         _baseUrl = baseUrl.TrimEnd('/');
         _httpClient = httpClient ?? new HttpClient();
-        
+
         // Set authorization header
-        _httpClient.DefaultRequestHeaders.Authorization = 
+        _httpClient.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", apiKey);
-        
+
         // Set default headers
         _httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("IntegrityClient/1.0");
-        
+
         // Configure JSON options
         _jsonOptions = new JsonSerializerOptions
         {
@@ -150,6 +150,97 @@ public sealed class IntegrityClient : IDisposable
     {
         var url = $"{_baseUrl}/wp-json/integrity/v1/meetings/{id}";
         return await GetAsync<Meeting>(url, cancellationToken);
+    }
+
+    #endregion
+
+    #region Positions
+
+    /// <summary>
+    /// Gets all positions with optional filtering.
+    /// </summary>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="perPage">Results per page (default: 100, max: 500)</param>
+    /// <param name="search">Search term to filter positions</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<List<Position>>> GetPositionsAsync(
+        int page = 1,
+        int perPage = 100,
+        string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        var queryParams = new List<string>
+        {
+            $"page={page}",
+            $"per_page={perPage}"
+        };
+
+        if (!string.IsNullOrEmpty(search))
+            queryParams.Add($"search={Uri.EscapeDataString(search)}");
+
+        var url = $"{_baseUrl}/wp-json/integrity/v1/positions?{string.Join("&", queryParams)}";
+        return await GetAsync<List<Position>>(url, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets a single position by ID.
+    /// </summary>
+    /// <param name="id">Position ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<Position>> GetPositionAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/positions/{id}";
+        return await GetAsync<Position>(url, cancellationToken);
+    }
+
+    #endregion
+
+    #region Members
+
+    /// <summary>
+    /// Gets all members with optional filtering.
+    /// </summary>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="perPage">Results per page (default: 100, max: 500)</param>
+    /// <param name="search">Search term to filter members</param>
+    /// <param name="homeGroupId">Filter by home group ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<List<Member>>> GetMembersAsync(
+        int page = 1,
+        int perPage = 100,
+        string? search = null,
+        int? homeGroupId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var queryParams = new List<string>
+        {
+            $"page={page}",
+            $"per_page={perPage}"
+        };
+
+        if (!string.IsNullOrEmpty(search))
+            queryParams.Add($"search={Uri.EscapeDataString(search)}");
+
+        if (homeGroupId.HasValue)
+            queryParams.Add($"home_group_id={homeGroupId.Value}");
+
+        var url = $"{_baseUrl}/wp-json/integrity/v1/members?{string.Join("&", queryParams)}";
+        return await GetAsync<List<Member>>(url, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets a single member by ID.
+    /// </summary>
+    /// <param name="id">Member ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<Member>> GetMemberAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/members/{id}";
+        return await GetAsync<Member>(url, cancellationToken);
     }
 
     #endregion
@@ -458,6 +549,45 @@ public sealed class ContributionOptions
     public string Paypal { get; init; } = string.Empty;
     public string Square { get; init; } = string.Empty;
     public bool HasOptions { get; init; }
+}
+
+/// <summary>
+/// Represents a position in the Unity system.
+/// </summary>
+public sealed class Position
+{
+    public int Id { get; init; }
+    public string LongName { get; init; } = string.Empty;
+    public string ShortDescription { get; init; } = string.Empty;
+    public string Summary { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public int MinimumSobriety { get; init; }
+    public int TermYears { get; init; }
+    public string Link { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Represents a member in the Unity system.
+/// </summary>
+public sealed class Member
+{
+    public int Id { get; init; }
+    public string WordpressUsername { get; init; } = string.Empty;
+    public string AnonymousName { get; init; } = string.Empty;
+    public string Email { get; init; } = string.Empty;
+    public string PersonalEmail { get; init; } = string.Empty;
+    public string MobileNumber { get; init; } = string.Empty;
+    public bool ShowAnonymousName { get; init; }
+    public bool ShowMemberProfile { get; init; }
+    public string AnonymousProfile { get; init; } = string.Empty;
+    public int? HomeGroupId { get; init; }
+    public string HomeGroupName { get; init; } = string.Empty;
+    public bool IsGsr { get; init; }
+    public string MeetingPo { get; init; } = string.Empty;
+    public int? IntergroupPositionId { get; init; }
+    public string IntergroupPositionName { get; init; } = string.Empty;
+    public string IntergroupPositionRotation { get; init; } = string.Empty;
+    public string Link { get; init; } = string.Empty;
 }
 
 #endregion
