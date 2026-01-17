@@ -572,7 +572,7 @@ public sealed class Position
 public sealed class Member
 {
     public int Id { get; init; }
-    public string WordpressUsername { get; init; } = string.Empty;
+    public string PrivateName { get; init; } = string.Empty;
     public string AnonymousName { get; init; } = string.Empty;
     public string Email { get; init; } = string.Empty;
     public string PersonalEmail { get; init; } = string.Empty;

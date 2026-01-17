@@ -78,6 +78,50 @@ class RestController
             ],
         ]);
 
+        // Positions endpoints
+        register_rest_route(self::NAMESPACE, '/positions', [
+            'methods' => 'GET',
+            'callback' => [self::class, 'getPositions'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getPositionsArgs(),
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/positions/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'callback' => [self::class, 'getPosition'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => [
+                'id' => [
+                    'required' => true,
+                    'validate_callback' => function ($param) {
+                        return is_numeric($param) && $param > 0;
+                    },
+                ],
+            ],
+        ]);
+
+        // Members endpoints
+        register_rest_route(self::NAMESPACE, '/members', [
+            'methods' => 'GET',
+            'callback' => [self::class, 'getMembers'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getMembersArgs(),
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/members/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'callback' => [self::class, 'getMember'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => [
+                'id' => [
+                    'required' => true,
+                    'validate_callback' => function ($param) {
+                        return is_numeric($param) && $param > 0;
+                    },
+                ],
+            ],
+        ]);
+
         // Health check endpoint (no auth required)
         register_rest_route(self::NAMESPACE, '/health', [
             'methods' => 'GET',
@@ -175,6 +219,69 @@ class RestController
             'search' => [
                 'default' => '',
                 'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ];
+    }
+
+    /**
+     * Get arguments for positions endpoint
+     */
+    private static function getPositionsArgs(): array
+    {
+        return [
+            'per_page' => [
+                'default' => 100,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0 && $param <= 500;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'page' => [
+                'default' => 1,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'search' => [
+                'default' => '',
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ];
+    }
+
+    /**
+     * Get arguments for members endpoint
+     */
+    private static function getMembersArgs(): array
+    {
+        return [
+            'per_page' => [
+                'default' => 100,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0 && $param <= 500;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'page' => [
+                'default' => 1,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'search' => [
+                'default' => '',
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'home_group_id' => [
+                'default' => null,
+                'validate_callback' => function ($param) {
+                    return $param === null || (is_numeric($param) && $param > 0);
+                },
+                'sanitize_callback' => function ($param) {
+                    return $param === null ? null : absint($param);
+                },
             ],
         ];
     }
@@ -655,6 +762,290 @@ class RestController
     }
 
     /**
+     * Get all positions
+     */
+    public static function getPositions(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+
+        try {
+            $container = \Unity\Plugin::getContainer();
+            $positionRepo = $container->get(\Unity\Positions\Interfaces\PositionRepositoryInterface::class);
+
+            $args = [
+                'posts_per_page' => $request->get_param('per_page'),
+                'paged' => $request->get_param('page'),
+            ];
+
+            $search = $request->get_param('search');
+            if (!empty($search)) {
+                $args['s'] = $search;
+            }
+
+            $positions = $positionRepo->findAll($args);
+            $total = $positionRepo->count($args);
+
+            $perPage = (int) $request->get_param('per_page');
+            $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 1;
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                $args,
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => array_map([self::class, 'transformPosition'], $positions),
+                'meta' => [
+                    'total' => $total,
+                    'page' => (int) $request->get_param('page'),
+                    'per_page' => $perPage,
+                    'total_pages' => $totalPages,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                null,
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get a single position
+     */
+    public static function getPosition(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+        $id = (int) $request->get_param('id');
+
+        try {
+            $container = \Unity\Plugin::getContainer();
+            $positionRepo = $container->get(\Unity\Positions\Interfaces\PositionRepositoryInterface::class);
+
+            // Use findById instead of find for positions
+            $position = $positionRepo->findById($id);
+
+            if (!$position) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $id],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_found',
+                        'message' => 'Position not found',
+                    ],
+                ], 404);
+            }
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $id],
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => self::transformPosition($position),
+            ], 200);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $id],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all members
+     */
+    public static function getMembers(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+
+        try {
+            $container = \Unity\Plugin::getContainer();
+            $memberRepo = $container->get(\Unity\Members\Interfaces\MemberRepositoryInterface::class);
+
+            $args = [
+                'posts_per_page' => $request->get_param('per_page'),
+                'paged' => $request->get_param('page'),
+            ];
+
+            $search = $request->get_param('search');
+            if (!empty($search)) {
+                $args['s'] = $search;
+            }
+
+            $homeGroupId = $request->get_param('home_group_id');
+            if ($homeGroupId !== null) {
+                $args['meta_query'] = [
+                    [
+                        'key' => 'home_group',
+                        'value' => $homeGroupId,
+                        'compare' => '=',
+                    ],
+                ];
+            }
+
+            $members = $memberRepo->findAll($args);
+            $total = $memberRepo->count($args);
+
+            $perPage = (int) $request->get_param('per_page');
+            $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 1;
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                $args,
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => array_map([self::class, 'transformMember'], $members),
+                'meta' => [
+                    'total' => $total,
+                    'page' => (int) $request->get_param('page'),
+                    'per_page' => $perPage,
+                    'total_pages' => $totalPages,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                null,
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get a single member
+     */
+    public static function getMember(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+        $id = (int) $request->get_param('id');
+
+        try {
+            $container = \Unity\Plugin::getContainer();
+            $memberRepo = $container->get(\Unity\Members\Interfaces\MemberRepositoryInterface::class);
+
+            $member = $memberRepo->find($id);
+
+            if (!$member) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $id],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_found',
+                        'message' => 'Member not found',
+                    ],
+                ], 404);
+            }
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $id],
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => self::transformMember($member),
+            ], 200);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $id],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
      * Health check endpoint
      */
     public static function healthCheck(WP_REST_Request $request): WP_REST_Response
@@ -798,6 +1189,101 @@ class RestController
             'name' => '',
             'email' => '',
             'phone' => '',
+        ];
+    }
+
+    /**
+     * Transform a Position object to API response format
+     *
+     * @param \Unity\Positions\Interfaces\PositionInterface $position
+     * @return array
+     */
+    private static function transformPosition(\Unity\Positions\Interfaces\PositionInterface $position): array
+    {
+        return [
+            'id' => $position->getId(),
+            'long_name' => $position->getLongName(),
+            'short_description' => $position->getShortDescription(),
+            'summary' => $position->getSummary(),
+            'email' => $position->getEmail(),
+            'minimum_sobriety' => $position->getMinimumSobriety(),
+            'term_years' => $position->getTermYears(),
+            'link' => $position->getLink(),
+        ];
+    }
+
+    /**
+     * Transform a Member object to API response format
+     *
+     * @param \Unity\Members\Interfaces\MemberInterface $member
+     * @return array
+     */
+    private static function transformMember(\Unity\Members\Interfaces\MemberInterface $member): array
+    {
+        // Get home group details
+        $homeGroupId = null;
+        $homeGroupName = '';
+        $homeGroup = $member->getHomeGroup();
+        if (is_numeric($homeGroup)) {
+            $homeGroupId = (int) $homeGroup;
+            $homeGroupPost = get_post($homeGroupId);
+            if ($homeGroupPost) {
+                $homeGroupName = $homeGroupPost->post_title ?? '';
+            }
+        } elseif (is_object($homeGroup) && isset($homeGroup->ID)) {
+            $homeGroupId = (int) $homeGroup->ID;
+            $homeGroupName = $homeGroup->post_title ?? '';
+        }
+
+        // Get intergroup position details
+        $intergroupPositionId = null;
+        $intergroupPositionName = '';
+        $intergroupPositionIdValue = $member->getIntergroupPosition();
+        if ($intergroupPositionIdValue > 0) {
+            $intergroupPositionId = $intergroupPositionIdValue;
+            $positionPost = get_post($intergroupPositionId);
+            if ($positionPost) {
+                $intergroupPositionName = $positionPost->post_title ?? '';
+            }
+        }
+
+        // Get meeting PO
+        $meetingPo = '';
+        $meetingPoValue = $member->getMeetingPO();
+        if (is_numeric($meetingPoValue)) {
+            $meetingPoPost = get_post((int) $meetingPoValue);
+            if ($meetingPoPost) {
+                $meetingPo = $meetingPoPost->post_title ?? '';
+            }
+        } elseif (is_string($meetingPoValue)) {
+            $meetingPo = $meetingPoValue;
+        }
+
+        // Get permalink
+        $link = '';
+        if (function_exists('get_permalink')) {
+            $permalink = get_permalink($member->getId());
+            $link = is_string($permalink) ? $permalink : '';
+        }
+
+        return [
+            'id' => $member->getId(),
+            'private_name' => $member->getPrivateName(),
+            'anonymous_name' => $member->getAnonymousName(),
+            'email' => $member->getEmail(),
+            'personal_email' => $member->getPersonalEmail(),
+            'mobile_number' => $member->getMobileNumber(),
+            'show_anonymous_name' => $member->showAnonymousName(),
+            'show_member_profile' => $member->showMemberProfile(),
+            'anonymous_profile' => $member->getAnonymousProfile(),
+            'home_group_id' => $homeGroupId,
+            'home_group_name' => $homeGroupName,
+            'is_gsr' => $member->isGSR(),
+            'meeting_po' => $meetingPo,
+            'intergroup_position_id' => $intergroupPositionId,
+            'intergroup_position_name' => $intergroupPositionName,
+            'intergroup_position_rotation' => $member->getIntergroupPositionRotation(),
+            'link' => $link,
         ];
     }
 }

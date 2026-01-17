@@ -7,39 +7,99 @@ using var client = new IntegrityClient(
     "int_4b933f9dcfef5c90b59be21c8c603c6ae94f1817367d51297c54a075e416a51a"
 );
 
+// Health Check
 var status = await client.CheckHealthAsync();
+Console.WriteLine($"Health Check - Unity Available: {status?.UnityAvailable}");
+Console.WriteLine();
 
-Console.WriteLine(status.UnityAvailable);
-
+// Groups
+Console.WriteLine("=== GROUPS ===");
 var groups = await client.GetGroupsAsync();
-
-Console.WriteLine(groups.StatusCode);
-
-foreach (var group in groups.Data)
+Console.WriteLine($"Status Code: {groups.StatusCode}");
+if (groups.Success && groups.Data != null)
 {
-    Console.WriteLine(group.Meetings.Count);
+    Console.WriteLine($"Found {groups.Data.Count} groups");
+    foreach (var group in groups.Data)
+    {
+        Console.WriteLine($"  - {group.Title} (Meetings: {group.Meetings.Count})");
+    }
 }
+else
+{
+    Console.WriteLine($"Error: {groups.Error?.Code} - {groups.Error?.Message}");
+}
+Console.WriteLine();
 
+// Online Meetings
+Console.WriteLine("=== ONLINE MEETINGS ===");
 var onlineMeetings = await client.GetMeetingsAsync(day: null, online: true);
-
-Console.WriteLine(onlineMeetings.StatusCode);
-
-foreach  (var meeting in onlineMeetings.Data)
+Console.WriteLine($"Status Code: {onlineMeetings.StatusCode}");
+if (onlineMeetings.Success && onlineMeetings.Data != null)
 {
-    Console.WriteLine(meeting.Name);
+    Console.WriteLine($"Found {onlineMeetings.Data.Count} online meetings");
+    foreach (var meeting in onlineMeetings.Data)
+    {
+        Console.WriteLine($"  - {meeting.Name}");
+    }
 }
+else
+{
+    Console.WriteLine($"Error: {onlineMeetings.Error?.Code} - {onlineMeetings.Error?.Message}");
+}
+Console.WriteLine();
 
+// All Meetings
+Console.WriteLine("=== ALL MEETINGS ===");
 var allMeetings = await client.GetMeetingsAsync();
-
-foreach (var meeting in allMeetings.Data)
+Console.WriteLine($"Status Code: {allMeetings.StatusCode}");
+if (allMeetings.Success && allMeetings.Data != null)
 {
-    Console.WriteLine(meeting.Name);
+    Console.WriteLine($"Found {allMeetings.Data.Count} meetings");
+    foreach (var meeting in allMeetings.Data)
+    {
+        Console.WriteLine($"  - {meeting.Name}");
+    }
 }
+else
+{
+    Console.WriteLine($"Error: {allMeetings.Error?.Code} - {allMeetings.Error?.Message}");
+}
+Console.WriteLine();
 
+// Members
+Console.WriteLine("=== MEMBERS ===");
+var members = await client.GetMembersAsync();
+Console.WriteLine($"Status Code: {members.StatusCode}");
+if (members.Success && members.Data != null)
+{
+    Console.WriteLine($"Found {members.Data.Count} members");
+    foreach (var member in members.Data)
+    {
+        Console.WriteLine($"  - {member.AnonymousName} ({member.Email})");
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {members.Error?.Code} - {members.Error?.Message}");
+}
+Console.WriteLine();
 
-Console.WriteLine(allMeetings.StatusCode);
+// Positions
+Console.WriteLine("=== POSITIONS ===");
+var positions = await client.GetPositionsAsync();
+Console.WriteLine($"Status Code: {positions.StatusCode}");
+if (positions.Success && positions.Data != null)
+{
+    Console.WriteLine($"Found {positions.Data.Count} positions");
+    foreach (var position in positions.Data)
+    {
+        Console.WriteLine($"  - {position.LongName}");
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {positions.Error?.Code} - {positions.Error?.Message}");
+}
+Console.WriteLine();
 
-//foreach  (var meeting in meetings.Data)
-//{
-//    Console.WriteLine(meeting.Name);
-//}
+Console.WriteLine("Done!");
