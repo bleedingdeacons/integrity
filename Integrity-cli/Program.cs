@@ -14,7 +14,7 @@ Console.WriteLine();
 
 // Groups
 Console.WriteLine("=== GROUPS ===");
-var groups = await client.GetGroupsAsync();
+var groups = await client.GetGroupsAsync(expandMeetings: true);
 Console.WriteLine($"Status Code: {groups.StatusCode}");
 if (groups.Success && groups.Data != null)
 {
