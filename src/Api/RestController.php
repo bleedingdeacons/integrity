@@ -200,11 +200,21 @@ class RestController
                 'validate_callback' => function ($param) {
                     return $param === null || (is_numeric($param) && $param >= 0 && $param <= 6);
                 },
+                'sanitize_callback' => function ($param) {
+                    return $param === null ? null : (int) $param;
+                },
             ],
             'online' => [
                 'default' => null,
                 'validate_callback' => function ($param) {
                     return $param === null || in_array($param, ['true', 'false', '1', '0', true, false], true);
+                },
+                'sanitize_callback' => function ($param) {
+                    if ($param === null) {
+                        return null;
+                    }
+                    // Convert string 'true'/'false' to boolean
+                    return filter_var($param, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                 },
             ],
             'group_id' => [
@@ -614,16 +624,19 @@ class RestController
             $meetingRepo = $container->get(\Unity\Meetings\Interfaces\MeetingRepositoryInterface::class);
 
             // Build query args
-            $args = [];
-
-            $day = $request->get_param('day');
-            if ($day !== null) {
-                $args['day'] = (int) $day;
-            }
+            $args = [
+                'posts_per_page' => $request->get_param('per_page'),
+                'paged' => $request->get_param('page'),
+            ];
 
             $groupId = $request->get_param('group_id');
             if ($groupId !== null) {
-                $args['group_id'] = (int) $groupId;
+                $args['meta_query'] = $args['meta_query'] ?? [];
+                $args['meta_query'][] = [
+                    'key' => 'group_id',
+                    'value' => (int) $groupId,
+                    'compare' => '=',
+                ];
             }
 
             $search = $request->get_param('search');
@@ -631,33 +644,60 @@ class RestController
                 $args['s'] = $search;
             }
 
-            // Get meetings
-            $meetings = $meetingRepo->findAll($args);
-
-            // Filter by online status if specified
+            // Get day parameter
+            $day = $request->get_param('day');
             $online = $request->get_param('online');
-            if ($online !== null) {
+
+            // Debug logging
+            error_log("getMeetings - day: " . var_export($day, true) . ", online: " . var_export($online, true));
+
+            // Determine which repository method to use based on filters
+            $meetings = [];
+
+            if ($day !== null && $online !== null) {
+                // Both day AND online filter
                 $onlineFilter = in_array($online, ['true', '1', true], true);
-                $meetings = array_filter($meetings, function ($meeting) use ($onlineFilter) {
-                    return $meeting->isOnline() === $onlineFilter;
-                });
+
+                // Add attendance_option to meta_query
+                $args['meta_query'] = $args['meta_query'] ?? [];
+                $args['meta_query'][] = [
+                    'key' => 'attendance_option',
+                    'value' => $onlineFilter ? 'online' : 'in_person',
+                    'compare' => '=',
+                ];
+
+                $meetings = $meetingRepo->findByDay((int) $day, $args);
+            } elseif ($day !== null) {
+                // Only day filter
+                $meetings = $meetingRepo->findByDay((int) $day, $args);
+            } elseif ($online !== null) {
+                // Only online filter
+                $onlineFilter = in_array($online, ['true', '1', true], true);
+                if ($onlineFilter) {
+                    $meetings = $meetingRepo->findOnline($args);
+                } else {
+                    $meetings = $meetingRepo->findInPerson($args);
+                }
+            } else {
+                // No special filters
+                $meetings = $meetingRepo->findAll($args);
             }
 
-            // Apply pagination
-            $perPage = $request->get_param('per_page');
-            $page = $request->get_param('page');
+            // Get total count for pagination
             $total = count($meetings);
-            $offset = ($page - 1) * $perPage;
-            $meetings = array_slice($meetings, $offset, $perPage);
 
             // Transform to API response format
             $data = array_map([self::class, 'transformMeeting'], $meetings);
+
+            $perPage = $request->get_param('per_page');
+            $page = $request->get_param('page');
+            $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 1;
 
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
-                ['per_page' => $perPage, 'page' => $page],
+                ['per_page' => $perPage, 'page' => $page, 'day' => $day, 'online' => $online],
                 200,
                 microtime(true) - $startTime
             );
@@ -669,7 +709,7 @@ class RestController
                     'total' => $total,
                     'page' => $page,
                     'per_page' => $perPage,
-                    'total_pages' => (int) ceil($total / $perPage),
+                    'total_pages' => $totalPages,
                 ],
             ], 200);
 

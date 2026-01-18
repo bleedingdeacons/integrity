@@ -112,10 +112,17 @@ public sealed class IntegrityClient : IDisposable
     /// <summary>
     /// Gets all meetings with optional filtering.
     /// </summary>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="perPage">Results per page (default: 100, max: 500)</param>
+    /// <param name="dayOfWeek">Filter by day of week (Sunday=0, Monday=1, etc.)</param>
+    /// <param name="online">Filter by online (true) or in-person (false) meetings</param>
+    /// <param name="groupId">Filter by group ID</param>
+    /// <param name="search">Search term to filter meetings</param>
+    /// <param name="cancellationToken">Cancellation token</param>
     public async Task<ApiResponse<List<Meeting>>> GetMeetingsAsync(
         int page = 1,
         int perPage = 100,
-        int? day = null,
+        DayOfWeek? dayOfWeek = null,
         bool? online = null,
         int? groupId = null,
         string? search = null,
@@ -127,8 +134,8 @@ public sealed class IntegrityClient : IDisposable
             $"per_page={perPage}"
         };
 
-        if (day.HasValue)
-            queryParams.Add($"day={day.Value}");
+        if (dayOfWeek.HasValue)
+            queryParams.Add($"day={(int)dayOfWeek.Value}");
 
         if (online.HasValue)
             queryParams.Add($"online={online.Value.ToString().ToLowerInvariant()}");

@@ -32,7 +32,7 @@ Console.WriteLine();
 
 // Online Meetings
 Console.WriteLine("=== ONLINE MEETINGS ===");
-var onlineMeetings = await client.GetMeetingsAsync(day: null, online: true);
+var onlineMeetings = await client.GetMeetingsAsync(dayOfWeek: null, online: true);
 Console.WriteLine($"Status Code: {onlineMeetings.StatusCode}");
 if (onlineMeetings.Success && onlineMeetings.Data != null)
 {
@@ -45,6 +45,42 @@ if (onlineMeetings.Success && onlineMeetings.Data != null)
 else
 {
     Console.WriteLine($"Error: {onlineMeetings.Error?.Code} - {onlineMeetings.Error?.Message}");
+}
+Console.WriteLine();
+
+// Sunday Meetings (with debug info)
+Console.WriteLine("=== SUNDAY MEETINGS ===");
+var sundayMeetings = await client.GetMeetingsAsync(dayOfWeek: DayOfWeek.Sunday);
+Console.WriteLine($"Status Code: {sundayMeetings.StatusCode}");
+if (sundayMeetings.Success && sundayMeetings.Data != null)
+{
+    Console.WriteLine($"Found {sundayMeetings.Data.Count} meetings on Sunday");
+    foreach (var meeting in sundayMeetings.Data.Take(10))
+    {
+        Console.WriteLine($"  - {meeting.Name} at {meeting.Time} (Day: {meeting.Day}, DayOfWeek: {meeting.DayOfWeek})");
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {sundayMeetings.Error?.Code} - {sundayMeetings.Error?.Message}");
+}
+Console.WriteLine();
+
+// Monday Meetings
+Console.WriteLine("=== MONDAY MEETINGS ===");
+var mondayMeetings = await client.GetMeetingsAsync(dayOfWeek: DayOfWeek.Monday);
+Console.WriteLine($"Status Code: {mondayMeetings.StatusCode}");
+if (mondayMeetings.Success && mondayMeetings.Data != null)
+{
+    Console.WriteLine($"Found {mondayMeetings.Data.Count} meetings on Monday");
+    foreach (var meeting in mondayMeetings.Data.Take(5))
+    {
+        Console.WriteLine($"  - {meeting.Name} at {meeting.Time}");
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {mondayMeetings.Error?.Code} - {mondayMeetings.Error?.Message}");
 }
 Console.WriteLine();
 
