@@ -111,12 +111,31 @@ if (members.Success && members.Data != null)
     Console.WriteLine($"Found {members.Data.Count} members");
     foreach (var member in members.Data)
     {
-        Console.WriteLine($"  - {member.AnonymousName} ({member.Email})");
+        Console.WriteLine($"  - {member.AnonymousName} ({member.Email}) - GSR: {member.IsGsr}");
     }
 }
 else
 {
     Console.WriteLine($"Error: {members.Error?.Code} - {members.Error?.Message}");
+}
+Console.WriteLine();
+
+// GSR Members Only
+Console.WriteLine("=== GSR MEMBERS ===");
+var gsrMembers = await client.GetMembersAsync();
+Console.WriteLine($"Status Code: {gsrMembers.StatusCode}");
+if (gsrMembers.Success && gsrMembers.Data != null)
+{
+    var gsrs = gsrMembers.Data.Where(m => m.IsGsr).ToList();
+    Console.WriteLine($"Found {gsrs.Count} GSR members out of {gsrMembers.Data.Count} total");
+    foreach (var member in gsrs)
+    {
+        Console.WriteLine($"  - {member.AnonymousName} ({member.Email})");
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {gsrMembers.Error?.Code} - {gsrMembers.Error?.Message}");
 }
 Console.WriteLine();
 
@@ -131,14 +150,14 @@ if (membersExpanded.Success && membersExpanded.Data != null)
     {
         if (member.HasExpandedHomeGroup && member.HomeGroup != null)
         {
-            Console.WriteLine($"  - {member.AnonymousName}");
+            Console.WriteLine($"  - {member.AnonymousName} (GSR: {member.IsGsr})");
             Console.WriteLine($"    Home Group: {member.HomeGroup.Title}");
             Console.WriteLine($"    Group Email: {member.HomeGroup.Email}");
             Console.WriteLine($"    Group Meetings: {member.HomeGroup.MeetingIds.Count}");
         }
         else
         {
-            Console.WriteLine($"  - {member.AnonymousName} (Home Group ID: {member.HomeGroupId}, Name: {member.HomeGroupName})");
+            Console.WriteLine($"  - {member.AnonymousName} (Home Group ID: {member.HomeGroupId}, Name: {member.HomeGroupName}, GSR: {member.IsGsr})");
         }
     }
 }
