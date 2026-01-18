@@ -213,12 +213,14 @@ public sealed class IntegrityClient : IDisposable
     /// <param name="perPage">Results per page (default: 100, max: 500)</param>
     /// <param name="search">Search term to filter members</param>
     /// <param name="homeGroupId">Filter by home group ID</param>
+    /// <param name="expandHomeGroup">When true, includes full home group data instead of just ID</param>
     /// <param name="cancellationToken">Cancellation token</param>
     public async Task<ApiResponse<List<Member>>> GetMembersAsync(
         int page = 1,
         int perPage = 100,
         string? search = null,
         int? homeGroupId = null,
+        bool expandHomeGroup = false,
         CancellationToken cancellationToken = default)
     {
         var queryParams = new List<string>
@@ -233,6 +235,9 @@ public sealed class IntegrityClient : IDisposable
         if (homeGroupId.HasValue)
             queryParams.Add($"home_group_id={homeGroupId.Value}");
 
+        if (expandHomeGroup)
+            queryParams.Add("expand=home_group");
+
         var url = $"{_baseUrl}/wp-json/integrity/v1/members?{string.Join("&", queryParams)}";
         return await GetAsync<List<Member>>(url, cancellationToken);
     }
@@ -241,12 +246,18 @@ public sealed class IntegrityClient : IDisposable
     /// Gets a single member by ID.
     /// </summary>
     /// <param name="id">Member ID</param>
+    /// <param name="expandHomeGroup">When true, includes full home group data instead of just ID</param>
     /// <param name="cancellationToken">Cancellation token</param>
     public async Task<ApiResponse<Member>> GetMemberAsync(
         int id,
+        bool expandHomeGroup = false,
         CancellationToken cancellationToken = default)
     {
         var url = $"{_baseUrl}/wp-json/integrity/v1/members/{id}";
+
+        if (expandHomeGroup)
+            url += "?expand=home_group";
+
         return await GetAsync<Member>(url, cancellationToken);
     }
 
@@ -589,12 +600,25 @@ public sealed class Member
     public string AnonymousProfile { get; init; } = string.Empty;
     public int? HomeGroupId { get; init; }
     public string HomeGroupName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Full home group object (when expand=home_group is used).
+    /// This will be populated when the API returns home_group.
+    /// </summary>
+    public Group? HomeGroup { get; init; }
+
     public bool IsGsr { get; init; }
     public string MeetingPo { get; init; } = string.Empty;
     public int? IntergroupPositionId { get; init; }
     public string IntergroupPositionName { get; init; } = string.Empty;
     public string IntergroupPositionRotation { get; init; } = string.Empty;
     public string Link { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets whether this member has expanded home group data.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasExpandedHomeGroup => HomeGroup != null;
 }
 
 #endregion

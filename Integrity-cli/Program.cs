@@ -120,6 +120,34 @@ else
 }
 Console.WriteLine();
 
+// Members with Expanded Home Group
+Console.WriteLine("=== MEMBERS WITH EXPANDED HOME GROUP ===");
+var membersExpanded = await client.GetMembersAsync(expandHomeGroup: true);
+Console.WriteLine($"Status Code: {membersExpanded.StatusCode}");
+if (membersExpanded.Success && membersExpanded.Data != null)
+{
+    Console.WriteLine($"Found {membersExpanded.Data.Count} members");
+    foreach (var member in membersExpanded.Data.Take(5))
+    {
+        if (member.HasExpandedHomeGroup && member.HomeGroup != null)
+        {
+            Console.WriteLine($"  - {member.AnonymousName}");
+            Console.WriteLine($"    Home Group: {member.HomeGroup.Title}");
+            Console.WriteLine($"    Group Email: {member.HomeGroup.Email}");
+            Console.WriteLine($"    Group Meetings: {member.HomeGroup.MeetingIds.Count}");
+        }
+        else
+        {
+            Console.WriteLine($"  - {member.AnonymousName} (Home Group ID: {member.HomeGroupId}, Name: {member.HomeGroupName})");
+        }
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {membersExpanded.Error?.Code} - {membersExpanded.Error?.Message}");
+}
+Console.WriteLine();
+
 // Positions
 Console.WriteLine("=== POSITIONS ===");
 var positions = await client.GetPositionsAsync();
