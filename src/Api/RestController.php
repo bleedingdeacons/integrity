@@ -648,9 +648,6 @@ class RestController
             $day = $request->get_param('day');
             $online = $request->get_param('online');
 
-            // Debug logging
-            error_log("getMeetings - day: " . var_export($day, true) . ", online: " . var_export($online, true));
-
             // Determine which repository method to use based on filters
             $meetings = [];
 
