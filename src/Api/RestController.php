@@ -7,6 +7,7 @@ namespace Integrity\Api;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\RateLimiter;
 use Integrity\Auth\AuditLogger;
+use Mask;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -1208,8 +1209,8 @@ class RestController
         if ($contact instanceof \Unity\Contact\Interfaces\ContactInterface) {
             return [
                 'name' => $contact->getName(),
-                'email' => $contact->getEmail(),
-                'phone' => $contact->getPhone(),
+                'email' => Mask::email($contact->getEmail()),
+                'phone' => Mask::phone($contact->getPhone()),
             ];
         }
 
@@ -1217,8 +1218,8 @@ class RestController
         if (is_array($contact)) {
             return [
                 'name' => $contact['name'] ?? '',
-                'email' => $contact['email'] ?? '',
-                'phone' => $contact['phone'] ?? '',
+                'email' => Mask::email($contact['email'] ?? ''),
+                'phone' => Mask::phone($contact['phone'] ?? ''),
             ];
         }
 
@@ -1323,4 +1324,6 @@ class RestController
             'link' => $link,
         ];
     }
+
+
 }
