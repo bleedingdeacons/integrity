@@ -1,4 +1,9 @@
 <?php
+
+declare(strict_types=1);
+
+namespace Integrity\Utils;
+
 class Mask
 {
     public static function email(string $email): string

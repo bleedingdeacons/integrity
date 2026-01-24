@@ -7,7 +7,7 @@ namespace Integrity\Api;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\RateLimiter;
 use Integrity\Auth\AuditLogger;
-use Mask;
+use Integrity\Utils\Mask;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
