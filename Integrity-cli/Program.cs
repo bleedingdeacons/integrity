@@ -185,4 +185,72 @@ else
 }
 Console.WriteLine();
 
+// Intergroup Meetings
+Console.WriteLine("=== INTERGROUP MEETINGS ===");
+var intergroupMeetings = await client.GetIntergroupMeetingsAsync();
+Console.WriteLine($"Status Code: {intergroupMeetings.StatusCode}");
+if (intergroupMeetings.Success && intergroupMeetings.Data != null)
+{
+    Console.WriteLine($"Found {intergroupMeetings.Data.Count} intergroup meetings");
+    foreach (var meeting in intergroupMeetings.Data)
+    {
+        Console.WriteLine($"  - ID: {meeting.Id}, Date: {meeting.Date}, Attendees: {meeting.Attendees.Count}");
+        foreach (var attendee in meeting.Attendees.Take(3))
+        {
+            Console.WriteLine($"      - {attendee.Name}");
+        }
+        if (meeting.Attendees.Count > 3)
+        {
+            Console.WriteLine($"      ... and {meeting.Attendees.Count - 3} more");
+        }
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {intergroupMeetings.Error?.Code} - {intergroupMeetings.Error?.Message}");
+}
+Console.WriteLine();
+
+// Intergroup Meetings with Date Filter - Past 30 days
+Console.WriteLine("=== INTERGROUP MEETINGS (LAST 30 DAYS) ===");
+var recentIntergroupMeetings = await client.GetIntergroupMeetingsAsync(
+    dateFrom: DateOnly.FromDateTime(DateTime.Today.AddDays(-30)),
+    dateTo: DateOnly.FromDateTime(DateTime.Today)
+);
+Console.WriteLine($"Status Code: {recentIntergroupMeetings.StatusCode}");
+if (recentIntergroupMeetings.Success && recentIntergroupMeetings.Data != null)
+{
+    Console.WriteLine($"Found {recentIntergroupMeetings.Data.Count} intergroup meetings in the last 30 days");
+    foreach (var meeting in recentIntergroupMeetings.Data)
+    {
+        Console.WriteLine($"  - {meeting.Date}: {meeting.Attendees.Count} attendees");
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {recentIntergroupMeetings.Error?.Code} - {recentIntergroupMeetings.Error?.Message}");
+}
+Console.WriteLine();
+
+// Intergroup Meetings - All future meetings (dateTo: null means no upper bound)
+Console.WriteLine("=== UPCOMING INTERGROUP MEETINGS ===");
+var upcomingIntergroupMeetings = await client.GetIntergroupMeetingsAsync(
+    dateFrom: DateOnly.FromDateTime(DateTime.Today),
+    dateTo: null  // No upper date limit - gets all future meetings
+);
+Console.WriteLine($"Status Code: {upcomingIntergroupMeetings.StatusCode}");
+if (upcomingIntergroupMeetings.Success && upcomingIntergroupMeetings.Data != null)
+{
+    Console.WriteLine($"Found {upcomingIntergroupMeetings.Data.Count} upcoming intergroup meetings");
+    foreach (var meeting in upcomingIntergroupMeetings.Data)
+    {
+        Console.WriteLine($"  - {meeting.Date}: {meeting.Attendees.Count} attendees");
+    }
+}
+else
+{
+    Console.WriteLine($"Error: {upcomingIntergroupMeetings.Error?.Code} - {upcomingIntergroupMeetings.Error?.Message}");
+}
+Console.WriteLine();
+
 Console.WriteLine("Done!");

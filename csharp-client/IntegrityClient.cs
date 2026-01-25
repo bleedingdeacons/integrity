@@ -7,7 +7,7 @@ namespace Integrity.Client;
 
 /// <summary>
 /// Client for the Integrity WordPress API.
-/// Provides secure access to Groups, Meetings, Positions, and Members from the Unity plugin.
+/// Provides secure access to Groups, Meetings, Positions, Members, and Intergroup Meetings from the Unity plugin.
 /// </summary>
 public sealed class IntegrityClient : IDisposable
 {
@@ -259,6 +259,54 @@ public sealed class IntegrityClient : IDisposable
             url += "?expand=home_group";
 
         return await GetAsync<Member>(url, cancellationToken);
+    }
+
+    #endregion
+
+    #region Intergroup Meetings
+
+    /// <summary>
+    /// Gets all intergroup meetings with optional filtering.
+    /// </summary>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="perPage">Results per page (default: 100, max: 500)</param>
+    /// <param name="dateFrom">Filter meetings on or after this date (format: yyyy-MM-dd)</param>
+    /// <param name="dateTo">Filter meetings on or before this date (format: yyyy-MM-dd)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<List<IntergroupMeeting>>> GetIntergroupMeetingsAsync(
+        int page = 1,
+        int perPage = 100,
+        DateOnly? dateFrom = null,
+        DateOnly? dateTo = null,
+        CancellationToken cancellationToken = default)
+    {
+        var queryParams = new List<string>
+        {
+            $"page={page}",
+            $"per_page={perPage}"
+        };
+
+        if (dateFrom.HasValue)
+            queryParams.Add($"date_from={dateFrom.Value:yyyy-MM-dd}");
+
+        if (dateTo.HasValue)
+            queryParams.Add($"date_to={dateTo.Value:yyyy-MM-dd}");
+
+        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings?{string.Join("&", queryParams)}";
+        return await GetAsync<List<IntergroupMeeting>>(url, cancellationToken);
+    }
+
+    /// <summary>
+    /// Gets a single intergroup meeting by ID.
+    /// </summary>
+    /// <param name="id">Intergroup meeting ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<IntergroupMeeting>> GetIntergroupMeetingAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{id}";
+        return await GetAsync<IntergroupMeeting>(url, cancellationToken);
     }
 
     #endregion
@@ -619,6 +667,40 @@ public sealed class Member
     /// </summary>
     [JsonIgnore]
     public bool HasExpandedHomeGroup => HomeGroup != null;
+}
+
+/// <summary>
+/// Represents an intergroup meeting in the Unity system.
+/// </summary>
+public sealed class IntergroupMeeting
+{
+    public int Id { get; init; }
+    public string Date { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Array of member IDs attending the meeting.
+    /// </summary>
+    public List<int> AttendeeIds { get; init; } = [];
+
+    /// <summary>
+    /// Attendee details with ID and name.
+    /// </summary>
+    public List<IntergroupMeetingAttendee> Attendees { get; init; } = [];
+
+    /// <summary>
+    /// Gets the meeting date as a DateOnly value, if valid.
+    /// </summary>
+    [JsonIgnore]
+    public DateOnly? DateValue => DateOnly.TryParse(Date, out var date) ? date : null;
+}
+
+/// <summary>
+/// Represents an attendee of an intergroup meeting.
+/// </summary>
+public sealed class IntergroupMeetingAttendee
+{
+    public int Id { get; init; }
+    public string Name { get; init; } = string.Empty;
 }
 
 #endregion

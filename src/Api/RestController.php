@@ -123,6 +123,28 @@ class RestController
             ],
         ]);
 
+        // Intergroup Meetings endpoints
+        register_rest_route(self::NAMESPACE, '/intergroup-meetings', [
+            'methods' => 'GET',
+            'callback' => [self::class, 'getIntergroupMeetings'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getIntergroupMeetingsArgs(),
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)', [
+            'methods' => 'GET',
+            'callback' => [self::class, 'getIntergroupMeeting'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => [
+                'id' => [
+                    'required' => true,
+                    'validate_callback' => function ($param) {
+                        return is_numeric($param) && $param > 0;
+                    },
+                ],
+            ],
+        ]);
+
         // Health check endpoint (no auth required)
         register_rest_route(self::NAMESPACE, '/health', [
             'methods' => 'GET',
@@ -293,6 +315,53 @@ class RestController
                 'sanitize_callback' => function ($param) {
                     return $param === null ? null : absint($param);
                 },
+            ],
+        ];
+    }
+
+    /**
+     * Get arguments for intergroup meetings endpoint
+     */
+    private static function getIntergroupMeetingsArgs(): array
+    {
+        return [
+            'per_page' => [
+                'default' => 100,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0 && $param <= 500;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'page' => [
+                'default' => 1,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'date_from' => [
+                'default' => null,
+                'validate_callback' => function ($param) {
+                    if ($param === null) {
+                        return true;
+                    }
+                    // Validate date format Y-m-d
+                    $date = \DateTime::createFromFormat('Y-m-d', $param);
+                    return $date && $date->format('Y-m-d') === $param;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'date_to' => [
+                'default' => null,
+                'validate_callback' => function ($param) {
+                    if ($param === null) {
+                        return true;
+                    }
+                    // Validate date format Y-m-d
+                    $date = \DateTime::createFromFormat('Y-m-d', $param);
+                    return $date && $date->format('Y-m-d') === $param;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
             ],
         ];
     }
@@ -1084,6 +1153,166 @@ class RestController
     }
 
     /**
+     * Get all intergroup meetings
+     */
+    public static function getIntergroupMeetings(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+
+        try {
+            $container = \Unity\Plugin::getContainer();
+            $intergroupMeetingRepo = $container->get(\Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepositoryInterface::class);
+
+            $args = [
+                'posts_per_page' => $request->get_param('per_page'),
+                'paged' => $request->get_param('page'),
+            ];
+
+            $dateFrom = $request->get_param('date_from');
+            $dateTo = $request->get_param('date_to');
+
+            if ($dateFrom !== null || $dateTo !== null) {
+                $metaQuery = [];
+                if ($dateFrom !== null) {
+                    // Convert Y-m-d to Ymd format (ACF stores dates as Ymd)
+                    $dateFromFormatted = str_replace('-', '', $dateFrom);
+                    $metaQuery[] = [
+                        'key' => 'intergroup-meeting_date',
+                        'value' => $dateFromFormatted,
+                        'compare' => '>=',
+                    ];
+                }
+                if ($dateTo !== null) {
+                    // Convert Y-m-d to Ymd format (ACF stores dates as Ymd)
+                    $dateToFormatted = str_replace('-', '', $dateTo);
+                    $metaQuery[] = [
+                        'key' => 'intergroup-meeting_date',
+                        'value' => $dateToFormatted,
+                        'compare' => '<=',
+                    ];
+                }
+                if (count($metaQuery) > 1) {
+                    $metaQuery['relation'] = 'AND';
+                }
+                $args['meta_query'] = $metaQuery;
+            }
+
+            $intergroupMeetings = $intergroupMeetingRepo->findAll($args);
+            $total = $intergroupMeetingRepo->count($args);
+
+            $perPage = (int) $request->get_param('per_page');
+            $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 1;
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                $args,
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => array_map([self::class, 'transformIntergroupMeeting'], $intergroupMeetings),
+                'meta' => [
+                    'total' => $total,
+                    'page' => (int) $request->get_param('page'),
+                    'per_page' => $perPage,
+                    'total_pages' => $totalPages,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                null,
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get a single intergroup meeting
+     */
+    public static function getIntergroupMeeting(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+        $id = (int) $request->get_param('id');
+
+        try {
+            $container = \Unity\Plugin::getContainer();
+            $intergroupMeetingRepo = $container->get(\Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepositoryInterface::class);
+
+            $intergroupMeeting = $intergroupMeetingRepo->find($id);
+
+            if (!$intergroupMeeting) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $id],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_found',
+                        'message' => 'Intergroup meeting not found',
+                    ],
+                ], 404);
+            }
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $id],
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => self::transformIntergroupMeeting($intergroupMeeting),
+            ], 200);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $id],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
      * Health check endpoint
      */
     public static function healthCheck(WP_REST_Request $request): WP_REST_Response
@@ -1322,6 +1551,36 @@ class RestController
             'intergroup_position_name' => $intergroupPositionName,
             'intergroup_position_rotation' => $member->getIntergroupPositionRotation(),
             'link' => $link,
+        ];
+    }
+
+    /**
+     * Transform an IntergroupMeeting object to API response format
+     *
+     * @param \Unity\IntergroupMeetings\Interfaces\IntergroupMeetingInterface $intergroupMeeting
+     * @return array
+     */
+    private static function transformIntergroupMeeting(\Unity\IntergroupMeetings\Interfaces\IntergroupMeetingInterface $intergroupMeeting): array
+    {
+        $attendeeIds = $intergroupMeeting->getAttendees();
+        $attendees = [];
+
+        // Get attendee details
+        foreach ($attendeeIds as $attendeeId) {
+            $attendeePost = get_post($attendeeId);
+            if ($attendeePost) {
+                $attendees[] = [
+                    'id' => $attendeeId,
+                    'name' => $attendeePost->post_title ?? '',
+                ];
+            }
+        }
+
+        return [
+            'id' => $intergroupMeeting->getId(),
+            'date' => $intergroupMeeting->getDate(),
+            'attendee_ids' => $attendeeIds,
+            'attendees' => $attendees,
         ];
     }
 
