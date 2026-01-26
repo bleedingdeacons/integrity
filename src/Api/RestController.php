@@ -1562,16 +1562,30 @@ class RestController
      */
     private static function transformIntergroupMeeting(\Unity\IntergroupMeetings\Interfaces\IntergroupMeetingInterface $intergroupMeeting): array
     {
-        $attendeeIds = $intergroupMeeting->getAttendees();
-        $attendees = [];
+        $groupAttendeeIds = $intergroupMeeting->getGroupAttendees();
+        $groupAttendees = [];
 
         // Get attendee details
-        foreach ($attendeeIds as $attendeeId) {
+        foreach ($groupAttendeeIds as $attendeeId) {
             $attendeePost = get_post($attendeeId);
             if ($attendeePost) {
-                $attendees[] = [
+                $groupAttendees[] = [
                     'id' => $attendeeId,
                     'name' => $attendeePost->post_title ?? '',
+                ];
+            }
+        }
+
+        $officersAttendingIds = $intergroupMeeting->getOfficersAttending();
+        $officersAttending = [];
+
+        // Get officer details
+        foreach ($officersAttendingIds as $officerId) {
+            $officerPost = get_post($officerId);
+            if ($officerPost) {
+                $officersAttending[] = [
+                    'id' => $officerId,
+                    'name' => $officerPost->post_title ?? '',
                 ];
             }
         }
@@ -1579,8 +1593,10 @@ class RestController
         return [
             'id' => $intergroupMeeting->getId(),
             'date' => $intergroupMeeting->getDate(),
-            'attendee_ids' => $attendeeIds,
-            'attendees' => $attendees,
+            'group_attendee_ids' => $groupAttendeeIds,
+            'group_attendees' => $groupAttendees,
+            'officers_attending_ids' => $officersAttendingIds,
+            'officers_attending' => $officersAttending,
         ];
     }
 

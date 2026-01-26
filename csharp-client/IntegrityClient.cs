@@ -680,12 +680,22 @@ public sealed class IntergroupMeeting
     /// <summary>
     /// Array of member IDs attending the meeting.
     /// </summary>
-    public List<int> AttendeeIds { get; init; } = [];
+    public List<int> GroupAttendeeIds { get; init; } = [];
 
     /// <summary>
     /// Attendee details with ID and name.
     /// </summary>
-    public List<IntergroupMeetingAttendee> Attendees { get; init; } = [];
+    public List<IntergroupMeetingAttendee> GroupAttendees { get; init; } = [];
+
+    /// <summary>
+    /// Array of officer IDs attending the meeting.
+    /// </summary>
+    public List<int> OfficersAttendingIds { get; init; } = [];
+
+    /// <summary>
+    /// Officer details with ID and name.
+    /// </summary>
+    public List<IntergroupMeetingAttendee> OfficersAttending { get; init; } = [];
 
     /// <summary>
     /// Gets the meeting date as a DateOnly value, if valid.

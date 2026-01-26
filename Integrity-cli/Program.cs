@@ -194,14 +194,30 @@ if (intergroupMeetings.Success && intergroupMeetings.Data != null)
     Console.WriteLine($"Found {intergroupMeetings.Data.Count} intergroup meetings");
     foreach (var meeting in intergroupMeetings.Data)
     {
-        Console.WriteLine($"  - ID: {meeting.Id}, Date: {meeting.Date}, Attendees: {meeting.Attendees.Count}");
-        foreach (var attendee in meeting.Attendees.Take(3))
+        Console.WriteLine($"  - ID: {meeting.Id}, Date: {meeting.Date}, GroupAttendees: {meeting.GroupAttendees.Count}, OfficersAttending: {meeting.OfficersAttending.Count}");
+        if (meeting.GroupAttendees.Count > 0)
         {
-            Console.WriteLine($"      - {attendee.Name}");
+            Console.WriteLine($"    Group Attendees:");
+            foreach (var attendee in meeting.GroupAttendees.Take(3))
+            {
+                Console.WriteLine($"      - {attendee.Name}");
+            }
+            if (meeting.GroupAttendees.Count > 3)
+            {
+                Console.WriteLine($"      ... and {meeting.GroupAttendees.Count - 3} more");
+            }
         }
-        if (meeting.Attendees.Count > 3)
+        if (meeting.OfficersAttending.Count > 0)
         {
-            Console.WriteLine($"      ... and {meeting.Attendees.Count - 3} more");
+            Console.WriteLine($"    Officers Attending:");
+            foreach (var officer in meeting.OfficersAttending.Take(3))
+            {
+                Console.WriteLine($"      - {officer.Name}");
+            }
+            if (meeting.OfficersAttending.Count > 3)
+            {
+                Console.WriteLine($"      ... and {meeting.OfficersAttending.Count - 3} more");
+            }
         }
     }
 }
@@ -223,7 +239,7 @@ if (recentIntergroupMeetings.Success && recentIntergroupMeetings.Data != null)
     Console.WriteLine($"Found {recentIntergroupMeetings.Data.Count} intergroup meetings in the last 30 days");
     foreach (var meeting in recentIntergroupMeetings.Data)
     {
-        Console.WriteLine($"  - {meeting.Date}: {meeting.Attendees.Count} attendees");
+        Console.WriteLine($"  - {meeting.Date}: {meeting.GroupAttendees.Count} group attendees, {meeting.OfficersAttending.Count} officers");
     }
 }
 else
@@ -244,7 +260,7 @@ if (upcomingIntergroupMeetings.Success && upcomingIntergroupMeetings.Data != nul
     Console.WriteLine($"Found {upcomingIntergroupMeetings.Data.Count} upcoming intergroup meetings");
     foreach (var meeting in upcomingIntergroupMeetings.Data)
     {
-        Console.WriteLine($"  - {meeting.Date}: {meeting.Attendees.Count} attendees");
+        Console.WriteLine($"  - {meeting.Date}: {meeting.GroupAttendees.Count} group attendees, {meeting.OfficersAttending.Count} officers");
     }
 }
 else
