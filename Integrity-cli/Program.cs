@@ -227,10 +227,10 @@ else
 }
 Console.WriteLine();
 
-// Intergroup Meetings with Date Filter - Past 30 days
-Console.WriteLine("=== INTERGROUP MEETINGS (LAST 30 DAYS) ===");
+// Intergroup Meetings with Date Filter - Past 90 days
+Console.WriteLine("=== INTERGROUP MEETINGS (LAST 90 DAYS) ===");
 var recentIntergroupMeetings = await client.GetIntergroupMeetingsAsync(
-    dateFrom: DateOnly.FromDateTime(DateTime.Today.AddDays(-30)),
+    dateFrom: DateOnly.FromDateTime(DateTime.Today.AddDays(-90)),
     dateTo: DateOnly.FromDateTime(DateTime.Today)
 );
 Console.WriteLine($"Status Code: {recentIntergroupMeetings.StatusCode}");
