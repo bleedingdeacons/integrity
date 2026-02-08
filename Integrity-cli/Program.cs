@@ -2,7 +2,7 @@
 using Integrity.Client;
 
 Console.WriteLine("Integrity CLI");
-using var client = new IntegrityClient(
+using var client = new IntegrityRestClient(
     "http://unity-dev.local/",
     "int_4b933f9dcfef5c90b59be21c8c603c6ae94f1817367d51297c54a075e416a51a"
 );

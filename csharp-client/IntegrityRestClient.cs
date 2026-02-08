@@ -10,7 +10,7 @@ namespace Integrity.Client;
 /// Client for the Integrity WordPress API.
 /// Provides secure access to Groups, Meetings, Positions, Members, and Intergroup Meetings from the Unity plugin.
 /// </summary>
-public sealed class IntegrityClient : IDisposable
+public sealed class IntegrityRestClient : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly string _baseUrl;
@@ -23,7 +23,7 @@ public sealed class IntegrityClient : IDisposable
     /// <param name="baseUrl">The WordPress site URL (e.g., "https://example.com")</param>
     /// <param name="apiKey">Your Integrity API key</param>
     /// <param name="httpClient">Optional HttpClient instance for dependency injection</param>
-    public IntegrityClient(string baseUrl, string apiKey, HttpClient? httpClient = null)
+    public IntegrityRestClient(string baseUrl, string apiKey, HttpClient? httpClient = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
