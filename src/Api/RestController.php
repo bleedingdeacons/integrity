@@ -10,17 +10,17 @@ use Integrity\Auth\AuditLogger;
 use Integrity\Utils\Mask;
 use Unity\Plugin;
 use Unity\Contact\Interfaces\ContactInterface;
-use Unity\Groups\Interfaces\GroupInterface;
-use Unity\Groups\Interfaces\GroupRepositoryInterface;
-use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingInterface;
-use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepositoryInterface;
-use Unity\Locations\Interfaces\LocationInterface;
-use Unity\Meetings\Interfaces\MeetingInterface;
-use Unity\Meetings\Interfaces\MeetingRepositoryInterface;
-use Unity\Members\Interfaces\MemberInterface;
-use Unity\Members\Interfaces\MemberRepositoryInterface;
-use Unity\Positions\Interfaces\PositionInterface;
-use Unity\Positions\Interfaces\PositionRepositoryInterface;
+use Unity\Groups\Interfaces\Group;
+use Unity\Groups\Interfaces\GroupRepository;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeeting;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepository;
+use Unity\Locations\Interfaces\Location;
+use Unity\Meetings\Interfaces\Meeting;
+use Unity\Meetings\Interfaces\MeetingRepository;
+use Unity\Members\Interfaces\Member;
+use Unity\Members\Interfaces\MemberRepository;
+use Unity\Positions\Interfaces\Position;
+use Unity\Positions\Interfaces\PositionRepository;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -549,7 +549,7 @@ class RestController
         try {
             // Get Unity container
             $container = Plugin::getContainer();
-            $groupRepo = $container->get(GroupRepositoryInterface::class);
+            $groupRepo = $container->get(GroupRepository::class);
 
             // Build query args
             $args = [
@@ -633,7 +633,7 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $groupRepo = $container->get(GroupRepositoryInterface::class);
+            $groupRepo = $container->get(GroupRepository::class);
 
             $group = $groupRepo->findById($id);
 
@@ -704,7 +704,7 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $meetingRepo = $container->get(MeetingRepositoryInterface::class);
+            $meetingRepo = $container->get(MeetingRepository::class);
 
             // Build query args
             $args = [
@@ -824,7 +824,7 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $meetingRepo = $container->get(MeetingRepositoryInterface::class);
+            $meetingRepo = $container->get(MeetingRepository::class);
 
             $meeting = $meetingRepo->find($id);
 
@@ -891,7 +891,7 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $positionRepo = $container->get(PositionRepositoryInterface::class);
+            $positionRepo = $container->get(PositionRepository::class);
 
             $args = [
                 'posts_per_page' => $request->get_param('per_page'),
@@ -960,7 +960,7 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $positionRepo = $container->get(PositionRepositoryInterface::class);
+            $positionRepo = $container->get(PositionRepository::class);
 
             // Use findById instead of find for positions
             $position = $positionRepo->findById($id);
@@ -1028,10 +1028,10 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $memberRepo = $container->get(MemberRepositoryInterface::class);
-            $groupRepo = $container->get(GroupRepositoryInterface::class);
-            $positionRepo = $container->get(PositionRepositoryInterface::class);
-            $meetingRepo = $container->get(MeetingRepositoryInterface::class);
+            $memberRepo = $container->get(MemberRepository::class);
+            $groupRepo = $container->get(GroupRepository::class);
+            $positionRepo = $container->get(PositionRepository::class);
+            $meetingRepo = $container->get(MeetingRepository::class);
 
             $args = [
                 'posts_per_page' => $request->get_param('per_page'),
@@ -1140,7 +1140,7 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $memberRepo = $container->get(MemberRepositoryInterface::class);
+            $memberRepo = $container->get(MemberRepository::class);
 
             $member = $memberRepo->find($id);
 
@@ -1207,8 +1207,8 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $intergroupMeetingRepo = $container->get(IntergroupMeetingRepositoryInterface::class);
-            $memberRepo = $container->get(MemberRepositoryInterface::class);
+            $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
+            $memberRepo = $container->get(MemberRepository::class);
 
             $args = [
                 'posts_per_page' => $request->get_param('per_page'),
@@ -1316,7 +1316,7 @@ class RestController
 
         try {
             $container = Plugin::getContainer();
-            $intergroupMeetingRepo = $container->get(IntergroupMeetingRepositoryInterface::class);
+            $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
 
             $intergroupMeeting = $intergroupMeetingRepo->find($id);
 
@@ -1391,11 +1391,11 @@ class RestController
     /**
      * Transform a Group object to API response format
      *
-     * @param GroupInterface $group
+     * @param Group $group
      * @param array $expand Array of fields to expand (e.g., ['meetings'])
      * @return array
      */
-    private static function transformGroup(GroupInterface $group, array $expand = []): array
+    private static function transformGroup(Group $group, array $expand = []): array
     {
         $contacts = $group->getContacts();
         $meetings = $group->getMeetings();
@@ -1437,7 +1437,7 @@ class RestController
     /**
      * Transform a Meeting object to API response format
      */
-    private static function transformMeeting(MeetingInterface $meeting): array
+    private static function transformMeeting(Meeting $meeting): array
     {
         $contacts = $meeting->getContacts();
         $location = $meeting->getLocation();
@@ -1465,10 +1465,10 @@ class RestController
     /**
      * Transform a Location object to API response format
      *
-     * @param LocationInterface $location
+     * @param Location $location
      * @return array
      */
-    private static function transformLocation(LocationInterface $location): array
+    private static function transformLocation(Location $location): array
     {
         return [
             'id' => $location->getId(),
@@ -1523,10 +1523,10 @@ class RestController
     /**
      * Transform a Position object to API response format
      *
-     * @param PositionInterface $position
+     * @param Position $position
      * @return array
      */
-    private static function transformPosition(PositionInterface $position): array
+    private static function transformPosition(Position $position): array
     {
         return [
             'id' => $position->getId(),
@@ -1543,16 +1543,16 @@ class RestController
     /**
      * Transform a Member object to API response format
      *
-     * @param MemberInterface $member
+     * @param Member $member
      * @return array
      * @deprecated Use transformMemberWithCache for better performance
      */
-    private static function transformMember(MemberInterface $member): array
+    private static function transformMember(Member $member): array
     {
         $container = Plugin::getContainer();
-        $groupRepo = $container->get(GroupRepositoryInterface::class);
-        $positionRepo = $container->get(PositionRepositoryInterface::class);
-        $meetingRepo = $container->get(MeetingRepositoryInterface::class);
+        $groupRepo = $container->get(GroupRepository::class);
+        $positionRepo = $container->get(PositionRepository::class);
+        $meetingRepo = $container->get(MeetingRepository::class);
 
         // Collect IDs
         $groupIds = [];
@@ -1583,14 +1583,14 @@ class RestController
     /**
      * Transform a Member object to API response format using cached entities
      *
-     * @param MemberInterface $member
-     * @param array<int, GroupInterface> $groupCache
-     * @param array<int, PositionInterface> $positionCache
-     * @param array<int, MeetingInterface> $meetingCache
+     * @param Member $member
+     * @param array<int, Group> $groupCache
+     * @param array<int, Position> $positionCache
+     * @param array<int, Meeting> $meetingCache
      * @return array
      */
     private static function transformMemberWithCache(
-        MemberInterface $member,
+        Member $member,
         array $groupCache,
         array $positionCache,
         array $meetingCache
@@ -1660,11 +1660,11 @@ class RestController
     /**
      * Batch fetch members by IDs using repository
      *
-     * @param MemberRepositoryInterface $memberRepo
+     * @param MemberRepository $memberRepo
      * @param array<int> $memberIds
-     * @return array<int, MemberInterface> Map of member ID to member object
+     * @return array<int, Member> Map of member ID to member object
      */
-    private static function batchGetMembers(MemberRepositoryInterface $memberRepo, array $memberIds): array
+    private static function batchGetMembers(MemberRepository $memberRepo, array $memberIds): array
     {
         if (empty($memberIds)) {
             return [];
@@ -1686,11 +1686,11 @@ class RestController
     /**
      * Batch fetch groups by IDs using repository
      *
-     * @param GroupRepositoryInterface $groupRepo
+     * @param GroupRepository $groupRepo
      * @param array<int> $groupIds
-     * @return array<int, GroupInterface> Map of group ID to group object
+     * @return array<int, Group> Map of group ID to group object
      */
-    private static function batchGetGroups(GroupRepositoryInterface $groupRepo, array $groupIds): array
+    private static function batchGetGroups(GroupRepository $groupRepo, array $groupIds): array
     {
         if (empty($groupIds)) {
             return [];
@@ -1712,11 +1712,11 @@ class RestController
     /**
      * Batch fetch positions by IDs using repository
      *
-     * @param PositionRepositoryInterface $positionRepo
+     * @param PositionRepository $positionRepo
      * @param array<int> $positionIds
-     * @return array<int, PositionInterface> Map of position ID to position object
+     * @return array<int, Position> Map of position ID to position object
      */
-    private static function batchGetPositions(PositionRepositoryInterface $positionRepo, array $positionIds): array
+    private static function batchGetPositions(PositionRepository $positionRepo, array $positionIds): array
     {
         if (empty($positionIds)) {
             return [];
@@ -1738,11 +1738,11 @@ class RestController
     /**
      * Batch fetch meetings by IDs using repository
      *
-     * @param MeetingRepositoryInterface $meetingRepo
+     * @param MeetingRepository $meetingRepo
      * @param array<int> $meetingIds
-     * @return array<int, MeetingInterface> Map of meeting ID to meeting object
+     * @return array<int, Meeting> Map of meeting ID to meeting object
      */
-    private static function batchGetMeetings(MeetingRepositoryInterface $meetingRepo, array $meetingIds): array
+    private static function batchGetMeetings(MeetingRepository $meetingRepo, array $meetingIds): array
     {
         if (empty($meetingIds)) {
             return [];
@@ -1764,11 +1764,11 @@ class RestController
     /**
      * Transform an IntergroupMeeting object to API response format using cached members
      *
-     * @param IntergroupMeetingInterface $intergroupMeeting
-     * @param array<int, MemberInterface> $memberCache
+     * @param IntergroupMeeting $intergroupMeeting
+     * @param array<int, Member> $memberCache
      * @return array
      */
-    private static function transformIntergroupMeetingWithCache(IntergroupMeetingInterface $intergroupMeeting, array $memberCache): array
+    private static function transformIntergroupMeetingWithCache(IntergroupMeeting $intergroupMeeting, array $memberCache): array
     {
         $groupAttendeeIds = $intergroupMeeting->getGroupAttendees();
         $groupAttendees = [];
@@ -1807,14 +1807,14 @@ class RestController
     /**
      * Transform an IntergroupMeeting object to API response format
      *
-     * @param IntergroupMeetingInterface $intergroupMeeting
+     * @param IntergroupMeeting $intergroupMeeting
      * @return array
      * @deprecated Use transformIntergroupMeetingWithCache for better performance
      */
-    private static function transformIntergroupMeeting(IntergroupMeetingInterface $intergroupMeeting): array
+    private static function transformIntergroupMeeting(IntergroupMeeting $intergroupMeeting): array
     {
         $container = Plugin::getContainer();
-        $memberRepo = $container->get(MemberRepositoryInterface::class);
+        $memberRepo = $container->get(MemberRepository::class);
 
         $groupAttendeeIds = $intergroupMeeting->getGroupAttendees();
         $officersAttendingIds = $intergroupMeeting->getOfficersAttending();

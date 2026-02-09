@@ -239,7 +239,7 @@ class RestControllerTest extends TestCase
     public function transformGroup_returns_expected_structure(): void
     {
         // Mock a group object
-        $group = Mockery::mock('Unity\Groups\Interfaces\GroupInterface');
+        $group = Mockery::mock('Unity\Groups\Interfaces\Group');
         $group->shouldReceive('getId')->andReturn(1);
         $group->shouldReceive('getTitle')->andReturn('Test Group');
         $group->shouldReceive('getEmail')->andReturn('test@example.com');
@@ -277,7 +277,7 @@ class RestControllerTest extends TestCase
     public function transformMeeting_returns_expected_structure(): void
     {
         // Mock a meeting object
-        $meeting = Mockery::mock('Unity\Meetings\Interfaces\MeetingInterface');
+        $meeting = Mockery::mock('Unity\Meetings\Interfaces\Meeting');
         $meeting->shouldReceive('getId')->andReturn(100);
         $meeting->shouldReceive('getName')->andReturn('Morning Meditation');
         $meeting->shouldReceive('getSlug')->andReturn('morning-meditation');
