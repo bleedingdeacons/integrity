@@ -9,7 +9,7 @@ use Integrity\Auth\RateLimiter;
 use Integrity\Auth\AuditLogger;
 use Integrity\Utils\Mask;
 use Unity\Plugin;
-use Unity\Contact\Interfaces\ContactInterface;
+use Unity\Contacts\Interfaces\Contact;
 use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeeting;
@@ -1491,12 +1491,12 @@ class RestController
     /**
      * Transform a Contact object to API response format
      *
-     * @param ContactInterface|array $contact
+     * @param Contact|array $contact
      * @return array
      */
     private static function transformContact($contact): array
     {
-        if ($contact instanceof ContactInterface) {
+        if ($contact instanceof Contact) {
             return [
                 'name' => $contact->getName(),
                 'email' => Mask::email($contact->getEmail()),

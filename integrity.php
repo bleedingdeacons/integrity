@@ -53,7 +53,7 @@ spl_autoload_register(function ($class) {
 });
 
 // Initialize plugin after Unity is fully loaded
-add_action('unity_loaded', function ($container): void {
+add_action('unity/loaded', function ($container): void {
     try {
         // Initialize Integrity
         \Integrity\Plugin::init();
@@ -172,8 +172,8 @@ register_activation_hook(__FILE__, function (): void {
     add_option('integrity_require_https', true);
 
     // Schedule cleanup cron
-    if (!wp_next_scheduled('integrity_cleanup_cron')) {
-        wp_schedule_event(time(), 'daily', 'integrity_cleanup_cron');
+    if (!wp_next_scheduled('integrity/cleanup_cron')) {
+        wp_schedule_event(time(), 'daily', 'integrity/cleanup_cron');
     }
 
     // Flush rewrite rules
@@ -182,12 +182,12 @@ register_activation_hook(__FILE__, function (): void {
 
 // Deactivation hook
 register_deactivation_hook(__FILE__, function (): void {
-    wp_clear_scheduled_hook('integrity_cleanup_cron');
+    wp_clear_scheduled_hook('integrity/cleanup_cron');
     flush_rewrite_rules();
 });
 
 // Cleanup cron handler
-add_action('integrity_cleanup_cron', function (): void {
+add_action('integrity/cleanup_cron', function (): void {
     global $wpdb;
     
     // Clean old rate limit records

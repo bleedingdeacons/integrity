@@ -544,7 +544,7 @@ PSR-4 Autoloading:
 
 Dependencies:
   Integrity requires the Unity plugin to be installed and activated.
-  It hooks into the 'unity_loaded' action to ensure Unity is fully
+  It hooks into the 'unity/loaded' action to ensure Unity is fully
   initialized before Integrity starts.
 
 NOTES;
