@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Integrity.Client", "Integri
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Integrity-cli", "..\Integrity-cli\Integrity-cli.csproj", "{791A5F15-27C9-42CF-AEA8-46019A49CFE3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheBleedingDeacons.Intergroup.Models", "..\..\..\..\..\..\..\..\..\..\Data\dev\Register\TheBleedingDeacons.Intergroup.Models\TheBleedingDeacons.Intergroup.Models.csproj", "{D6FD5B23-BA19-E1CE-B7C0-59F0ED4CAC41}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{791A5F15-27C9-42CF-AEA8-46019A49CFE3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{791A5F15-27C9-42CF-AEA8-46019A49CFE3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{791A5F15-27C9-42CF-AEA8-46019A49CFE3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D6FD5B23-BA19-E1CE-B7C0-59F0ED4CAC41}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D6FD5B23-BA19-E1CE-B7C0-59F0ED4CAC41}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D6FD5B23-BA19-E1CE-B7C0-59F0ED4CAC41}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D6FD5B23-BA19-E1CE-B7C0-59F0ED4CAC41}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

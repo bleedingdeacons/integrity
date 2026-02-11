@@ -1638,7 +1638,7 @@ class RestController
 
         return [
             'id' => $member->getId(),
-            'private_name' => $member->getPrivateName(),
+//            'private_name' => $member->getPrivateName(),
             'anonymous_name' => $member->getAnonymousName(),
             'email' => $member->getEmail(),
             'personal_email' => $member->getPersonalEmail(),
