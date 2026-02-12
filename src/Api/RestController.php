@@ -391,7 +391,7 @@ class RestController
         $startTime = microtime(true);
 
         // Require HTTPS in production
-        if (get_option('integrity_require_https', true) && !is_ssl() && !defined('WP_DEBUG') || !WP_DEBUG) {
+        if (get_option('integrity_require_https', true) && !is_ssl() && !(defined('WP_DEBUG') && WP_DEBUG)) { {
             self::logFailedRequest($request, 403, $startTime);
             return new WP_Error(
                 'https_required',
@@ -519,6 +519,18 @@ class RestController
 
         if (strpos($endpoint, '/meetings') !== false) {
             return 'meetings:read';
+        }
+
+        if (strpos($endpoint, '/members') !== false) {
+            return 'members:read';
+        }
+
+        if (strpos($endpoint, '/positions') !== false) {
+            return 'positions:read';
+        }
+
+        if (strpos($endpoint, '/intergroup-meetings') !== false) {
+            return 'intergroup-meetings:read';
         }
 
         return null;
