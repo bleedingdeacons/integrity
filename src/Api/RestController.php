@@ -391,7 +391,7 @@ class RestController
         $startTime = microtime(true);
 
         // Require HTTPS in production
-        if (get_option('integrity_require_https', true) && !is_ssl() && !(defined('WP_DEBUG') && WP_DEBUG)) { {
+        if (get_option('integrity_require_https', true) && !is_ssl() && !(defined('WP_DEBUG') && WP_DEBUG)) {
             self::logFailedRequest($request, 403, $startTime);
             return new WP_Error(
                 'https_required',
@@ -1652,7 +1652,6 @@ class RestController
         return [
             'id' => $member->getId(),
             'anonymous_name' => $member->getAnonymousName(),
-            'email' => $member->getEmail(),
             'personal_email' => Mask::email($member->getPersonalEmail()),
             'mobile_number' => Mask::phone($member->getMobileNumber()),
             'show_anonymous_name' => $member->showAnonymousName(),
