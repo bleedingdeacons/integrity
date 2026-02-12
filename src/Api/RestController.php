@@ -34,6 +34,7 @@ class RestController
 {
     private const NAMESPACE = 'integrity/v1';
 
+
     /**
      * Register REST API routes
      */
@@ -1638,11 +1639,10 @@ class RestController
 
         return [
             'id' => $member->getId(),
-//            'private_name' => $member->getPrivateName(),
             'anonymous_name' => $member->getAnonymousName(),
             'email' => $member->getEmail(),
-            'personal_email' => $member->getPersonalEmail(),
-            'mobile_number' => $member->getMobileNumber(),
+            'personal_email' => Mask::email($member->getPersonalEmail()),
+            'mobile_number' => Mask::phone($member->getMobileNumber()),
             'show_anonymous_name' => $member->showAnonymousName(),
             'show_member_profile' => $member->showMemberProfile(),
             'anonymous_profile' => $member->getAnonymousProfile(),
