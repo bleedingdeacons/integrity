@@ -4,7 +4,7 @@ using Integrity.Client;
 Console.WriteLine("Integrity CLI");
 using var client = new IntegrityRestClient(
     "http://unity-dev.local/",
-    "int_4b933f9dcfef5c90b59be21c8c603c6ae94f1817367d51297c54a075e416a51a"
+    "int_de8e8f80b7585dd25d96784d9936a4c32b124c8b90903dce449aa7217a77db47"
 );
 
 // Health Check

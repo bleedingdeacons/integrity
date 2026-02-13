@@ -513,6 +513,11 @@ class RestController
      */
     private static function getRequiredPermission(string $endpoint): ?string
     {
+        // Check intergroup-meetings before meetings/members (substring match)
+        if (strpos($endpoint, '/intergroup-meetings') !== false) {
+            return 'intergroup-meetings:read';
+        }
+
         if (strpos($endpoint, '/groups') !== false) {
             return 'groups:read';
         }
@@ -527,10 +532,6 @@ class RestController
 
         if (strpos($endpoint, '/positions') !== false) {
             return 'positions:read';
-        }
-
-        if (strpos($endpoint, '/intergroup-meetings') !== false) {
-            return 'intergroup-meetings:read';
         }
 
         return null;

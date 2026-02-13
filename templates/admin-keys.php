@@ -79,6 +79,18 @@ if (!defined('ABSPATH')) {
                                 <?php echo esc_html__('Read Meetings', 'integrity'); ?>
                             </label><br>
                             <label>
+                                <input type="checkbox" name="perm_positions" value="1">
+                                <?php echo esc_html__('Read Positions', 'integrity'); ?>
+                            </label><br>
+                            <label>
+                                <input type="checkbox" name="perm_members" value="1">
+                                <?php echo esc_html__('Read Members', 'integrity'); ?>
+                            </label><br>
+                            <label>
+                                <input type="checkbox" name="perm_intergroup_meetings" value="1">
+                                <?php echo esc_html__('Read Intergroup Meetings', 'integrity'); ?>
+                            </label><br>
+                            <label>
                                 <input type="checkbox" name="perm_all" value="1">
                                 <?php echo esc_html__('Full Access (all permissions)', 'integrity'); ?>
                             </label>
@@ -257,6 +269,36 @@ if (!defined('ABSPATH')) {
                     <td><code>GET</code></td>
                     <td><code>/wp-json/integrity/v1/meetings/{id}</code></td>
                     <td><?php echo esc_html__('Get a single meeting', 'integrity'); ?></td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/wp-json/integrity/v1/positions</code></td>
+                    <td><?php echo esc_html__('List all positions', 'integrity'); ?></td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/wp-json/integrity/v1/positions/{id}</code></td>
+                    <td><?php echo esc_html__('Get a single position', 'integrity'); ?></td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/wp-json/integrity/v1/members</code></td>
+                    <td><?php echo esc_html__('List all members', 'integrity'); ?></td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/wp-json/integrity/v1/members/{id}</code></td>
+                    <td><?php echo esc_html__('Get a single member', 'integrity'); ?></td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/wp-json/integrity/v1/intergroup-meetings</code></td>
+                    <td><?php echo esc_html__('List all intergroup meetings', 'integrity'); ?></td>
+                </tr>
+                <tr>
+                    <td><code>GET</code></td>
+                    <td><code>/wp-json/integrity/v1/intergroup-meetings/{id}</code></td>
+                    <td><?php echo esc_html__('Get a single intergroup meeting', 'integrity'); ?></td>
                 </tr>
                 <tr>
                     <td><code>GET</code></td>

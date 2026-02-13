@@ -191,6 +191,15 @@ class SettingsPage
         if (!empty($_POST['perm_meetings'])) {
             $permissions[] = 'meetings:read';
         }
+        if (!empty($_POST['perm_positions'])) {
+            $permissions[] = 'positions:read';
+        }
+        if (!empty($_POST['perm_members'])) {
+            $permissions[] = 'members:read';
+        }
+        if (!empty($_POST['perm_intergroup_meetings'])) {
+            $permissions[] = 'intergroup-meetings:read';
+        }
         if (!empty($_POST['perm_all'])) {
             $permissions = ['*'];
         }
