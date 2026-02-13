@@ -22,6 +22,13 @@ if (groups.Success && groups.Data != null)
     foreach (var group in groups.Data)
     {
         Console.WriteLine($"  - {group.Title} (Meetings: {group.Meetings.Count})");
+        if (group.Contacts.Count > 0)
+        {
+            foreach (var contact in group.Contacts)
+            {
+                Console.WriteLine($"    Contact: {contact.Name} | {contact.Email} | {contact.Phone}");
+            }
+        }
     }
 }
 else
@@ -40,6 +47,13 @@ if (onlineMeetings.Success && onlineMeetings.Data != null)
     foreach (var meeting in onlineMeetings.Data)
     {
         Console.WriteLine($"  - {meeting.Name}");
+        if (meeting.Contacts.Count > 0)
+        {
+            foreach (var contact in meeting.Contacts)
+            {
+                Console.WriteLine($"    Contact: {contact.Name} | {contact.Email} | {contact.Phone}");
+            }
+        }
     }
 }
 else
@@ -58,6 +72,13 @@ if (sundayMeetings.Success && sundayMeetings.Data != null)
     foreach (var meeting in sundayMeetings.Data.Take(10))
     {
         Console.WriteLine($"  - {meeting.Name} at {meeting.Time} (Day: {meeting.Day}, DayOfWeek: {meeting.DayOfWeek})");
+        if (meeting.Contacts.Count > 0)
+        {
+            foreach (var contact in meeting.Contacts)
+            {
+                Console.WriteLine($"    Contact: {contact.Name} | {contact.Email} | {contact.Phone}");
+            }
+        }
     }
 }
 else
@@ -76,6 +97,13 @@ if (mondayMeetings.Success && mondayMeetings.Data != null)
     foreach (var meeting in mondayMeetings.Data.Take(5))
     {
         Console.WriteLine($"  - {meeting.Name} at {meeting.Time}");
+        if (meeting.Contacts.Count > 0)
+        {
+            foreach (var contact in meeting.Contacts)
+            {
+                Console.WriteLine($"    Contact: {contact.Name} | {contact.Email} | {contact.Phone}");
+            }
+        }
     }
 }
 else
@@ -94,6 +122,13 @@ if (allMeetings.Success && allMeetings.Data != null)
     foreach (var meeting in allMeetings.Data)
     {
         Console.WriteLine($"  - {meeting.Name}");
+        if (meeting.Contacts.Count > 0)
+        {
+            foreach (var contact in meeting.Contacts)
+            {
+                Console.WriteLine($"    Contact: {contact.Name} | {contact.Email} | {contact.Phone}");
+            }
+        }
     }
 }
 else
