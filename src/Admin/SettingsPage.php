@@ -9,7 +9,7 @@ use Integrity\Auth\AuditLogger;
 
 /**
  * Admin Settings Page
- * 
+ *
  * Provides WordPress admin interface for managing Integrity API keys and settings.
  */
 class SettingsPage
@@ -114,7 +114,7 @@ class SettingsPage
 
         $keys = ApiKeyManager::getAllKeys();
         $newKey = get_transient('integrity_new_key_' . get_current_user_id());
-        
+
         if ($newKey) {
             delete_transient('integrity_new_key_' . get_current_user_id());
         }
@@ -133,7 +133,7 @@ class SettingsPage
 
         $page = isset($_GET['paged']) ? max(1, (int) $_GET['paged']) : 1;
         $perPage = 50;
-        
+
         $filters = [
             'api_key_id' => isset($_GET['api_key_id']) ? (int) $_GET['api_key_id'] : null,
             'response_code' => isset($_GET['response_code']) ? (int) $_GET['response_code'] : null,
@@ -141,12 +141,12 @@ class SettingsPage
             'date_from' => isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : null,
             'date_to' => isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : null,
         ];
-        
+
         $result = AuditLogger::getLogs(array_merge($filters, [
             'page' => $page,
             'per_page' => $perPage,
         ]));
-        
+
         $stats = AuditLogger::getStats(30);
         $keys = ApiKeyManager::getAllKeys();
 
@@ -177,7 +177,7 @@ class SettingsPage
         check_admin_referer(self::NONCE_ACTION);
 
         $name = isset($_POST['key_name']) ? sanitize_text_field($_POST['key_name']) : '';
-        
+
         if (empty($name)) {
             wp_redirect(add_query_arg('error', 'name_required', admin_url('admin.php?page=' . self::MENU_SLUG)));
             exit;
@@ -197,6 +197,9 @@ class SettingsPage
         if (!empty($_POST['perm_members'])) {
             $permissions[] = 'members:read';
         }
+        if (!empty($_POST['perm_members_write'])) {
+            $permissions[] = 'members:write';
+        }
         if (!empty($_POST['perm_intergroup_meetings'])) {
             $permissions[] = 'intergroup-meetings:read';
         }
@@ -214,7 +217,7 @@ class SettingsPage
         // Parse optional settings
         $rateLimit = !empty($_POST['rate_limit']) ? (int) $_POST['rate_limit'] : null;
         $expiresAt = !empty($_POST['expires_at']) ? sanitize_text_field($_POST['expires_at']) . ' 23:59:59' : null;
-        
+
         // Parse IP whitelist
         $ipWhitelist = null;
         if (!empty($_POST['ip_whitelist'])) {
@@ -290,12 +293,12 @@ class SettingsPage
 
         check_admin_referer(self::NONCE_ACTION);
 
-        $olderThanDays = isset($_POST['older_than_days']) && $_POST['older_than_days'] !== '' 
-            ? (int) $_POST['older_than_days'] 
+        $olderThanDays = isset($_POST['older_than_days']) && $_POST['older_than_days'] !== ''
+            ? (int) $_POST['older_than_days']
             : null;
-        
-        $apiKeyId = isset($_POST['api_key_id']) && $_POST['api_key_id'] !== '' 
-            ? (int) $_POST['api_key_id'] 
+
+        $apiKeyId = isset($_POST['api_key_id']) && $_POST['api_key_id'] !== ''
+            ? (int) $_POST['api_key_id']
             : null;
 
         $deleted = AuditLogger::clearLogs($olderThanDays, $apiKeyId);

@@ -262,6 +262,22 @@ public sealed class UnityRestSharp : IDisposable
         return await GetAsync<Member>(url, cancellationToken);
     }
 
+    /// <summary>
+    /// Updates a member. Only the fields set on the request object will be changed (partial update).
+    /// Requires the members:write permission.
+    /// </summary>
+    /// <param name="id">Member ID to update</param>
+    /// <param name="request">Fields to update</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<Member>> UpdateMemberAsync(
+        int id,
+        UpdateMemberRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/members/{id}/update";
+        return await PostAsync<Member>(url, request, cancellationToken);
+    }
+
     #endregion
 
     #region Intergroup Meetings

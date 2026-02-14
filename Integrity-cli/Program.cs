@@ -1,10 +1,11 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using TheBleedingDeacons.Unity.Client;
+using TheBleedingDeacons.Unity.Models;
 
 Console.WriteLine("Integrity CLI");
 using var client = new UnityRestSharp(
     "http://unity-dev.local/",
-    "int_c450a948e276843b8cad9fe439992ccaa7e4f243962c29da03e5669031289cec"
+    "int_5b6f1e8b3a023f41de4873abe75008b0e50b7706dbbdad0efd443d6a520ad328"
 );
 
 // Health Check
@@ -199,6 +200,109 @@ if (membersExpanded.Success && membersExpanded.Data != null)
 else
 {
     Console.WriteLine($"Error: {membersExpanded.Error?.Code} - {membersExpanded.Error?.Message}");
+}
+Console.WriteLine();
+
+// Update Member
+Console.WriteLine("=== UPDATE MEMBER ===");
+if (members.Success && members.Data?.Count > 0)
+{
+    var targetMember = members.Data.First();
+    var originalName = targetMember.AnonymousName;
+    var originalGsr = targetMember.IsGsr;
+
+    Console.WriteLine($"Target: {targetMember.AnonymousName} (ID: {targetMember.Id}, GSR: {targetMember.IsGsr})");
+
+    // Update a single field
+    Console.WriteLine();
+    Console.WriteLine("  Updating anonymous name...");
+    var updateResult = await client.UpdateMemberAsync(targetMember.Id, new UpdateMemberRequest
+    {
+        AnonymousName = $"{originalName} (updated)"
+    });
+    Console.WriteLine($"  Status Code: {updateResult.StatusCode}");
+
+    if (updateResult.Success && updateResult.Data != null)
+    {
+        Console.WriteLine($"  Updated Name: {updateResult.Data.AnonymousName}");
+        Console.WriteLine($"  GSR unchanged: {updateResult.Data.IsGsr} (was {originalGsr})");
+    }
+    else
+    {
+        Console.WriteLine($"  Error: {updateResult.Error?.Code} - {updateResult.Error?.Message}");
+    }
+
+    // Verify by re-fetching
+    Console.WriteLine();
+    Console.WriteLine("  Verifying update...");
+    var verifyMember = await client.GetMemberAsync(targetMember.Id);
+    if (verifyMember.Success && verifyMember.Data != null)
+    {
+        Console.WriteLine($"  Fetched Name: {verifyMember.Data.AnonymousName}");
+    }
+
+    // Update multiple fields at once
+    Console.WriteLine();
+    Console.WriteLine("  Updating multiple fields...");
+    var multiUpdate = await client.UpdateMemberAsync(targetMember.Id, new UpdateMemberRequest
+    {
+        AnonymousName = originalName,
+        IsGsr = !originalGsr,
+        ShowAnonymousName = true
+    });
+    Console.WriteLine($"  Status Code: {multiUpdate.StatusCode}");
+
+    if (multiUpdate.Success && multiUpdate.Data != null)
+    {
+        Console.WriteLine($"  Name restored: {multiUpdate.Data.AnonymousName}");
+        Console.WriteLine($"  GSR toggled: {multiUpdate.Data.IsGsr} (was {originalGsr})");
+        Console.WriteLine($"  Show Anonymous Name: {multiUpdate.Data.ShowAnonymousName}");
+    }
+    else
+    {
+        Console.WriteLine($"  Error: {multiUpdate.Error?.Code} - {multiUpdate.Error?.Message}");
+    }
+
+    // Restore original GSR value
+    Console.WriteLine();
+    Console.WriteLine("  Restoring original GSR value...");
+    var restoreResult = await client.UpdateMemberAsync(targetMember.Id, new UpdateMemberRequest
+    {
+        IsGsr = originalGsr
+    });
+    Console.WriteLine($"  Status Code: {restoreResult.StatusCode}");
+    if (restoreResult.Success && restoreResult.Data != null)
+    {
+        Console.WriteLine($"  GSR restored: {restoreResult.Data.IsGsr}");
+    }
+    else
+    {
+        Console.WriteLine($"  Error: {restoreResult.Error?.Code} - {restoreResult.Error?.Message}");
+    }
+
+    // Test update with invalid home group (should return 422)
+    Console.WriteLine();
+    Console.WriteLine("  Testing update with invalid home group...");
+    var invalidUpdate = await client.UpdateMemberAsync(targetMember.Id, new UpdateMemberRequest
+    {
+        HomeGroupId = 999999
+    });
+    Console.WriteLine($"  Status Code: {invalidUpdate.StatusCode} (expected 422)");
+    Console.WriteLine($"  Error: {invalidUpdate.Error?.Code} - {invalidUpdate.Error?.Message}");
+
+    // Test update with non-existent member (should return 404)
+    Console.WriteLine();
+    Console.WriteLine("  Testing update of non-existent member...");
+    var notFoundUpdate = await client.UpdateMemberAsync(999999, new UpdateMemberRequest
+    {
+        AnonymousName = "Ghost"
+    });
+    Console.WriteLine($"  Status Code: {notFoundUpdate.StatusCode} (expected 404)");
+    Console.WriteLine($"  Error: {notFoundUpdate.Error?.Code} - {notFoundUpdate.Error?.Message}");
+}
+else
+{
+    Console.WriteLine("Skipped: requires members data");
 }
 Console.WriteLine();
 

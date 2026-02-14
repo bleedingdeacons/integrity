@@ -18,6 +18,7 @@ use Unity\Locations\Interfaces\Location;
 use Unity\Meetings\Interfaces\Meeting;
 use Unity\Meetings\Interfaces\MeetingRepository;
 use Unity\Members\Interfaces\Member;
+use Unity\Members\Interfaces\MemberFactory;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Positions\Interfaces\Position;
 use Unity\Positions\Interfaces\PositionRepository;
@@ -135,6 +136,13 @@ class RestController
                     },
                 ],
             ],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/members/(?P<id>\d+)/update', [
+            'methods' => 'POST',
+            'callback' => [self::class, 'updateMember'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getUpdateMemberArgs(),
         ]);
 
         // Intergroup Meetings endpoints
@@ -345,6 +353,103 @@ class RestController
                 'sanitize_callback' => function ($param) {
                     return $param === null ? null : absint($param);
                 },
+            ],
+        ];
+    }
+
+    /**
+     * Get arguments for update member endpoint
+     */
+    private static function getUpdateMemberArgs(): array
+    {
+        return [
+            'id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'anonymous_name' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen($param) <= 255;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'personal_email' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && ($param === '' || is_email($param));
+                },
+                'sanitize_callback' => 'sanitize_email',
+            ],
+            'mobile_number' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen($param) <= 50;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'show_anonymous_name' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_bool($param) || in_array($param, ['true', 'false', '1', '0', 1, 0], true);
+                },
+                'sanitize_callback' => function ($param) {
+                    return filter_var($param, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+                },
+            ],
+            'show_member_profile' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_bool($param) || in_array($param, ['true', 'false', '1', '0', 1, 0], true);
+                },
+                'sanitize_callback' => function ($param) {
+                    return filter_var($param, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+                },
+            ],
+            'anonymous_profile' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_string($param);
+                },
+                'sanitize_callback' => 'wp_kses_post',
+            ],
+            'home_group_id' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param >= 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'is_gsr' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_bool($param) || in_array($param, ['true', 'false', '1', '0', 1, 0], true);
+                },
+                'sanitize_callback' => function ($param) {
+                    return filter_var($param, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+                },
+            ],
+            'intergroup_position_id' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param >= 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'intergroup_position_rotation' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    if ($param === '' || $param === null) {
+                        return true;
+                    }
+                    // Validate date format Y-m-d if provided
+                    $date = \DateTime::createFromFormat('Y-m-d', $param);
+                    return $date && $date->format('Y-m-d') === $param;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
             ],
         ];
     }
@@ -573,6 +678,9 @@ class RestController
         }
 
         if (strpos($endpoint, '/members') !== false) {
+            if (strpos($endpoint, '/update') !== false) {
+                return 'members:write';
+            }
             return 'members:read';
         }
 
@@ -1235,6 +1343,191 @@ class RestController
             return new WP_REST_Response([
                 'success' => true,
                 'data' => self::transformMember($member),
+            ], 200);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $id],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Update a member
+     */
+    public static function updateMember(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+        $id = (int) $request->get_param('id');
+
+        try {
+            $container = Plugin::getContainer();
+            $memberRepo = $container->get(MemberRepository::class);
+            $memberFactory = $container->get(MemberFactory::class);
+
+            // Fetch existing member
+            $existingMember = $memberRepo->find($id);
+
+            if (!$existingMember) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $id],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_found',
+                        'message' => 'Member not found',
+                    ],
+                ], 404);
+            }
+
+            // Validate referenced entities exist
+            $homeGroupId = $request->has_param('home_group_id')
+                ? (int) $request->get_param('home_group_id')
+                : $existingMember->getHomeGroup();
+
+            if ($request->has_param('home_group_id') && $homeGroupId > 0) {
+                $groupRepo = $container->get(GroupRepository::class);
+                $group = $groupRepo->findById($homeGroupId);
+                if (!$group || !$group->isValid()) {
+                    AuditLogger::log(
+                        $keyData['api_key_id'],
+                        $request->get_route(),
+                        $request->get_method(),
+                        ['id' => $id, 'home_group_id' => $homeGroupId],
+                        422,
+                        microtime(true) - $startTime
+                    );
+
+                    return new WP_REST_Response([
+                        'success' => false,
+                        'error' => [
+                            'code' => 'invalid_home_group',
+                            'message' => 'The specified home group does not exist',
+                        ],
+                    ], 422);
+                }
+            }
+
+            $intergroupPositionId = $request->has_param('intergroup_position_id')
+                ? (int) $request->get_param('intergroup_position_id')
+                : $existingMember->getIntergroupPosition();
+
+            if ($request->has_param('intergroup_position_id') && $intergroupPositionId > 0) {
+                $positionRepo = $container->get(PositionRepository::class);
+                $positions = $positionRepo->findAll([
+                    'post__in' => [$intergroupPositionId],
+                    'posts_per_page' => 1,
+                ]);
+                if (empty($positions)) {
+                    AuditLogger::log(
+                        $keyData['api_key_id'],
+                        $request->get_route(),
+                        $request->get_method(),
+                        ['id' => $id, 'intergroup_position_id' => $intergroupPositionId],
+                        422,
+                        microtime(true) - $startTime
+                    );
+
+                    return new WP_REST_Response([
+                        'success' => false,
+                        'error' => [
+                            'code' => 'invalid_intergroup_position',
+                            'message' => 'The specified intergroup position does not exist',
+                        ],
+                    ], 422);
+                }
+            }
+
+            // Build updated member using existing values as defaults (partial update)
+            $updatedMember = $memberFactory->createNew(
+                $id,
+                $request->has_param('anonymous_name')
+                    ? $request->get_param('anonymous_name')
+                    : $existingMember->getAnonymousName(),
+                $request->has_param('show_anonymous_name')
+                    ? $request->get_param('show_anonymous_name')
+                    : $existingMember->showAnonymousName(),
+                $request->has_param('show_member_profile')
+                    ? $request->get_param('show_member_profile')
+                    : $existingMember->showMemberProfile(),
+                $request->has_param('anonymous_profile')
+                    ? $request->get_param('anonymous_profile')
+                    : $existingMember->getAnonymousProfile(),
+                $intergroupPositionId,
+                $request->has_param('intergroup_position_rotation')
+                    ? $request->get_param('intergroup_position_rotation')
+                    : $existingMember->getIntergroupPositionRotation(),
+                $homeGroupId,
+                $request->has_param('is_gsr')
+                    ? $request->get_param('is_gsr')
+                    : $existingMember->isGSR(),
+                $existingMember->getMeetingPO(),
+                $request->has_param('personal_email')
+                    ? $request->get_param('personal_email')
+                    : $existingMember->getPersonalEmail(),
+                $request->has_param('mobile_number')
+                    ? $request->get_param('mobile_number')
+                    : $existingMember->getMobileNumber(),
+            );
+
+            // Save
+            $saved = $memberRepo->save($updatedMember);
+
+            if (!$saved) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $id],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'save_failed',
+                        'message' => 'Failed to update member',
+                    ],
+                ], 500);
+            }
+
+            // Re-fetch the saved member to return the latest state
+            $savedMember = $memberRepo->find($id);
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $id],
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => self::transformMember($savedMember ?? $updatedMember),
             ], 200);
 
         } catch (\Exception $e) {
