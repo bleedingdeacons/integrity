@@ -1,5 +1,5 @@
 ﻿// See https://aka.ms/new-console-template for more information
-using Integrity.Client;
+using TheBleedingDeacons.Unity.Client;
 
 Console.WriteLine("Integrity CLI");
 using var client = new UnityRestSharp(

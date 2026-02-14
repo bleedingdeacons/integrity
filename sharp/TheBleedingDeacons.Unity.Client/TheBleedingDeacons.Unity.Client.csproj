@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\..\..\..\..\..\..\Data\dev\register\TheBleedingDeacons.Intergroup.Models\TheBleedingDeacons.Intergroup.Models.csproj" />
+    <ProjectReference Include="..\TheBleedingDeacons.Unity.Models\TheBleedingDeacons.Unity.Models.csproj" />
   </ItemGroup>
 
 </Project>

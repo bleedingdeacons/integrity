@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using TheBleedingDeacons.Unity.Models;
 
-namespace Integrity.Client;
+namespace TheBleedingDeacons.Unity.Client;
 
 /// <summary>
 /// Client for the Integrity WordPress API.
