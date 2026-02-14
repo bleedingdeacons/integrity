@@ -1,0 +1,19 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace TheBleedingDeacons.Unity.Models
+{
+    /// <summary>
+    /// Represents the result of registering or unregistering a member from an intergroup meeting.
+    /// </summary>
+    public sealed class IntergroupMeetingRegistration
+    {
+        public int IntergroupMeetingId { get; init; }
+        public int MemberId { get; init; }
+        public string MemberName { get; init; } = string.Empty;
+        public bool Registered { get; init; }
+    }
+}
