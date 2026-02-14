@@ -4,7 +4,7 @@ using TheBleedingDeacons.Unity.Client;
 Console.WriteLine("Integrity CLI");
 using var client = new UnityRestSharp(
     "http://unity-dev.local/",
-    "int_de8e8f80b7585dd25d96784d9936a4c32b124c8b90903dce449aa7217a77db47"
+    "int_c450a948e276843b8cad9fe439992ccaa7e4f243962c29da03e5669031289cec"
 );
 
 // Health Check
@@ -301,6 +301,80 @@ if (upcomingIntergroupMeetings.Success && upcomingIntergroupMeetings.Data != nul
 else
 {
     Console.WriteLine($"Error: {upcomingIntergroupMeetings.Error?.Code} - {upcomingIntergroupMeetings.Error?.Message}");
+}
+Console.WriteLine();
+
+// Register Attendee for Intergroup Meeting
+Console.WriteLine("=== REGISTER ATTENDEE FOR INTERGROUP MEETING ===");
+if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
+    && members.Success && members.Data?.Count > 0)
+{
+    var targetMeeting = intergroupMeetings.Data.First();
+    var targetMember = members.Data.First();
+
+    Console.WriteLine($"Registering member '{targetMember.AnonymousName}' (ID: {targetMember.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Date})");
+
+    var registerResult = await client.RegisterAttendeeAsync(targetMeeting.Id, targetMember.Id);
+    Console.WriteLine($"Status Code: {registerResult.StatusCode}");
+
+    if (registerResult.Success && registerResult.Data != null)
+    {
+        Console.WriteLine($"  Registered: {registerResult.Data.Registered}");
+        Console.WriteLine($"  Member: {registerResult.Data.MemberName} (ID: {registerResult.Data.MemberId})");
+        Console.WriteLine($"  Meeting ID: {registerResult.Data.IntergroupMeetingId}");
+    }
+    else
+    {
+        Console.WriteLine($"  Result: {registerResult.Error?.Code} - {registerResult.Error?.Message}");
+    }
+
+    // Verify by re-fetching the meeting
+    Console.WriteLine();
+    Console.WriteLine("  Verifying registration...");
+    var verifyMeeting = await client.GetIntergroupMeetingAsync(targetMeeting.Id);
+    if (verifyMeeting.Success && verifyMeeting.Data != null)
+    {
+        var isAttending = verifyMeeting.Data.GroupAttendeeIds.Contains(targetMember.Id);
+        Console.WriteLine($"  Member {targetMember.Id} in attendees: {isAttending}");
+        Console.WriteLine($"  Total group attendees: {verifyMeeting.Data.GroupAttendees.Count}");
+    }
+
+    // Test duplicate registration (should return 409)
+    Console.WriteLine();
+    Console.WriteLine("  Testing duplicate registration...");
+    var duplicateResult = await client.RegisterAttendeeAsync(targetMeeting.Id, targetMember.Id);
+    Console.WriteLine($"  Status Code: {duplicateResult.StatusCode} (expected 409)");
+    Console.WriteLine($"  Error: {duplicateResult.Error?.Code} - {duplicateResult.Error?.Message}");
+
+    // Unregister the attendee
+    Console.WriteLine();
+    Console.WriteLine("=== UNREGISTER ATTENDEE FROM INTERGROUP MEETING ===");
+    Console.WriteLine($"Unregistering member '{targetMember.AnonymousName}' (ID: {targetMember.Id}) from intergroup meeting ID: {targetMeeting.Id}");
+
+    var unregisterResult = await client.UnregisterAttendeeAsync(targetMeeting.Id, targetMember.Id);
+    Console.WriteLine($"Status Code: {unregisterResult.StatusCode}");
+
+    if (unregisterResult.Success && unregisterResult.Data != null)
+    {
+        Console.WriteLine($"  Registered: {unregisterResult.Data.Registered}");
+        Console.WriteLine($"  Member ID: {unregisterResult.Data.MemberId}");
+        Console.WriteLine($"  Meeting ID: {unregisterResult.Data.IntergroupMeetingId}");
+    }
+    else
+    {
+        Console.WriteLine($"  Result: {unregisterResult.Error?.Code} - {unregisterResult.Error?.Message}");
+    }
+
+    // Test unregister when not registered (should return 404)
+    Console.WriteLine();
+    Console.WriteLine("  Testing unregister when not registered...");
+    var notRegisteredResult = await client.UnregisterAttendeeAsync(targetMeeting.Id, targetMember.Id);
+    Console.WriteLine($"  Status Code: {notRegisteredResult.StatusCode} (expected 404)");
+    Console.WriteLine($"  Error: {notRegisteredResult.Error?.Code} - {notRegisteredResult.Error?.Message}");
+}
+else
+{
+    Console.WriteLine("Skipped: requires intergroup meetings and members data");
 }
 Console.WriteLine();
 

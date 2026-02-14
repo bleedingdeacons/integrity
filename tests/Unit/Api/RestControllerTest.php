@@ -234,6 +234,8 @@ class RestControllerTest extends TestCase
             'members with id' => ['/integrity/v1/members/321', 'members:read'],
             'intergroup meetings endpoint' => ['/integrity/v1/intergroup-meetings', 'intergroup-meetings:read'],
             'intergroup meetings with id' => ['/integrity/v1/intergroup-meetings/654', 'intergroup-meetings:read'],
+            'intergroup meetings register' => ['/integrity/v1/intergroup-meetings/654/register', 'intergroup-meetings:write'],
+            'intergroup meetings unregister' => ['/integrity/v1/intergroup-meetings/654/unregister', 'intergroup-meetings:write'],
             'health endpoint' => ['/integrity/v1/health', null],
             'unknown endpoint' => ['/integrity/v1/unknown', null],
         ];

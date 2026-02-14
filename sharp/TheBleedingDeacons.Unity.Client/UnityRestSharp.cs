@@ -310,6 +310,38 @@ public sealed class UnityRestSharp : IDisposable
         return await GetAsync<IntergroupMeeting>(url, cancellationToken);
     }
 
+    /// <summary>
+    /// Registers a member as an attendee of an intergroup meeting.
+    /// </summary>
+    /// <param name="intergroupMeetingId">The intergroup meeting ID</param>
+    /// <param name="memberId">The member ID to register</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<IntergroupMeetingRegistration>> RegisterAttendeeAsync(
+        int intergroupMeetingId,
+        int memberId,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/register";
+        var payload = new { member_id = memberId };
+        return await PostAsync<IntergroupMeetingRegistration>(url, payload, cancellationToken);
+    }
+
+    /// <summary>
+    /// Unregisters a member from an intergroup meeting.
+    /// </summary>
+    /// <param name="intergroupMeetingId">The intergroup meeting ID</param>
+    /// <param name="memberId">The member ID to unregister</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<IntergroupMeetingRegistration>> UnregisterAttendeeAsync(
+        int intergroupMeetingId,
+        int memberId,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/unregister";
+        var payload = new { member_id = memberId };
+        return await PostAsync<IntergroupMeetingRegistration>(url, payload, cancellationToken);
+    }
+
     #endregion
 
     #region Health
@@ -340,6 +372,73 @@ public sealed class UnityRestSharp : IDisposable
         try
         {
             using var response = await _httpClient.GetAsync(url, cancellationToken);
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            // Parse rate limit headers
+            var rateLimit = new RateLimitInfo
+            {
+                Limit = GetHeaderInt(response, "X-RateLimit-Limit"),
+                Remaining = GetHeaderInt(response, "X-RateLimit-Remaining"),
+                Reset = GetHeaderLong(response, "X-RateLimit-Reset")
+            };
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorResponse = JsonSerializer.Deserialize<ApiErrorResponse>(content, _jsonOptions);
+                return new ApiResponse<T>
+                {
+                    Success = false,
+                    Error = errorResponse?.Error ?? new ApiError
+                    {
+                        Code = "unknown_error",
+                        Message = $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}"
+                    },
+                    StatusCode = (int)response.StatusCode,
+                    RateLimit = rateLimit
+                };
+            }
+
+            var apiResponse = JsonSerializer.Deserialize<ApiDataResponse<T>>(content, _jsonOptions);
+
+            return new ApiResponse<T>
+            {
+                Success = apiResponse?.Success ?? false,
+                Data = apiResponse?.Data,
+                Meta = apiResponse?.Meta,
+                StatusCode = (int)response.StatusCode,
+                RateLimit = rateLimit
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            return new ApiResponse<T>
+            {
+                Success = false,
+                Error = new ApiError { Code = "network_error", Message = ex.Message },
+                StatusCode = 0
+            };
+        }
+        catch (JsonException ex)
+        {
+            return new ApiResponse<T>
+            {
+                Success = false,
+                Error = new ApiError { Code = "parse_error", Message = ex.Message },
+                StatusCode = 0
+            };
+        }
+    }
+
+    private async Task<ApiResponse<T>> PostAsync<T>(string url, object payload, CancellationToken cancellationToken) where T : class
+    {
+        try
+        {
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(payload, _jsonOptions),
+                System.Text.Encoding.UTF8,
+                "application/json");
+
+            using var response = await _httpClient.PostAsync(url, jsonContent, cancellationToken);
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
 
             // Parse rate limit headers

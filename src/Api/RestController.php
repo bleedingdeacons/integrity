@@ -159,6 +159,22 @@ class RestController
             ],
         ]);
 
+        // Intergroup Meeting Registration endpoint
+        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/register', [
+            'methods' => 'POST',
+            'callback' => [self::class, 'registerIntergroupMeetingAttendee'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getRegisterAttendeeArgs(),
+        ]);
+
+        // Intergroup Meeting Unregister endpoint
+        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/unregister', [
+            'methods' => 'POST',
+            'callback' => [self::class, 'unregisterIntergroupMeetingAttendee'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getRegisterAttendeeArgs(),
+        ]);
+
         // Health check endpoint (no auth required)
         register_rest_route(self::NAMESPACE, '/health', [
             'methods' => 'GET',
@@ -381,6 +397,29 @@ class RestController
     }
 
     /**
+     * Get arguments for register/unregister attendee endpoints
+     */
+    private static function getRegisterAttendeeArgs(): array
+    {
+        return [
+            'id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'member_id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+        ];
+    }
+
+    /**
      * Check permission and authenticate request
      *
      * @param WP_REST_Request $request
@@ -513,6 +552,13 @@ class RestController
      */
     private static function getRequiredPermission(string $endpoint): ?string
     {
+        // Check registration endpoints before general intergroup-meetings (more specific first)
+        if (strpos($endpoint, '/intergroup-meetings') !== false
+            && (strpos($endpoint, '/register') !== false || strpos($endpoint, '/unregister') !== false)
+        ) {
+            return 'intergroup-meetings:write';
+        }
+
         // Check intergroup-meetings before meetings/members (substring match)
         if (strpos($endpoint, '/intergroup-meetings') !== false) {
             return 'intergroup-meetings:read';
@@ -1373,6 +1419,268 @@ class RestController
                 $request->get_route(),
                 $request->get_method(),
                 ['id' => $id],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Register a member as an attendee of an intergroup meeting
+     */
+    public static function registerIntergroupMeetingAttendee(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+        $meetingId = (int) $request->get_param('id');
+        $memberId = (int) $request->get_param('member_id');
+
+        try {
+            $container = Plugin::getContainer();
+            $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
+            $memberRepo = $container->get(MemberRepository::class);
+
+            // Validate intergroup meeting exists
+            $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
+
+            if (!$intergroupMeeting) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'member_id' => $memberId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_found',
+                        'message' => 'Intergroup meeting not found',
+                    ],
+                ], 404);
+            }
+
+            // Validate member exists
+            $member = $memberRepo->find($memberId);
+
+            if (!$member) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'member_id' => $memberId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'member_not_found',
+                        'message' => 'Member not found',
+                    ],
+                ], 404);
+            }
+
+            // Check if member is already registered
+            if ($intergroupMeeting->hasGroupAttendee($memberId)) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'member_id' => $memberId],
+                    409,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'already_registered',
+                        'message' => 'Member is already registered for this intergroup meeting',
+                    ],
+                ], 409);
+            }
+
+            // Add the member as an attendee
+            $intergroupMeeting->addGroupAttendee($memberId);
+
+            // Save the updated intergroup meeting
+            $saved = $intergroupMeetingRepo->save($intergroupMeeting);
+
+            if (!$saved) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'member_id' => $memberId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'save_failed',
+                        'message' => 'Failed to register attendee',
+                    ],
+                ], 500);
+            }
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $meetingId, 'member_id' => $memberId],
+                201,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => [
+                    'intergroup_meeting_id' => $meetingId,
+                    'member_id' => $memberId,
+                    'member_name' => $member->getAnonymousName(),
+                    'registered' => true,
+                ],
+            ], 201);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $meetingId, 'member_id' => $memberId],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Unregister a member from an intergroup meeting
+     */
+    public static function unregisterIntergroupMeetingAttendee(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+        $meetingId = (int) $request->get_param('id');
+        $memberId = (int) $request->get_param('member_id');
+
+        try {
+            $container = Plugin::getContainer();
+            $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
+
+            // Validate intergroup meeting exists
+            $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
+
+            if (!$intergroupMeeting) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'member_id' => $memberId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_found',
+                        'message' => 'Intergroup meeting not found',
+                    ],
+                ], 404);
+            }
+
+            // Check if member is actually registered
+            if (!$intergroupMeeting->hasGroupAttendee($memberId)) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'member_id' => $memberId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_registered',
+                        'message' => 'Member is not registered for this intergroup meeting',
+                    ],
+                ], 404);
+            }
+
+            // Remove the member
+            $intergroupMeeting->removeGroupAttendee($memberId);
+
+            // Save the updated intergroup meeting
+            $saved = $intergroupMeetingRepo->save($intergroupMeeting);
+
+            if (!$saved) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'member_id' => $memberId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'save_failed',
+                        'message' => 'Failed to unregister attendee',
+                    ],
+                ], 500);
+            }
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $meetingId, 'member_id' => $memberId],
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => [
+                    'intergroup_meeting_id' => $meetingId,
+                    'member_id' => $memberId,
+                    'registered' => false,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $meetingId, 'member_id' => $memberId],
                 500,
                 microtime(true) - $startTime
             );

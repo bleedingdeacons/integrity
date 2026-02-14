@@ -91,6 +91,10 @@ if (!defined('ABSPATH')) {
                                 <?php echo esc_html__('Read Intergroup Meetings', 'integrity'); ?>
                             </label><br>
                             <label>
+                                <input type="checkbox" name="perm_intergroup_meetings_write" value="1">
+                                <?php echo esc_html__('Write Intergroup Meetings (register/unregister attendees)', 'integrity'); ?>
+                            </label><br>
+                            <label>
                                 <input type="checkbox" name="perm_all" value="1">
                                 <?php echo esc_html__('Full Access (all permissions)', 'integrity'); ?>
                             </label>
@@ -299,6 +303,16 @@ if (!defined('ABSPATH')) {
                     <td><code>GET</code></td>
                     <td><code>/wp-json/integrity/v1/intergroup-meetings/{id}</code></td>
                     <td><?php echo esc_html__('Get a single intergroup meeting', 'integrity'); ?></td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
+                    <td><code>/wp-json/integrity/v1/intergroup-meetings/{id}/register</code></td>
+                    <td><?php echo esc_html__('Register a member as an attendee (requires member_id in body)', 'integrity'); ?></td>
+                </tr>
+                <tr>
+                    <td><code>POST</code></td>
+                    <td><code>/wp-json/integrity/v1/intergroup-meetings/{id}/unregister</code></td>
+                    <td><?php echo esc_html__('Unregister a member from an intergroup meeting (requires member_id in body)', 'integrity'); ?></td>
                 </tr>
                 <tr>
                     <td><code>GET</code></td>
