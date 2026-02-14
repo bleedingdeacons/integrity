@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\csharp-client\Integrity.Client.csproj" />
+    <ProjectReference Include="..\csharp-client\TheBleedingDeacons.Unity.Client.csproj" />
   </ItemGroup>
 
 </Project>
