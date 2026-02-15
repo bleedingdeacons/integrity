@@ -9,7 +9,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Represents a meeting in the Unity system.
     /// </summary>
-    public sealed class Meeting
+    public class Meeting
     {
         public int Id { get; init; }
         public string Name { get; init; } = string.Empty;

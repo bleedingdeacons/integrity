@@ -9,7 +9,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Digital contribution options for a group.
     /// </summary>
-    public sealed class ContributionOptions
+    public class ContributionOptions
     {
         public string Venmo { get; init; } = string.Empty;
         public string Paypal { get; init; } = string.Empty;

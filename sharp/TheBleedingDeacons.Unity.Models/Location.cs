@@ -9,7 +9,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Represents a location in the Unity system.
     /// </summary>
-    public sealed class Location
+    public class Location
     {
         public int Id { get; init; }
         public string Name { get; init; } = string.Empty;

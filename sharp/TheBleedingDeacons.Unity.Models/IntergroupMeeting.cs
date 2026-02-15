@@ -10,7 +10,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Represents an intergroup meeting in the Unity system.
     /// </summary>
-    public sealed class IntergroupMeeting
+    public class IntergroupMeeting
     {
         public int Id { get; init; }
         public string Date { get; init; } = string.Empty;

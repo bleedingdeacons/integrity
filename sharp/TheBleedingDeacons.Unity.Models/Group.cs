@@ -5,7 +5,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Represents a group in the Unity system.
     /// </summary>
-    public sealed class Group
+    public class Group
     {
         public int Id { get; init; }
         public string Title { get; init; } = string.Empty;

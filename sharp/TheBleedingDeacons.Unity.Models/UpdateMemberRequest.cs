@@ -6,7 +6,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// Request model for updating a member via PUT /members/{id}.
     /// All properties are optional — only supplied fields are updated (partial update).
     /// </summary>
-    public sealed class UpdateMemberRequest
+    public class UpdateMemberRequest
     {
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? AnonymousName { get; init; }

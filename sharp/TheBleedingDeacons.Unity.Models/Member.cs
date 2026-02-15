@@ -10,7 +10,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Represents a member in the Unity system.
     /// </summary>
-    public sealed class Member
+    public class Member
     {
         public int Id { get; init; }
         public string PrivateName { get; init; } = string.Empty;

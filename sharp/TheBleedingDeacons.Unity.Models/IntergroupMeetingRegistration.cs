@@ -9,7 +9,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Represents the result of registering or unregistering a member from an intergroup meeting.
     /// </summary>
-    public sealed class IntergroupMeetingRegistration
+    public class IntergroupMeetingRegistration
     {
         public int IntergroupMeetingId { get; init; }
         public int MemberId { get; init; }

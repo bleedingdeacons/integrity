@@ -9,7 +9,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Contact information.
     /// </summary>
-    public sealed class Contact
+    public class Contact
     {
         public string Name { get; init; } = string.Empty;
         public string Email { get; init; } = string.Empty;

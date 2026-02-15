@@ -9,7 +9,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Represents an attendee of an intergroup meeting.
     /// </summary>
-    public sealed class IntergroupMeetingAttendee
+    public class IntergroupMeetingAttendee
     {
         public int Id { get; init; }
         public string Name { get; init; } = string.Empty;

@@ -9,7 +9,7 @@ namespace TheBleedingDeacons.Unity.Models
     /// <summary>
     /// Represents a position in the Unity system.
     /// </summary>
-    public sealed class Position
+    public class Position
     {
         public int Id { get; init; }
         public string LongName { get; init; } = string.Empty;
