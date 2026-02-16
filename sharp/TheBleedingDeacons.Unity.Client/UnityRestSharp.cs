@@ -331,14 +331,29 @@ public sealed class UnityRestSharp : IDisposable
     /// </summary>
     /// <param name="intergroupMeetingId">The intergroup meeting ID</param>
     /// <param name="memberId">The member ID to register</param>
+    /// <param name="meetingGroup">The meeting or group name (plain text)</param>
+    /// <param name="gsrName">The GSR name (plain text)</param>
+    /// <param name="gsrProxy">Whether a proxy attended in place of the GSR</param>
+    /// <param name="gsrProxyName">The proxy name when a proxy attended</param>
     /// <param name="cancellationToken">Cancellation token</param>
     public async Task<ApiResponse<IntergroupMeetingRegistration>> RegisterAttendeeAsync(
         int intergroupMeetingId,
         int memberId,
+        string meetingGroup,
+        string gsrName,
+        bool gsrProxy = false,
+        string? gsrProxyName = null,
         CancellationToken cancellationToken = default)
     {
         var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/register";
-        var payload = new { member_id = memberId };
+        var payload = new
+        {
+            member_id = memberId,
+            meeting_group = meetingGroup,
+            gsr_name = gsrName,
+            gsr_proxy = gsrProxy,
+            gsr_proxy_name = gsrProxyName ?? string.Empty
+        };
         return await PostAsync<IntergroupMeetingRegistration>(url, payload, cancellationToken);
     }
 

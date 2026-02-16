@@ -14,6 +14,7 @@ use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeeting;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepository;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingAttendanceRepository;
 use Unity\Locations\Interfaces\Location;
 use Unity\Meetings\Interfaces\Meeting;
 use Unity\Meetings\Interfaces\MeetingRepository;
@@ -180,7 +181,7 @@ class RestController
             'methods' => 'POST',
             'callback' => [self::class, 'unregisterIntergroupMeetingAttendee'],
             'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getRegisterAttendeeArgs(),
+            'args' => self::getUnregisterAttendeeArgs(),
         ]);
 
         // Health check endpoint (no auth required)
@@ -502,9 +503,63 @@ class RestController
     }
 
     /**
-     * Get arguments for register/unregister attendee endpoints
+     * Get arguments for register attendee endpoint
      */
     private static function getRegisterAttendeeArgs(): array
+    {
+        return [
+            'id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'member_id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'meeting_group' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen(trim($param)) > 0;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'gsr_name' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen(trim($param)) > 0;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'gsr_proxy' => [
+                'required' => false,
+                'default' => false,
+                'validate_callback' => function ($param) {
+                    return is_bool($param) || $param === '0' || $param === '1'
+                        || $param === 'true' || $param === 'false';
+                },
+                'sanitize_callback' => 'rest_sanitize_boolean',
+            ],
+            'gsr_proxy_name' => [
+                'required' => false,
+                'default' => '',
+                'validate_callback' => function ($param) {
+                    return is_string($param);
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ];
+    }
+
+    /**
+     * Get arguments for unregister attendee endpoint
+     */
+    private static function getUnregisterAttendeeArgs(): array
     {
         return [
             'id' => [
@@ -1735,11 +1790,19 @@ class RestController
         $keyData = $request->get_param('_integrity_key_data');
         $meetingId = (int) $request->get_param('id');
         $memberId = (int) $request->get_param('member_id');
+        $meetingGroup = (string) $request->get_param('meeting_group');
+        $gsrName = (string) $request->get_param('gsr_name');
+        $gsrProxy = (bool) $request->get_param('gsr_proxy');
+        $gsrProxyName = (string) $request->get_param('gsr_proxy_name');
 
         try {
             $container = Plugin::getContainer();
             $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
             $memberRepo = $container->get(MemberRepository::class);
+            $attendanceRepo = $container->get(IntergroupMeetingAttendanceRepository::class);
+            $attendanceFactory = $container->get(
+                'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingAttendanceFactory'
+            );
 
             // Validate intergroup meeting exists
             $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
@@ -1830,6 +1893,37 @@ class RestController
                 ], 500);
             }
 
+            // Create the attendance record in the custom table
+            $attendance = $attendanceFactory->createNew(
+                $meetingId,
+                $memberId,
+                $meetingGroup,
+                $gsrName,
+                $gsrProxy,
+                $gsrProxyName
+            );
+
+            $attendanceSaved = $attendanceRepo->save($attendance);
+
+            if (!$attendanceSaved) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'member_id' => $memberId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'attendance_save_failed',
+                        'message' => 'Failed to save attendance record',
+                    ],
+                ], 500);
+            }
+
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
@@ -1845,11 +1939,20 @@ class RestController
                     'intergroup_meeting_id' => $meetingId,
                     'member_id' => $memberId,
                     'member_name' => $member->getAnonymousName(),
+                    'meeting_group' => $meetingGroup,
+                    'gsr_name' => $gsrName,
+                    'gsr_proxy' => $gsrProxy,
+                    'gsr_proxy_name' => $gsrProxyName,
                     'registered' => true,
                 ],
             ], 201);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('Integrity: registerIntergroupMeetingAttendee error: ' . $e->getMessage());
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
+
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
@@ -1864,14 +1967,11 @@ class RestController
                 'error' => [
                     'code' => 'internal_error',
                     'message' => 'An internal error occurred',
+                    'debug' => WP_DEBUG ? $e->getMessage() : null,
                 ],
             ], 500);
         }
     }
-
-    /**
-     * Unregister a member from an intergroup meeting
-     */
     public static function unregisterIntergroupMeetingAttendee(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
@@ -1882,6 +1982,7 @@ class RestController
         try {
             $container = Plugin::getContainer();
             $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
+            $attendanceRepo = $container->get(IntergroupMeetingAttendanceRepository::class);
 
             // Validate intergroup meeting exists
             $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
@@ -1950,6 +2051,9 @@ class RestController
                 ], 500);
             }
 
+            // Delete the attendance record for this member at this meeting
+            $attendanceRepo->deleteByIntergroupMeetingAndMember($meetingId, $memberId);
+
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
@@ -1968,7 +2072,12 @@ class RestController
                 ],
             ], 200);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('Integrity: unregisterIntergroupMeetingAttendee error: ' . $e->getMessage());
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
+
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
@@ -1983,14 +2092,11 @@ class RestController
                 'error' => [
                     'code' => 'internal_error',
                     'message' => 'An internal error occurred',
+                    'debug' => WP_DEBUG ? $e->getMessage() : null,
                 ],
             ], 500);
         }
     }
-
-    /**
-     * Health check endpoint
-     */
     public static function healthCheck(WP_REST_Request $request): WP_REST_Response
     {
         $unityAvailable = class_exists('Unity\\Plugin');

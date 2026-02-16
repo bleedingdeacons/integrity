@@ -5,7 +5,7 @@ using TheBleedingDeacons.Unity.Models;
 Console.WriteLine("Integrity CLI");
 using var client = new UnityRestSharp(
     "http://unity-dev.local/",
-    "int_5b6f1e8b3a023f41de4873abe75008b0e50b7706dbbdad0efd443d6a520ad328"
+    "int_64f2033a119dddd8f57395945e0369b4ead79b1a81143f3a31071b7cb39b27ef"
 );
 
 // Health Check
@@ -418,7 +418,13 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
 
     Console.WriteLine($"Registering member '{targetMember.AnonymousName}' (ID: {targetMember.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Date})");
 
-    var registerResult = await client.RegisterAttendeeAsync(targetMeeting.Id, targetMember.Id);
+    var registerResult = await client.RegisterAttendeeAsync(
+        targetMeeting.Id,
+        targetMember.Id,
+        meetingGroup: "Saturday Morning Group",
+        gsrName: targetMember.AnonymousName,
+        gsrProxy: false
+    );
     Console.WriteLine($"Status Code: {registerResult.StatusCode}");
 
     if (registerResult.Success && registerResult.Data != null)
@@ -426,6 +432,11 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
         Console.WriteLine($"  Registered: {registerResult.Data.Registered}");
         Console.WriteLine($"  Member: {registerResult.Data.MemberName} (ID: {registerResult.Data.MemberId})");
         Console.WriteLine($"  Meeting ID: {registerResult.Data.IntergroupMeetingId}");
+        Console.WriteLine($"  Meeting/Group: {registerResult.Data.MeetingGroup}");
+        Console.WriteLine($"  GSR Name: {registerResult.Data.GsrName}");
+        Console.WriteLine($"  GSR Proxy: {registerResult.Data.GsrProxy}");
+        if (registerResult.Data.GsrProxy)
+            Console.WriteLine($"  Proxy Name: {registerResult.Data.GsrProxyName}");
     }
     else
     {
@@ -446,9 +457,59 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
     // Test duplicate registration (should return 409)
     Console.WriteLine();
     Console.WriteLine("  Testing duplicate registration...");
-    var duplicateResult = await client.RegisterAttendeeAsync(targetMeeting.Id, targetMember.Id);
+    var duplicateResult = await client.RegisterAttendeeAsync(
+        targetMeeting.Id,
+        targetMember.Id,
+        meetingGroup: "Saturday Morning Group",
+        gsrName: targetMember.AnonymousName
+    );
     Console.WriteLine($"  Status Code: {duplicateResult.StatusCode} (expected 409)");
     Console.WriteLine($"  Error: {duplicateResult.Error?.Code} - {duplicateResult.Error?.Message}");
+
+    // Test registration with a proxy
+    Console.WriteLine();
+    Console.WriteLine("=== REGISTER ATTENDEE WITH PROXY ===");
+    if (members.Data.Count > 1)
+    {
+        var proxyMember = members.Data[1];
+        Console.WriteLine($"Registering member '{proxyMember.AnonymousName}' (ID: {proxyMember.Id}) with proxy for meeting ID: {targetMeeting.Id}");
+
+        var proxyResult = await client.RegisterAttendeeAsync(
+            targetMeeting.Id,
+            proxyMember.Id,
+            meetingGroup: "Tuesday Night Big Book",
+            gsrName: proxyMember.AnonymousName,
+            gsrProxy: true,
+            gsrProxyName: "Jane S."
+        );
+        Console.WriteLine($"Status Code: {proxyResult.StatusCode}");
+
+        if (proxyResult.Success && proxyResult.Data != null)
+        {
+            Console.WriteLine($"  Registered: {proxyResult.Data.Registered}");
+            Console.WriteLine($"  GSR Name: {proxyResult.Data.GsrName}");
+            Console.WriteLine($"  GSR Proxy: {proxyResult.Data.GsrProxy}");
+            Console.WriteLine($"  Proxy Name: {proxyResult.Data.GsrProxyName}");
+        }
+        else
+        {
+            Console.WriteLine($"  Result: {proxyResult.Error?.Code} - {proxyResult.Error?.Message}");
+        }
+
+        // Unregister the proxy member
+        Console.WriteLine();
+        Console.WriteLine($"  Unregistering proxy member '{proxyMember.AnonymousName}'...");
+        var unregisterProxy = await client.UnregisterAttendeeAsync(targetMeeting.Id, proxyMember.Id);
+        Console.WriteLine($"  Status Code: {unregisterProxy.StatusCode}");
+        if (unregisterProxy.Success && unregisterProxy.Data != null)
+        {
+            Console.WriteLine($"  Registered: {unregisterProxy.Data.Registered}");
+        }
+        else
+        {
+            Console.WriteLine($"  Result: {unregisterProxy.Error?.Code} - {unregisterProxy.Error?.Message}");
+        }
+    }
 
     // Unregister the attendee
     Console.WriteLine();
