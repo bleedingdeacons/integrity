@@ -1514,6 +1514,24 @@ class RestController
                 }
             }
 
+            // Resolve personal_email: skip if the submitted value is obscured
+            $personalEmail = $existingMember->getPersonalEmail();
+            if ($request->has_param('personal_email')) {
+                $submittedEmail = $request->get_param('personal_email');
+                if (!self::isObscuredEmail($submittedEmail)) {
+                    $personalEmail = $submittedEmail;
+                }
+            }
+
+            // Resolve mobile_number: skip if the submitted value is obscured
+            $mobileNumber = $existingMember->getMobileNumber();
+            if ($request->has_param('mobile_number')) {
+                $submittedMobile = $request->get_param('mobile_number');
+                if (!self::isObscuredPhone($submittedMobile)) {
+                    $mobileNumber = $submittedMobile;
+                }
+            }
+
             // Build updated member using existing values as defaults (partial update)
             $updatedMember = $memberFactory->createNew(
                 $id,
@@ -1538,12 +1556,8 @@ class RestController
                     ? $request->get_param('is_gsr')
                     : $existingMember->isGSR(),
                 $existingMember->getMeetingPO(),
-                $request->has_param('personal_email')
-                    ? $request->get_param('personal_email')
-                    : $existingMember->getPersonalEmail(),
-                $request->has_param('mobile_number')
-                    ? $request->get_param('mobile_number')
-                    : $existingMember->getMobileNumber(),
+                $personalEmail,
+                $mobileNumber,
             );
 
             // Save
@@ -2542,6 +2556,44 @@ class RestController
         $memberCache = self::batchGetMembers($memberRepo, $allMemberIds);
 
         return self::transformIntergroupMeetingWithCache($intergroupMeeting, $memberCache);
+    }
+
+    /**
+     * Detect whether an email value is obscured (contains consecutive underscores)
+     *
+     * Masked emails use underscores to replace characters, e.g. "j___@e_____.com".
+     * A real email address would not contain two or more consecutive underscores.
+     *
+     * @param string $value The submitted email value
+     * @return bool True if the value appears to be obscured
+     */
+    private static function isObscuredEmail(string $value): bool
+    {
+        if (empty($value)) {
+            return false;
+        }
+
+        // Two or more consecutive underscores indicate an obscured email
+        return (bool) preg_match('/__+/', $value);
+    }
+
+    /**
+     * Detect whether a phone number value is obscured (contains consecutive asterisks)
+     *
+     * Masked phone numbers use asterisks to replace digits, e.g. "***-***-1234".
+     * A real phone number would not contain two or more consecutive asterisks.
+     *
+     * @param string $value The submitted phone value
+     * @return bool True if the value appears to be obscured
+     */
+    private static function isObscuredPhone(string $value): bool
+    {
+        if (empty($value)) {
+            return false;
+        }
+
+        // Two or more consecutive asterisks indicate an obscured phone number
+        return (bool) preg_match('/\*{2,}/', $value);
     }
 
 
