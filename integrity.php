@@ -7,6 +7,7 @@ declare(strict_types=1);
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
  * Version: 1.2.2
  * Requires at least: 6.0
+ * Requires Plugins: scrutiny
  * Requires PHP: 8.0
  * Author: The Bleeding Deacons
  * Author URI: thebleedingdeacons@gmail.com
@@ -189,11 +190,11 @@ register_deactivation_hook(__FILE__, function (): void {
 // Cleanup cron handler
 add_action('integrity/cleanup_cron', function (): void {
     global $wpdb;
-    
+
     // Clean old rate limit records
     $rateLimitTable = $wpdb->prefix . 'integrity_rate_limits';
     $wpdb->query("DELETE FROM $rateLimitTable WHERE window_start < DATE_SUB(NOW(), INTERVAL 1 DAY)");
-    
+
     // Clean old audit logs based on retention setting
     $retentionDays = (int) get_option('integrity_audit_log_retention_days', 90);
     $auditTable = $wpdb->prefix . 'integrity_audit_log';
