@@ -14,7 +14,7 @@ use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeeting;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepository;
-use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingAttendanceRepository;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingGroupAttendanceRepository;
 use Unity\Locations\Interfaces\Location;
 use Unity\Meetings\Interfaces\Meeting;
 use Unity\Meetings\Interfaces\MeetingRepository;
@@ -1813,9 +1813,9 @@ class RestController
             $container = Plugin::getContainer();
             $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
             $memberRepo = $container->get(MemberRepository::class);
-            $attendanceRepo = $container->get(IntergroupMeetingAttendanceRepository::class);
+            $attendanceRepo = $container->get(IntergroupMeetingGroupAttendanceRepository::class);
             $attendanceFactory = $container->get(
-                'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingAttendanceFactory'
+                'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingGroupAttendanceFactory'
             );
 
             // Validate intergroup meeting exists
@@ -1996,7 +1996,7 @@ class RestController
         try {
             $container = Plugin::getContainer();
             $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
-            $attendanceRepo = $container->get(IntergroupMeetingAttendanceRepository::class);
+            $attendanceRepo = $container->get(IntergroupMeetingGroupAttendanceRepository::class);
 
             // Validate intergroup meeting exists
             $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
