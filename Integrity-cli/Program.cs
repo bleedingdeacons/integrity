@@ -543,4 +543,89 @@ else
 }
 Console.WriteLine();
 
+// Register Officer for Intergroup Meeting
+Console.WriteLine("=== REGISTER OFFICER FOR INTERGROUP MEETING ===");
+if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
+    && members.Success && members.Data?.Count > 0)
+{
+    var targetMeeting = intergroupMeetings.Data.First();
+    var targetOfficer = members.Data.First();
+
+    Console.WriteLine($"Registering officer '{targetOfficer.AnonymousName}' (ID: {targetOfficer.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Date})");
+
+    var registerOfficerResult = await client.RegisterOfficerAsync(
+        targetMeeting.Id,
+        targetOfficer.Id,
+        positionName: "Treasurer",
+        officerName: targetOfficer.AnonymousName
+    );
+    Console.WriteLine($"Status Code: {registerOfficerResult.StatusCode}");
+
+    if (registerOfficerResult.Success && registerOfficerResult.Data != null)
+    {
+        Console.WriteLine($"  Registered: {registerOfficerResult.Data.Registered}");
+        Console.WriteLine($"  Officer: {registerOfficerResult.Data.OfficerName} (ID: {registerOfficerResult.Data.OfficerId})");
+        Console.WriteLine($"  Meeting ID: {registerOfficerResult.Data.IntergroupMeetingId}");
+        Console.WriteLine($"  Position: {registerOfficerResult.Data.PositionName}");
+    }
+    else
+    {
+        Console.WriteLine($"  Result: {registerOfficerResult.Error?.Code} - {registerOfficerResult.Error?.Message}");
+    }
+
+    // Verify by re-fetching the meeting
+    Console.WriteLine();
+    Console.WriteLine("  Verifying officer registration...");
+    var verifyOfficerMeeting = await client.GetIntergroupMeetingAsync(targetMeeting.Id);
+    if (verifyOfficerMeeting.Success && verifyOfficerMeeting.Data != null)
+    {
+        var isAttending = verifyOfficerMeeting.Data.OfficersAttendingIds.Contains(targetOfficer.Id);
+        Console.WriteLine($"  Officer {targetOfficer.Id} in officers attending: {isAttending}");
+        Console.WriteLine($"  Total officers attending: {verifyOfficerMeeting.Data.OfficersAttending.Count}");
+    }
+
+    // Test duplicate officer registration (should return 409)
+    Console.WriteLine();
+    Console.WriteLine("  Testing duplicate officer registration...");
+    var duplicateOfficerResult = await client.RegisterOfficerAsync(
+        targetMeeting.Id,
+        targetOfficer.Id,
+        positionName: "Treasurer",
+        officerName: targetOfficer.AnonymousName
+    );
+    Console.WriteLine($"  Status Code: {duplicateOfficerResult.StatusCode} (expected 409)");
+    Console.WriteLine($"  Error: {duplicateOfficerResult.Error?.Code} - {duplicateOfficerResult.Error?.Message}");
+
+    // Unregister the officer
+    Console.WriteLine();
+    Console.WriteLine("=== UNREGISTER OFFICER FROM INTERGROUP MEETING ===");
+    Console.WriteLine($"Unregistering officer '{targetOfficer.AnonymousName}' (ID: {targetOfficer.Id}) from intergroup meeting ID: {targetMeeting.Id}");
+
+    var unregisterOfficerResult = await client.UnregisterOfficerAsync(targetMeeting.Id, targetOfficer.Id);
+    Console.WriteLine($"Status Code: {unregisterOfficerResult.StatusCode}");
+
+    if (unregisterOfficerResult.Success && unregisterOfficerResult.Data != null)
+    {
+        Console.WriteLine($"  Registered: {unregisterOfficerResult.Data.Registered}");
+        Console.WriteLine($"  Officer ID: {unregisterOfficerResult.Data.OfficerId}");
+        Console.WriteLine($"  Meeting ID: {unregisterOfficerResult.Data.IntergroupMeetingId}");
+    }
+    else
+    {
+        Console.WriteLine($"  Result: {unregisterOfficerResult.Error?.Code} - {unregisterOfficerResult.Error?.Message}");
+    }
+
+    // Test unregister officer when not registered (should return 404)
+    Console.WriteLine();
+    Console.WriteLine("  Testing unregister officer when not registered...");
+    var notRegisteredOfficerResult = await client.UnregisterOfficerAsync(targetMeeting.Id, targetOfficer.Id);
+    Console.WriteLine($"  Status Code: {notRegisteredOfficerResult.StatusCode} (expected 404)");
+    Console.WriteLine($"  Error: {notRegisteredOfficerResult.Error?.Code} - {notRegisteredOfficerResult.Error?.Message}");
+}
+else
+{
+    Console.WriteLine("Skipped: requires intergroup meetings and members data");
+}
+Console.WriteLine();
+
 Console.WriteLine("Done!");

@@ -345,7 +345,7 @@ public sealed class UnityRestSharp : IDisposable
         string? gsrProxyName = null,
         CancellationToken cancellationToken = default)
     {
-        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/register";
+        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/register-group";
         var payload = new
         {
             member_id = memberId,
@@ -368,9 +368,50 @@ public sealed class UnityRestSharp : IDisposable
         int memberId,
         CancellationToken cancellationToken = default)
     {
-        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/unregister";
+        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/unregister-group";
         var payload = new { member_id = memberId };
         return await PostAsync<IntergroupMeetingRegistration>(url, payload, cancellationToken);
+    }
+
+    /// <summary>
+    /// Registers an officer as an attendee of an intergroup meeting.
+    /// </summary>
+    /// <param name="intergroupMeetingId">The intergroup meeting ID</param>
+    /// <param name="officerId">The officer (member) ID to register</param>
+    /// <param name="positionName">The position name (plain text)</param>
+    /// <param name="officerName">The officer name (plain text)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<IntergroupMeetingOfficerRegistration>> RegisterOfficerAsync(
+        int intergroupMeetingId,
+        int officerId,
+        string positionName,
+        string officerName,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/register-officer";
+        var payload = new
+        {
+            officer_id = officerId,
+            position_name = positionName,
+            officer_name = officerName
+        };
+        return await PostAsync<IntergroupMeetingOfficerRegistration>(url, payload, cancellationToken);
+    }
+
+    /// <summary>
+    /// Unregisters an officer from an intergroup meeting.
+    /// </summary>
+    /// <param name="intergroupMeetingId">The intergroup meeting ID</param>
+    /// <param name="officerId">The officer (member) ID to unregister</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<IntergroupMeetingOfficerRegistration>> UnregisterOfficerAsync(
+        int intergroupMeetingId,
+        int officerId,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/unregister-officer";
+        var payload = new { officer_id = officerId };
+        return await PostAsync<IntergroupMeetingOfficerRegistration>(url, payload, cancellationToken);
     }
 
     #endregion

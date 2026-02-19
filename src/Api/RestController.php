@@ -15,6 +15,7 @@ use Unity\Groups\Interfaces\GroupRepository;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeeting;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepository;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingGroupAttendanceRepository;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendanceRepository;
 use Unity\Locations\Interfaces\Location;
 use Unity\Meetings\Interfaces\Meeting;
 use Unity\Meetings\Interfaces\MeetingRepository;
@@ -168,20 +169,36 @@ class RestController
             ],
         ]);
 
-        // Intergroup Meeting Registration endpoint
-        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/register', [
+        // Intergroup Meeting Group Registration endpoint
+        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/register-group', [
             'methods' => 'POST',
             'callback' => [self::class, 'registerIntergroupMeetingAttendee'],
             'permission_callback' => [self::class, 'checkPermission'],
             'args' => self::getRegisterAttendeeArgs(),
         ]);
 
-        // Intergroup Meeting Unregister endpoint
-        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/unregister', [
+        // Intergroup Meeting Group Unregister endpoint
+        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/unregister-group', [
             'methods' => 'POST',
             'callback' => [self::class, 'unregisterIntergroupMeetingAttendee'],
             'permission_callback' => [self::class, 'checkPermission'],
             'args' => self::getUnregisterAttendeeArgs(),
+        ]);
+
+        // Intergroup Meeting Officer Registration endpoint
+        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/register-officer', [
+            'methods' => 'POST',
+            'callback' => [self::class, 'registerIntergroupMeetingOfficer'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getRegisterOfficerArgs(),
+        ]);
+
+        // Intergroup Meeting Officer Unregister endpoint
+        register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/unregister-officer', [
+            'methods' => 'POST',
+            'callback' => [self::class, 'unregisterIntergroupMeetingOfficer'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getUnregisterOfficerArgs(),
         ]);
 
         // Health check endpoint (no auth required)
@@ -570,6 +587,66 @@ class RestController
                 'sanitize_callback' => 'absint',
             ],
             'member_id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+        ];
+    }
+
+    /**
+     * Get arguments for register officer endpoint
+     */
+    private static function getRegisterOfficerArgs(): array
+    {
+        return [
+            'id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'officer_id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'position_name' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen(trim($param)) > 0;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'officer_name' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen(trim($param)) > 0;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ];
+    }
+
+    /**
+     * Get arguments for unregister officer endpoint
+     */
+    private static function getUnregisterOfficerArgs(): array
+    {
+        return [
+            'id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'officer_id' => [
                 'required' => true,
                 'validate_callback' => function ($param) {
                     return is_numeric($param) && $param > 0;
@@ -2097,6 +2174,319 @@ class RestController
                 $request->get_route(),
                 $request->get_method(),
                 ['id' => $meetingId, 'member_id' => $memberId],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                    'debug' => WP_DEBUG ? $e->getMessage() : null,
+                ],
+            ], 500);
+        }
+    }
+    /**
+     * Register an officer as an attendee of an intergroup meeting
+     */
+    public static function registerIntergroupMeetingOfficer(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+        $meetingId = (int) $request->get_param('id');
+        $officerId = (int) $request->get_param('officer_id');
+        $positionName = (string) $request->get_param('position_name');
+        $officerName = (string) $request->get_param('officer_name');
+
+        try {
+            $container = Plugin::getContainer();
+            $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
+            $memberRepo = $container->get(MemberRepository::class);
+            $attendanceRepo = $container->get(IntergroupMeetingOfficerAttendanceRepository::class);
+            $attendanceFactory = $container->get(
+                'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingOfficerAttendanceFactory'
+            );
+
+            // Validate intergroup meeting exists
+            $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
+
+            if (!$intergroupMeeting) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_found',
+                        'message' => 'Intergroup meeting not found',
+                    ],
+                ], 404);
+            }
+
+            // Validate officer (member) exists
+            $member = $memberRepo->find($officerId);
+
+            if (!$member) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'officer_not_found',
+                        'message' => 'Officer not found',
+                    ],
+                ], 404);
+            }
+
+            // Check if officer is already registered
+            if ($intergroupMeeting->hasOfficerAttendee($officerId)) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    409,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'already_registered',
+                        'message' => 'Officer is already registered for this intergroup meeting',
+                    ],
+                ], 409);
+            }
+
+            // Add the officer as an attendee
+            $intergroupMeeting->addOfficerAttendee($officerId);
+
+            // Save the updated intergroup meeting
+            $saved = $intergroupMeetingRepo->save($intergroupMeeting);
+
+            if (!$saved) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'save_failed',
+                        'message' => 'Failed to register officer',
+                    ],
+                ], 500);
+            }
+
+            // Create the attendance record in the custom table
+            $attendance = $attendanceFactory->createNew(
+                $meetingId,
+                $officerId,
+                $positionName,
+                $officerName
+            );
+
+            $attendanceSaved = $attendanceRepo->save($attendance);
+
+            if (!$attendanceSaved) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'attendance_save_failed',
+                        'message' => 'Failed to save officer attendance record',
+                    ],
+                ], 500);
+            }
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $meetingId, 'officer_id' => $officerId],
+                201,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => [
+                    'intergroup_meeting_id' => $meetingId,
+                    'officer_id' => $officerId,
+                    'officer_name' => $officerName,
+                    'position_name' => $positionName,
+                    'registered' => true,
+                ],
+            ], 201);
+
+        } catch (\Throwable $e) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('Integrity: registerIntergroupMeetingOfficer error: ' . $e->getMessage());
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $meetingId, 'officer_id' => $officerId],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                    'debug' => WP_DEBUG ? $e->getMessage() : null,
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Unregister an officer from an intergroup meeting
+     */
+    public static function unregisterIntergroupMeetingOfficer(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+        $meetingId = (int) $request->get_param('id');
+        $officerId = (int) $request->get_param('officer_id');
+
+        try {
+            $container = Plugin::getContainer();
+            $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
+            $attendanceRepo = $container->get(IntergroupMeetingOfficerAttendanceRepository::class);
+
+            // Validate intergroup meeting exists
+            $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
+
+            if (!$intergroupMeeting) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_found',
+                        'message' => 'Intergroup meeting not found',
+                    ],
+                ], 404);
+            }
+
+            // Check if officer is actually registered
+            if (!$intergroupMeeting->hasOfficerAttendee($officerId)) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'not_registered',
+                        'message' => 'Officer is not registered for this intergroup meeting',
+                    ],
+                ], 404);
+            }
+
+            // Remove the officer
+            $intergroupMeeting->removeOfficerAttendee($officerId);
+
+            // Save the updated intergroup meeting
+            $saved = $intergroupMeetingRepo->save($intergroupMeeting);
+
+            if (!$saved) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'save_failed',
+                        'message' => 'Failed to unregister officer',
+                    ],
+                ], 500);
+            }
+
+            // Delete the attendance record for this officer at this meeting
+            $attendanceRepo->deleteByIntergroupMeetingAndOfficer($meetingId, $officerId);
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $meetingId, 'officer_id' => $officerId],
+                200,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => [
+                    'intergroup_meeting_id' => $meetingId,
+                    'officer_id' => $officerId,
+                    'registered' => false,
+                ],
+            ], 200);
+
+        } catch (\Throwable $e) {
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('Integrity: unregisterIntergroupMeetingOfficer error: ' . $e->getMessage());
+            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+            error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $meetingId, 'officer_id' => $officerId],
                 500,
                 microtime(true) - $startTime
             );
