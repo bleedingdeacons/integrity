@@ -35,99 +35,92 @@ class PluginBuilder
     // Files and directories to exclude in production builds
     private array $productionExcludes = [
         // Version control
-        '.git',
-        '.gitignore',
-        '.gitattributes',
+            '.git',
+            '.gitignore',
+            '.gitattributes',
 
         // IDE/Editor
-        '.idea',
-        '.vscode',
+            '.idea',
+            '.vscode',
 
         // Build artifacts
-        'build',
+            'build',
 
         // Tests
-        'tests',
+            'tests',
 
         // Setup/config files not needed in production
-        'setup',
-        'node_modules',
-        '.DS_Store',
-        'Thumbs.db',
+            'setup',
+            'node_modules',
+            '.DS_Store',
+            'Thumbs.db',
 
         // Composer files (not needed after autoload is generated)
-        'composer.json',
-        'composer.lock',
+            'composer.json',
+            'composer.lock',
 
         // PHPUnit
-        'phpunit.xml',
-        'phpunit.xml.dist',
+            'phpunit.xml',
+            'phpunit.xml.dist',
 
         // Code style
-        '.phpcs.xml',
-        '.phpcs.xml.dist',
-        '.php-cs-fixer.php',
-        '.php-cs-fixer.cache',
+            '.phpcs.xml',
+            '.phpcs.xml.dist',
+            '.php-cs-fixer.php',
+            '.php-cs-fixer.cache',
 
         // Static analysis
-        'phpstan.neon',
-        'phpstan.neon.dist',
+            'phpstan.neon',
+            'phpstan.neon.dist',
 
         // Documentation
-        '*.md',
+            '*.md',
 
         // Package manager
-        'package.json',
-        'package-lock.json',
+            'package.json',
+            'package-lock.json',
 
         // Editor config
-        '.editorconfig',
+            '.editorconfig',
 
         // Build script
-        'build.php',
+            'build.php',
 
-        // C# client (separate distribution)
-        'csharp-client',
+        // CLI tool
+            'Integrity-cli',
 
-        // ==== ALL VENDOR PACKAGES (no production dependencies) ====
-        'vendor/bin',
-        'vendor/myclabs',
-        'vendor/nikic',
-        'vendor/phar-io',
-        'vendor/phpstan',
-        'vendor/phpunit',
-        'vendor/sebastian',
-        'vendor/theseer',
+        // Vendor (no production dependencies needed)
+            'vendor',
     ];
 
     // Files and directories to exclude in dev builds
     private array $devExcludes = [
         // Version control
-        '.git',
+            '.git',
 
         // IDE/Editor
-        '.idea',
-        '.vscode',
+            '.idea',
+            '.vscode',
 
         // Build artifacts
-        'build',
+            'build',
 
         // OS files
-        'node_modules',
-        '.DS_Store',
-        'Thumbs.db',
+            'node_modules',
+            '.DS_Store',
+            'Thumbs.db',
 
         // ==== VENDOR DEV PACKAGES NOT NEEDED IN DEV BUILD ====
         // These are dev tools, not needed to run/test the plugin
-        'vendor/bin',
-        'vendor/phpstan',
+            'vendor/bin',
+            'vendor/phpstan',
 
         // Vendor unnecessary files
-        'vendor/*/.git',
-        'vendor/*/.github',
-        'vendor/*/*/.github',
-        'vendor/*/doc',
-        'vendor/*/docs',
+            'vendor/*/.git',
+            'vendor/*/.github',
+            'vendor/*/*/.github',
+            'vendor/*/doc',
+            'vendor/*/docs',
     ];
 
     public function __construct()
@@ -177,7 +170,7 @@ class PluginBuilder
      */
     private function getVersionFromPlugin(): string
     {
-        $mainFile = $this->pluginDir . DIRECTORY_SEPARATOR . 'integrity.php';
+        $mainFile = $this->pluginDir . DIRECTORY_SEPARATOR . 'Integrity.php';
         if (file_exists($mainFile)) {
             $content = file_get_contents($mainFile);
             if (preg_match('/Version:\s*([0-9.]+\s*\w*)/', $content, $matches)) {
@@ -187,7 +180,7 @@ class PluginBuilder
                 return $matches[1];
             }
         }
-        return '1.0.0';
+        return '0.0.1';
     }
 
     /**
@@ -218,7 +211,7 @@ class PluginBuilder
         $vendorDir = $this->pluginDir . DIRECTORY_SEPARATOR . 'vendor';
         if (!is_dir($vendorDir)) {
             $this->log("Warning: vendor directory not found. Running 'composer install'...");
-            $this->runComposer();
+            $this->runComposer($type);
         }
 
         // Create build directory
@@ -247,9 +240,12 @@ class PluginBuilder
         $this->createZip($archiveName, $excludes);
 
         // Display file size
-        $size = $this->formatBytes(filesize($archiveName));
         $this->log("Archive created successfully: " . basename($archiveName));
-        $this->log("File size: {$size}");
+        $fileSize = filesize($archiveName);
+        if ($fileSize !== false) {
+            $size = $this->formatBytes($fileSize);
+            $this->log("File size: {$size}");
+        }
         $this->log("Location: {$archiveName}");
     }
 
@@ -283,37 +279,48 @@ class PluginBuilder
     }
 
     /**
-     * Create ZIP archive using PHP's ZipArchive
+     * Create a ZIP archive
      */
     private function createZip(string $archivePath, array $excludes): void
     {
         $zip = new ZipArchive();
-        $result = $zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
 
+        $result = $zip->open($archivePath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
         if ($result !== true) {
-            $this->error("Failed to create ZIP archive. Error code: {$result}");
+            $this->error("Failed to create ZIP archive (error code: {$result})");
             exit(1);
         }
-
-        $this->log("Creating ZIP archive...");
 
         $files = $this->getFiles($this->pluginDir, $excludes);
         $fileCount = 0;
 
         foreach ($files as $file) {
             $relativePath = substr($file, strlen($this->pluginDir) + 1);
-            // Use forward slashes in ZIP file for consistency
-            $zipPath = $this->pluginName . '/' . str_replace('\\', '/', $relativePath);
+            if (is_file($file)) {
+                // Normalize path to use forward slashes for ZIP standard compliance
+                // The ZIP file format specification requires forward slashes
+                // This ensures proper extraction on all platforms (Windows, macOS, Linux)
+                $relativePath = str_replace('\\', '/', $relativePath);
 
-            if (is_dir($file)) {
-                $zip->addEmptyDir($zipPath);
-            } else {
-                $zip->addFile($file, $zipPath);
+                $zipPath = $this->pluginName . '/' . $relativePath;
+
+                // Read file content and add as string to avoid keeping file handles
+                // open (which causes failures on Windows with many files)
+                $contents = file_get_contents($file);
+                if ($contents === false) {
+                    $this->error("Warning: Could not read file: {$file}");
+                    continue;
+                }
+                $zip->addFromString($zipPath, $contents);
                 $fileCount++;
             }
         }
 
-        $zip->close();
+        if (!$zip->close()) {
+            $this->error("Failed to write ZIP archive to: {$archivePath}");
+            exit(1);
+        }
+
         $this->log("Added {$fileCount} files to archive");
     }
 
@@ -324,8 +331,8 @@ class PluginBuilder
     {
         $files = [];
         $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
+                new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::SELF_FIRST
         );
 
         foreach ($iterator as $file) {
@@ -463,7 +470,7 @@ class PluginBuilder
         echo <<<HELP
 
 Integrity WordPress Plugin Build Script
-=======================================
+====================================
 Platform: {$platform}
 PHP Version: {$phpVersion}
 
@@ -490,7 +497,7 @@ Examples:
   php build.php --type=production         # Alternative: using --type flag
   php build.php                           # Default: production build
 
-Composer Scripts (in composer.json):
+Composer Scripts (add to composer.json):
   "scripts": {
       "build:production": "php build.php build:production",
       "build:dev": "php build.php build:dev",
@@ -502,7 +509,6 @@ Files Excluded (Production):
   - Build configuration (composer.json, package.json, etc.)
   - Documentation (*.md files)
   - PHP tooling configs (phpunit.xml, phpstan.neon, etc.)
-  - C# client (distributed separately)
 
 Files Excluded (Dev):
   - Only: .git, .idea, .vscode, build, node_modules, .DS_Store
@@ -540,12 +546,7 @@ PSR-4 Autoloading:
   if the vendor directory is missing.
 
   Namespace: Integrity\\
-  Source: src/
-
-Dependencies:
-  Integrity requires the Unity plugin to be installed and activated.
-  It hooks into the 'unity/loaded' action to ensure Unity is fully
-  initialized before Integrity starts.
+  Source: src/Integrity/
 
 NOTES;
     }
