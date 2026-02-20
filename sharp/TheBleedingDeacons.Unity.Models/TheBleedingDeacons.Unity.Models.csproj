@@ -4,6 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Copyright>Today is the yesterday of tomorrow.</Copyright>
   </PropertyGroup>
 
 </Project>
