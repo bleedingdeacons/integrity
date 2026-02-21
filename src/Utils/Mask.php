@@ -8,6 +8,10 @@ class Mask
 {
     public static function email(string $email): string
     {
+        // TODO Remove Masking
+
+        return $email;
+
         $parts = explode('@', $email);
 
         if (count($parts) !== 2) {
@@ -40,6 +44,9 @@ class Mask
 
     public static function phone(string $phone): string
     {
+        // TODO Remove Masking
+        return $phone;
+        
         $digits = preg_replace('/\s+/', '', $phone);
 
         if (strlen($digits) <= 4) {
