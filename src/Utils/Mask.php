@@ -46,7 +46,7 @@ class Mask
     {
         // TODO Remove Masking
         return $phone;
-        
+
         $digits = preg_replace('/\s+/', '', $phone);
 
         if (strlen($digits) <= 4) {
