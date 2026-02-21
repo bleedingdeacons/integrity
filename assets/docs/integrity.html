@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integrity Plugin — User Documentation</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #FAFAF8;
+            --surface: #FFFFFF;
+            --border: #E8E5E0;
+            --text: #1A1A18;
+            --text-secondary: #6B6860;
+            --accent: #D97706;
+            --accent-bg: #FEF3C7;
+            --accent-dark: #B45309;
+            --info: #1D4ED8;
+            --info-bg: #DBEAFE;
+            --danger: #DC2626;
+            --danger-bg: #FEE2E2;
+            --success: #16A34A;
+            --success-bg: #DCFCE7;
+            --purple: #7C3AED;
+            --purple-bg: #EDE9FE;
+            --code-bg: #F5F3EF;
+            --nav-width: 280px;
+            --header-height: 64px;
+            --radius: 10px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header-height) + 24px); }
+        body {
+            font-family: 'DM Sans', sans-serif; font-size: 16px; line-height: 1.7;
+            color: var(--text); background: var(--bg); -webkit-font-smoothing: antialiased;
+        }
+
+        .site-header {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            height: var(--header-height); background: rgba(250,250,248,0.92);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 24px; gap: 16px;
+        }
+        .site-header .logo {
+            display: flex; align-items: center; gap: 10px;
+            font-weight: 700; font-size: 20px; color: var(--text);
+            text-decoration: none; letter-spacing: -0.3px;
+        }
+        .site-header .logo span { color: var(--accent); }
+        .site-header .version {
+            font-size: 12px; font-weight: 500; color: var(--text-secondary);
+            background: var(--code-bg); padding: 2px 8px; border-radius: 6px;
+        }
+        .hamburger {
+            display: none; background: none; border: none; cursor: pointer;
+            width: 36px; height: 36px; flex-shrink: 0;
+            border-radius: 8px; align-items: center; justify-content: center;
+        }
+        .hamburger:hover { background: var(--code-bg); }
+        .hamburger svg { width: 22px; height: 22px; color: var(--text); }
+
+        .sidebar {
+            position: fixed; top: var(--header-height); left: 0; bottom: 0;
+            width: var(--nav-width); overflow-y: auto;
+            border-right: 1px solid var(--border);
+            background: var(--bg); padding: 24px 0; z-index: 90;
+        }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        .nav-section { padding: 0 20px; margin-bottom: 24px; }
+        .nav-section-title {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-secondary); margin-bottom: 8px; padding-left: 12px;
+        }
+        .nav-link {
+            display: block; padding: 6px 12px; border-radius: 8px;
+            color: var(--text-secondary); text-decoration: none;
+            font-size: 14px; font-weight: 400; transition: all 0.15s; line-height: 1.5;
+        }
+        .nav-link:hover { color: var(--text); background: var(--surface); }
+        .nav-link.active { color: var(--accent-dark); background: var(--accent-bg); font-weight: 500; }
+
+        .main {
+            margin-left: var(--nav-width);
+            padding: calc(var(--header-height) + 40px) 48px 80px; max-width: 880px;
+        }
+
+        h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.2; margin-bottom: 12px; }
+        h1 .emoji { font-size: 32px; margin-right: 4px; }
+        .subtitle { font-size: 18px; color: var(--text-secondary); font-weight: 400; margin-bottom: 40px; line-height: 1.6; }
+        h2 {
+            font-size: 24px; font-weight: 700; letter-spacing: -0.4px;
+            margin-top: 56px; margin-bottom: 16px; padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+        h2:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+        h3 { font-size: 18px; font-weight: 600; margin-top: 32px; margin-bottom: 10px; }
+        p { margin-bottom: 16px; }
+        ul, ol { margin-bottom: 16px; padding-left: 24px; }
+        li { margin-bottom: 6px; }
+
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-sm);
+        }
+        .callout {
+            border-radius: var(--radius); padding: 16px 20px; margin-bottom: 24px;
+            font-size: 15px; display: flex; gap: 12px; align-items: flex-start; line-height: 1.6;
+        }
+        .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+        .callout.info { background: var(--info-bg); border-left: 4px solid var(--info); }
+        .callout.warning { background: var(--accent-bg); border-left: 4px solid var(--accent); }
+        .callout.danger { background: var(--danger-bg); border-left: 4px solid var(--danger); }
+        .callout.success { background: var(--success-bg); border-left: 4px solid var(--success); }
+
+        code {
+            font-family: 'JetBrains Mono', monospace; font-size: 13.5px;
+            background: var(--code-bg); padding: 2px 7px; border-radius: 5px; color: var(--accent-dark);
+        }
+        pre {
+            background: #1E1E1C; color: #D4D0C8; border-radius: var(--radius);
+            padding: 20px 24px; margin-bottom: 24px; overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7;
+        }
+        pre code { background: none; padding: 0; color: inherit; }
+        pre .c { color: #7A7A6E; } /* comment */
+        pre .k { color: #C586C0; } /* keyword */
+        pre .s { color: #CE9178; } /* string */
+        pre .n { color: #9CDCFE; } /* number/key */
+
+        .status-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 15px; }
+        .status-table th {
+            text-align: left; padding: 10px 16px; font-weight: 600;
+            border-bottom: 2px solid var(--border); font-size: 13px;
+            text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);
+        }
+        .status-table td { padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+
+        .method-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.5px;
+        }
+        .method-get { background: var(--success-bg); color: var(--success); }
+        .method-post { background: var(--info-bg); color: var(--info); }
+
+        .perm-badge {
+            display: inline-block; padding: 2px 10px; border-radius: 20px;
+            font-size: 13px; font-weight: 600;
+        }
+        .perm-read { background: var(--success-bg); color: var(--success); }
+        .perm-write { background: var(--accent-bg); color: var(--accent-dark); }
+        .perm-all { background: var(--purple-bg); color: var(--purple); }
+
+        .steps { counter-reset: step; list-style: none; padding-left: 0; }
+        .steps li {
+            counter-increment: step; padding-left: 44px; position: relative;
+            margin-bottom: 20px; min-height: 32px;
+        }
+        .steps li::before {
+            content: counter(step); position: absolute; left: 0; top: 0;
+            width: 30px; height: 30px; border-radius: 50%;
+            background: var(--accent); color: #fff;
+            font-weight: 700; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .endpoint-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); margin-bottom: 16px; overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+        .endpoint-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--code-bg);
+            font-family: 'JetBrains Mono', monospace; font-size: 14px;
+        }
+        .endpoint-body { padding: 16px 20px; font-size: 15px; }
+        .endpoint-body p:last-child { margin-bottom: 0; }
+
+        .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 80; }
+
+        @media (max-width: 860px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: var(--shadow-md); }
+            .sidebar.open { transform: translateX(0); }
+            .overlay.visible { display: block; }
+            .hamburger { display: flex; }
+            .main { margin-left: 0; padding: calc(var(--header-height) + 24px) 20px 60px; }
+            h1 { font-size: 28px; } h2 { font-size: 20px; }
+            pre { padding: 16px; font-size: 12px; }
+            .status-table { font-size: 14px; }
+            .status-table th, .status-table td { padding: 8px 10px; }
+            .endpoint-header { font-size: 12px; flex-wrap: wrap; }
+        }
+
+        @media print {
+            .site-header, .sidebar, .hamburger, .overlay { display: none !important; }
+            .main { margin-left: 0; padding: 20px; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<header class="site-header">
+    <button class="hamburger" onclick="toggleNav()" aria-label="Toggle navigation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <a href="#" class="logo">
+        <span>🔐</span> Integrity <span>Docs</span>
+    </a>
+    <span class="version">February 2026</span>
+</header>
+
+<div class="overlay" onclick="toggleNav()"></div>
+
+<nav class="sidebar" id="sidebar">
+    <div class="nav-section">
+        <div class="nav-section-title">Getting Started</div>
+        <a href="#overview" class="nav-link active">Overview</a>
+        <a href="#requirements" class="nav-link">Requirements</a>
+        <a href="#installation" class="nav-link">Installation</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">API Keys</div>
+        <a href="#api-keys" class="nav-link">Managing Keys</a>
+        <a href="#creating-key" class="nav-link">Creating a Key</a>
+        <a href="#permissions" class="nav-link">Permissions</a>
+        <a href="#ip-whitelist" class="nav-link">IP Whitelisting</a>
+        <a href="#key-lifecycle" class="nav-link">Revoke &amp; Delete</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Authentication</div>
+        <a href="#auth" class="nav-link">Using the API</a>
+        <a href="#rate-limiting" class="nav-link">Rate Limiting</a>
+        <a href="#security-headers" class="nav-link">Security Headers</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Endpoints</div>
+        <a href="#endpoint-health" class="nav-link">Health Check</a>
+        <a href="#endpoint-groups" class="nav-link">Groups</a>
+        <a href="#endpoint-meetings" class="nav-link">Meetings</a>
+        <a href="#endpoint-positions" class="nav-link">Positions</a>
+        <a href="#endpoint-members" class="nav-link">Members</a>
+        <a href="#endpoint-ig-meetings" class="nav-link">Intergroup Meetings</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">.NET Client</div>
+        <a href="#dotnet-overview" class="nav-link">Client Library</a>
+        <a href="#dotnet-setup" class="nav-link">Setup</a>
+        <a href="#dotnet-usage" class="nav-link">Usage Examples</a>
+        <a href="#dotnet-models" class="nav-link">Model Reference</a>
+        <a href="#dotnet-responses" class="nav-link">Response Handling</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Admin</div>
+        <a href="#audit-log" class="nav-link">Audit Log</a>
+        <a href="#settings" class="nav-link">Settings</a>
+        <a href="#cleanup" class="nav-link">Automatic Cleanup</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Help</div>
+        <a href="#troubleshooting" class="nav-link">Troubleshooting</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+    </div>
+</nav>
+
+<main class="main">
+
+    <!-- Overview -->
+    <section id="overview">
+        <h1><span class="emoji">🔐</span> Integrity Plugin</h1>
+        <p class="subtitle">
+            Secure REST API bridge for the Unity plugin suite. Integrity provides authenticated, rate-limited access to Groups, Meetings, Members, Positions, and Intergroup Meetings for external applications.
+        </p>
+
+        <div class="card">
+            <h3>What Integrity Does</h3>
+            <p>Integrity exposes Unity's data through a standard REST API at <code>/wp-json/integrity/v1/</code>. Every request must carry a valid API key. Keys are scoped with granular permissions, protected by rate limiting, and optionally restricted to specific IP addresses. Every API call is recorded in an audit log.</p>
+            <p style="margin-bottom:0;">The plugin also ships with a .NET client library for consuming the API from C# applications.</p>
+        </div>
+    </section>
+
+    <!-- Requirements -->
+    <section id="requirements">
+        <h2>Requirements</h2>
+        <ul>
+            <li><strong>WordPress</strong> 6.0 or later</li>
+            <li><strong>PHP</strong> 8.0 or later (Argon2id password hashing required)</li>
+            <li><strong>Unity plugin</strong> — must be installed and activated</li>
+            <li><strong>Scrutiny plugin</strong> — listed as a required dependency</li>
+            <li><strong>HTTPS</strong> — strongly recommended and enforced by default (see <a href="#settings">Settings</a>)</li>
+        </ul>
+    </section>
+
+    <!-- Installation -->
+    <section id="installation">
+        <h2>Installation</h2>
+        <ol class="steps">
+            <li>Make sure <strong>Unity</strong> and <strong>Scrutiny</strong> are installed and activated.</li>
+            <li>Upload the <code>integrity</code> folder to <code>/wp-content/plugins/</code>, or install via the WordPress plugin uploader.</li>
+            <li>Activate <strong>Integrity</strong> in the Plugins screen.</li>
+            <li>On activation, three database tables are created: <code>wp_integrity_api_keys</code>, <code>wp_integrity_rate_limits</code>, and <code>wp_integrity_audit_log</code>. A daily cleanup cron job is also scheduled.</li>
+            <li>A new <strong>Integrity API</strong> top-level menu appears in the admin sidebar with sub-pages for API Keys, Audit Log, and Settings.</li>
+        </ol>
+    </section>
+
+    <!-- API Keys -->
+    <section id="api-keys">
+        <h2>Managing API Keys</h2>
+        <p>Navigate to <strong>Integrity API → API Keys</strong>. This page lists all keys with their name, prefix, permissions, rate limit, last-used date, lifetime request count, expiration status, and active/revoked state.</p>
+        <p>API keys are generated with a cryptographically secure random value, prefixed with <code>int_</code>. Only the Argon2id hash is stored in the database — the plain-text key is shown <strong>once</strong> at creation and cannot be retrieved afterwards.</p>
+
+        <div class="callout danger">
+            <span class="callout-icon">🚨</span>
+            <div><strong>Copy the key immediately after creation.</strong> It is displayed only once. If you lose it, you must create a new key.</div>
+        </div>
+    </section>
+
+    <!-- Creating a Key -->
+    <section id="creating-key">
+        <h2>Creating a Key</h2>
+        <p>On the API Keys page, fill in the creation form:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Field</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Name</strong></td><td>A human-readable label for the key (e.g. "Mobile App", "Reporting Server").</td></tr>
+            <tr><td><strong>Permissions</strong></td><td>Checkboxes for each resource. See <a href="#permissions">Permissions</a>.</td></tr>
+            <tr><td><strong>Rate Limit</strong></td><td>Requests per hour. Leave blank to use the global default (1,000).</td></tr>
+            <tr><td><strong>Expires At</strong></td><td>Optional expiration date. After this date, the key will fail validation.</td></tr>
+            <tr><td><strong>IP Whitelist</strong></td><td>Optional. One IP or CIDR range per line. See <a href="#ip-whitelist">IP Whitelisting</a>.</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Permissions -->
+    <section id="permissions">
+        <h2>Permissions</h2>
+        <p>Each API key is scoped to specific resources and actions:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Permission</th><th>Type</th><th>Grants Access To</th></tr></thead>
+            <tbody>
+            <tr><td><code>groups:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view groups</td></tr>
+            <tr><td><code>meetings:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view meetings</td></tr>
+            <tr><td><code>positions:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view positions</td></tr>
+            <tr><td><code>members:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view members</td></tr>
+            <tr><td><code>members:write</code></td><td><span class="perm-badge perm-write">Write</span></td><td>Update member data</td></tr>
+            <tr><td><code>intergroup-meetings:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view intergroup meetings</td></tr>
+            <tr><td><code>intergroup-meetings:write</code></td><td><span class="perm-badge perm-write">Write</span></td><td>Register/unregister group and officer attendance</td></tr>
+            <tr><td><code>*</code></td><td><span class="perm-badge perm-all">All</span></td><td>Full access to all endpoints</td></tr>
+            </tbody>
+        </table>
+
+        <p>If no permissions are selected when creating a key, it defaults to <code>groups:read</code> and <code>meetings:read</code>.</p>
+    </section>
+
+    <!-- IP Whitelisting -->
+    <section id="ip-whitelist">
+        <h2>IP Whitelisting</h2>
+        <p>Optionally restrict a key so it can only be used from specific IP addresses. Enter one IP or CIDR range per line when creating or editing a key:</p>
+
+        <pre><code>203.0.113.50
+10.0.0.0/8
+2001:db8::/32</code></pre>
+
+        <p>Both IPv4 and IPv6 are supported, including CIDR notation. If the whitelist is set and the client's IP doesn't match any entry, the request is rejected — even if the key is otherwise valid.</p>
+    </section>
+
+    <!-- Key Lifecycle -->
+    <section id="key-lifecycle">
+        <h2>Revoke &amp; Delete</h2>
+        <div class="card">
+            <h3>Revoking a Key</h3>
+            <p>Revoking sets the key to inactive. It can no longer authenticate requests, but the record is kept for audit purposes. You can see it was revoked, when it was last used, and how many requests it made.</p>
+        </div>
+        <div class="card">
+            <h3>Deleting a Key</h3>
+            <p style="margin-bottom:0;">Permanently removes the key record from the database. Use this for keys you no longer need to audit. This action cannot be undone.</p>
+        </div>
+    </section>
+
+    <!-- Authentication -->
+    <section id="auth">
+        <h2>Using the API</h2>
+        <p>Pass your API key in the <code>Authorization</code> header using the Bearer scheme:</p>
+
+        <pre><code><span class="k">GET</span> /wp-json/integrity/v1/groups
+<span class="n">Authorization</span>: <span class="s">Bearer int_a1b2c3d4...</span></code></pre>
+
+        <p>Alternatively, you can use the <code>X-API-Key</code> header:</p>
+
+        <pre><code><span class="n">X-API-Key</span>: <span class="s">int_a1b2c3d4...</span></code></pre>
+
+        <p>All successful responses follow this shape:</p>
+
+        <pre><code>{
+  <span class="n">"success"</span>: <span class="k">true</span>,
+  <span class="n">"data"</span>: [ ... ],
+  <span class="n">"meta"</span>: { <span class="n">"total"</span>: 42, <span class="n">"page"</span>: 1, <span class="n">"per_page"</span>: 100 }
+}</code></pre>
+
+        <p>Error responses include a machine-readable code and human-readable message:</p>
+
+        <pre><code>{
+  <span class="n">"success"</span>: <span class="k">false</span>,
+  <span class="n">"error"</span>: { <span class="n">"code"</span>: <span class="s">"invalid_api_key"</span>, <span class="n">"message"</span>: <span class="s">"Invalid or expired API key"</span> }
+}</code></pre>
+    </section>
+
+    <!-- Rate Limiting -->
+    <section id="rate-limiting">
+        <h2>Rate Limiting</h2>
+        <p>Each API key has a per-hour request limit (default: 1,000). Integrity uses a sliding-window approach rounded to the current clock hour. Every response includes rate limit headers:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Header</th><th>Meaning</th></tr></thead>
+            <tbody>
+            <tr><td><code>X-RateLimit-Limit</code></td><td>The maximum requests allowed in the current window.</td></tr>
+            <tr><td><code>X-RateLimit-Remaining</code></td><td>How many requests are left in the current window.</td></tr>
+            <tr><td><code>X-RateLimit-Reset</code></td><td>Unix timestamp when the current window resets.</td></tr>
+            </tbody>
+        </table>
+
+        <p>When the limit is exceeded, the API returns <strong>HTTP 429 Too Many Requests</strong>. Wait until the reset timestamp before retrying.</p>
+    </section>
+
+    <!-- Security Headers -->
+    <section id="security-headers">
+        <h2>Security Headers</h2>
+        <p>All Integrity API responses include these security headers automatically:</p>
+        <ul>
+            <li><code>X-Content-Type-Options: nosniff</code></li>
+            <li><code>X-Frame-Options: DENY</code></li>
+            <li><code>X-XSS-Protection: 1; mode=block</code></li>
+            <li><code>Cache-Control: no-store, no-cache, must-revalidate, max-age=0</code></li>
+        </ul>
+        <p>This prevents browsers from caching API responses or embedding them in frames.</p>
+    </section>
+
+    <!-- Health Endpoint -->
+    <section id="endpoint-health">
+        <h2>Health Check</h2>
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/health</code>
+            </div>
+            <div class="endpoint-body">
+                <p>No authentication required. Returns the API status, version, and whether Unity is available. Returns <strong>200</strong> when healthy, <strong>503</strong> when degraded (Unity unavailable).</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Groups Endpoint -->
+    <section id="endpoint-groups">
+        <h2>Groups</h2>
+        <p>Permission required: <code>groups:read</code></p>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/groups</code>
+            </div>
+            <div class="endpoint-body">
+                <p>List all groups. Supports pagination, search, district filtering, and optional meeting expansion.</p>
+                <p><strong>Parameters:</strong> <code>per_page</code> (1–500, default 100), <code>page</code>, <code>search</code>, <code>district_id</code>, <code>expand=meetings</code></p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/groups/{id}</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Get a single group by ID. Supports <code>expand=meetings</code> to include full meeting objects instead of IDs.</p>
+            </div>
+        </div>
+
+        <p>Group responses include: id, title, email, phone, website, link, notes, district_id, last_contact, meeting IDs (or full meeting objects if expanded), contacts, and contribution options (Venmo, PayPal, Square).</p>
+    </section>
+
+    <!-- Meetings Endpoint -->
+    <section id="endpoint-meetings">
+        <h2>Meetings</h2>
+        <p>Permission required: <code>meetings:read</code></p>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/meetings</code>
+            </div>
+            <div class="endpoint-body">
+                <p>List all meetings. Supports pagination, search, and filtering by day, group, and type.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/meetings/{id}</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Get a single meeting by ID.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Positions Endpoint -->
+    <section id="endpoint-positions">
+        <h2>Positions</h2>
+        <p>Permission required: <code>positions:read</code></p>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/positions</code>
+            </div>
+            <div class="endpoint-body">
+                <p>List all intergroup positions. Supports pagination and search.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/positions/{id}</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Get a single position by ID.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Members Endpoint -->
+    <section id="endpoint-members">
+        <h2>Members</h2>
+        <p>Permission required: <code>members:read</code> for reading, <code>members:write</code> for updating.</p>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/members</code>
+            </div>
+            <div class="endpoint-body">
+                <p>List all members. Supports pagination, search, and filtering by home group, position, and GSR status.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/members/{id}</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Get a single member by ID.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-post">POST</span>
+                <code>/integrity/v1/members/{id}/update</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Partial update — only send the fields you want to change. Omitted fields keep their current values. Referenced entities (home_group_id, intergroup_position_id) are validated to exist before saving. Obscured personal data values (from Scrutiny masking) are detected and ignored to prevent overwriting real data with bullet characters.</p>
+            </div>
+        </div>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>The update endpoint is smart about Scrutiny's data obscuring. If the submitted <code>personal_email</code> or <code>mobile_number</code> contains bullet characters (•), the value is treated as obscured and the existing value is preserved.</div>
+        </div>
+    </section>
+
+    <!-- Intergroup Meetings Endpoint -->
+    <section id="endpoint-ig-meetings">
+        <h2>Intergroup Meetings</h2>
+        <p>Permission required: <code>intergroup-meetings:read</code> for reading, <code>intergroup-meetings:write</code> for registration.</p>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/intergroup-meetings</code>
+            </div>
+            <div class="endpoint-body">
+                <p>List intergroup meetings with attendance data. Supports pagination and date filtering.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-get">GET</span>
+                <code>/integrity/v1/intergroup-meetings/{id}</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Get a single intergroup meeting with full attendance details.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-post">POST</span>
+                <code>/integrity/v1/intergroup-meetings/{id}/register-group</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Register a group's attendance at an intergroup meeting.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-post">POST</span>
+                <code>/integrity/v1/intergroup-meetings/{id}/unregister-group</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Remove a group's attendance registration.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-post">POST</span>
+                <code>/integrity/v1/intergroup-meetings/{id}/register-officer</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Register an officer's attendance at an intergroup meeting.</p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-post">POST</span>
+                <code>/integrity/v1/intergroup-meetings/{id}/unregister-officer</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Remove an officer's attendance registration.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- .NET Client Overview -->
+    <section id="dotnet-overview">
+        <h2>.NET Client Library</h2>
+        <p>Integrity ships with a typed C# client library (<code>UnityRestSharp</code>) and a set of model classes for consuming the REST API from .NET applications. The client handles authentication, JSON serialisation, rate limit header parsing, and error handling out of the box.</p>
+
+        <table class="status-table">
+            <thead><tr><th>Component</th><th>Location</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Client Library</strong></td><td><code>sharp/TheBleedingDeacons.Unity.Client/</code></td><td>The <code>UnityRestSharp</code> class — a full typed API client.</td></tr>
+            <tr><td><strong>Models</strong></td><td><code>sharp/TheBleedingDeacons.Unity.Models/</code></td><td>C# record/class definitions for Group, Meeting, Member, Position, IntergroupMeeting, etc.</td></tr>
+            </tbody>
+        </table>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>The client targets <strong>.NET 9</strong> with C# 13 language features. It uses <code>System.Text.Json</code> for serialisation with <code>snake_case</code> property naming to match the WordPress API convention.</div>
+        </div>
+    </section>
+
+    <!-- .NET Setup -->
+    <section id="dotnet-setup">
+        <h2>Setup</h2>
+        <p>Add a project reference to both the Client and Models projects, or copy the source files into your solution:</p>
+
+        <pre><code><span class="c">// In your .csproj</span>
+&lt;<span class="k">ItemGroup</span>&gt;
+  &lt;<span class="k">ProjectReference</span> <span class="n">Include</span>=<span class="s">"..\..\sharp\TheBleedingDeacons.Unity.Client\TheBleedingDeacons.Unity.Client.csproj"</span> /&gt;
+  &lt;<span class="k">ProjectReference</span> <span class="n">Include</span>=<span class="s">"..\..\sharp\TheBleedingDeacons.Unity.Models\TheBleedingDeacons.Unity.Models.csproj"</span> /&gt;
+&lt;/<span class="k">ItemGroup</span>&gt;</code></pre>
+
+        <p>Create a client instance with your site URL and API key:</p>
+
+        <pre><code><span class="k">using</span> TheBleedingDeacons.Unity.Client;
+
+<span class="k">using var</span> client = <span class="k">new</span> UnityRestSharp(
+    <span class="s">"https://example.com"</span>,   <span class="c">// WordPress site URL</span>
+    <span class="s">"int_a1b2c3d4e5f6..."</span>   <span class="c">// Your Integrity API key</span>
+);</code></pre>
+
+        <p>The client sets the <code>Authorization: Bearer</code> header automatically, along with <code>Accept: application/json</code> and a <code>IntegrityClient/1.0</code> user-agent string. It implements <code>IDisposable</code> so you can use it in a <code>using</code> block or inject it via DI.</p>
+
+        <div class="card">
+            <h3>Dependency Injection</h3>
+            <p style="margin-bottom:0;">You can pass an existing <code>HttpClient</code> instance for DI scenarios (e.g. <code>IHttpClientFactory</code>):</p>
+            <pre style="margin-bottom:0;margin-top:12px;"><code><span class="k">var</span> client = <span class="k">new</span> UnityRestSharp(<span class="s">"https://example.com"</span>, apiKey, myHttpClient);</code></pre>
+        </div>
+    </section>
+
+    <!-- .NET Usage Examples -->
+    <section id="dotnet-usage">
+        <h2>Usage Examples</h2>
+
+        <div class="card">
+            <h3>Health Check</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> health = <span class="k">await</span> client.CheckHealthAsync();
+Console.WriteLine($<span class="s">"Status: {health?.Status}, Unity: {health?.UnityAvailable}"</span>);</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>List Groups (with expanded meetings)</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.GetGroupsAsync(expandMeetings: <span class="k">true</span>);
+
+<span class="k">if</span> (response.Success && response.Data != <span class="k">null</span>)
+{
+    <span class="k">foreach</span> (<span class="k">var</span> group <span class="k">in</span> response.Data)
+    {
+        Console.WriteLine($<span class="s">"{group.Title} — {group.Meetings.Count} meetings"</span>);
+    }
+}</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Filter Meetings by Day and Online Status</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.GetMeetingsAsync(
+    dayOfWeek: DayOfWeek.Monday,
+    online: <span class="k">true</span>,
+    perPage: 50
+);</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Get a Single Member</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.GetMemberAsync(id: 42, expandHomeGroup: <span class="k">true</span>);
+
+<span class="k">if</span> (response.Success && response.Data != <span class="k">null</span>)
+{
+    <span class="k">var</span> member = response.Data;
+    Console.WriteLine($<span class="s">"{member.AnonymousName} — {member.HomeGroupName}"</span>);
+}</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Update a Member (partial update)</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.UpdateMemberAsync(42, <span class="k">new</span> UpdateMemberRequest
+{
+    AnonymousName = <span class="s">"John D."</span>,
+    IsGsr = <span class="k">true</span>,
+    HomeGroupId = 15
+});</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Register Group Attendance at an Intergroup Meeting</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.RegisterAttendeeAsync(
+    intergroupMeetingId: 7,
+    memberId: 42,
+    meetingGroup: <span class="s">"Tuesday Night Group"</span>,
+    gsrName: <span class="s">"John D."</span>,
+    gsrProxy: <span class="k">false</span>
+);</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Register an Officer</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.RegisterOfficerAsync(
+    intergroupMeetingId: 7,
+    officerId: 99,
+    positionName: <span class="s">"Treasurer"</span>,
+    officerName: <span class="s">"Jane S."</span>
+);</code></pre>
+        </div>
+    </section>
+
+    <!-- .NET Model Reference -->
+    <section id="dotnet-models">
+        <h2>Model Reference</h2>
+        <p>The models library contains typed classes for every API resource:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Class</th><th>Key Properties</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Group</strong></td><td>Id, Title, Email, Phone, Website, DistrictId, MeetingIds/Meetings, Contacts, ContributionOptions</td></tr>
+            <tr><td><strong>Meeting</strong></td><td>Id, Name, Day, DayOfWeek, Time, EndTime, Types, IsOnline, OnlineLink, Location, Contacts</td></tr>
+            <tr><td><strong>Position</strong></td><td>Id, LongName, ShortDescription, Email, MinimumSobriety, TermYears</td></tr>
+            <tr><td><strong>Member</strong></td><td>Id, AnonymousName, PersonalEmail, MobileNumber, HomeGroupId/HomeGroup, IsGsr, IntergroupPositionId, IntergroupPositionRotation</td></tr>
+            <tr><td><strong>IntergroupMeeting</strong></td><td>Id, Date, GroupAttendeeIds, GroupAttendees, OfficersAttendingIds, OfficersAttending</td></tr>
+            <tr><td><strong>UpdateMemberRequest</strong></td><td>All Member fields as nullable — only non-null fields are sent (partial update).</td></tr>
+            <tr><td><strong>Contact</strong></td><td>Name, Email, Phone</td></tr>
+            <tr><td><strong>Location</strong></td><td>Name, Address, City, State, PostalCode, Country, Latitude, Longitude</td></tr>
+            <tr><td><strong>ContributionOptions</strong></td><td>Venmo, Paypal, Square, HasOptions</td></tr>
+            </tbody>
+        </table>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>Groups and Members support <strong>expand</strong> parameters. When <code>expandMeetings: true</code> is passed to <code>GetGroupsAsync</code>, the <code>Meetings</code> list is populated with full <code>Meeting</code> objects instead of just IDs. Use the <code>HasExpandedMeetings</code> / <code>HasExpandedHomeGroup</code> helper properties to check which shape you have.</div>
+        </div>
+    </section>
+
+    <!-- .NET Response Handling -->
+    <section id="dotnet-responses">
+        <h2>Response Handling</h2>
+        <p>Every method returns an <code>ApiResponse&lt;T&gt;</code> wrapper that contains:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Property</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><code>Success</code></td><td><code>bool</code></td><td>Whether the request succeeded (HTTP 2xx).</td></tr>
+            <tr><td><code>Data</code></td><td><code>T?</code></td><td>The typed response data (null on failure).</td></tr>
+            <tr><td><code>Error</code></td><td><code>ApiError?</code></td><td>Error details with <code>Code</code> and <code>Message</code> (null on success).</td></tr>
+            <tr><td><code>Meta</code></td><td><code>ResponseMeta?</code></td><td>Pagination metadata: Total, Page, PerPage, TotalPages.</td></tr>
+            <tr><td><code>StatusCode</code></td><td><code>int</code></td><td>HTTP status code (0 for network/parse errors).</td></tr>
+            <tr><td><code>RateLimit</code></td><td><code>RateLimitInfo?</code></td><td>Parsed rate limit headers: Limit, Remaining, Reset, and <code>ResetDateTime</code>.</td></tr>
+            </tbody>
+        </table>
+
+        <div class="card">
+            <h3>Error Handling Pattern</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.GetGroupsAsync();
+
+<span class="k">if</span> (!response.Success)
+{
+    Console.WriteLine($<span class="s">"Error {response.StatusCode}: {response.Error?.Code} — {response.Error?.Message}"</span>);
+
+    <span class="c">// Check rate limiting</span>
+    <span class="k">if</span> (response.StatusCode == 429)
+    {
+        Console.WriteLine($<span class="s">"Rate limited. Retry after {response.RateLimit?.ResetDateTime}"</span>);
+    }
+    <span class="k">return</span>;
+}
+
+<span class="c">// Process data</span>
+<span class="k">foreach</span> (<span class="k">var</span> group <span class="k">in</span> response.Data!)
+{
+    Console.WriteLine(group.Title);
+}</code></pre>
+        </div>
+
+        <p>The client catches both <code>HttpRequestException</code> (network errors) and <code>JsonException</code> (parse errors) internally and wraps them in the <code>ApiResponse</code> with appropriate error codes (<code>network_error</code> / <code>parse_error</code>), so you never need to wrap calls in try-catch.</p>
+    </section>
+
+    <!-- Audit Log -->
+    <section id="audit-log">
+        <h2>Audit Log</h2>
+        <p>Navigate to <strong>Integrity API → Audit Log</strong>. Every API request is recorded with:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Column</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Date / Time</strong></td><td>When the request was made.</td></tr>
+            <tr><td><strong>API Key</strong></td><td>Which key was used (by ID), or blank for failed authentication.</td></tr>
+            <tr><td><strong>Endpoint</strong></td><td>The REST route that was requested.</td></tr>
+            <tr><td><strong>Method</strong></td><td>HTTP method (GET, POST).</td></tr>
+            <tr><td><strong>Response Code</strong></td><td>HTTP status code returned (200, 401, 403, 404, 429, 500, etc.).</td></tr>
+            <tr><td><strong>Response Time</strong></td><td>How long the request took to process (in seconds).</td></tr>
+            <tr><td><strong>IP Address</strong></td><td>The client's IP address (supports proxy headers like Cloudflare).</td></tr>
+            <tr><td><strong>User Agent</strong></td><td>The client's user-agent string (truncated to 500 characters).</td></tr>
+            <tr><td><strong>Request Params</strong></td><td>Sanitised request parameters. Sensitive keys (password, token, key, etc.) are redacted.</td></tr>
+            </tbody>
+        </table>
+
+        <p>The audit log page includes filters for API key, response code, IP address, and date range. A <strong>30-day statistics summary</strong> is shown at the top with total requests, success rate, failed auth attempts, rate-limited requests, average response time, and top endpoints/IPs.</p>
+
+        <p>You can <strong>clear logs</strong> by age (older than N days) or by API key from the audit log page.</p>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings">
+        <h2>Settings</h2>
+        <p>Navigate to <strong>Integrity API → Settings</strong>. Four configurable options:</p>
+
+        <table class="status-table">
+            <thead><tr><th>Setting</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Require HTTPS</strong></td><td>On</td><td>Reject API requests over plain HTTP. Bypassed when <code>WP_DEBUG</code> is true (for local development).</td></tr>
+            <tr><td><strong>Default Rate Limit</strong></td><td>1,000</td><td>Requests per hour for newly created keys. Can be overridden per key.</td></tr>
+            <tr><td><strong>Enable Audit Log</strong></td><td>On</td><td>Log every API request. Disable to save database writes on very high-traffic sites.</td></tr>
+            <tr><td><strong>Log Retention</strong></td><td>90 days</td><td>Logs older than this are automatically deleted by the daily cron job.</td></tr>
+            </tbody>
+        </table>
+
+        <p>The settings page also shows the <strong>REST API base URL</strong>, plugin version, and Unity plugin status for quick diagnostics.</p>
+    </section>
+
+    <!-- Automatic Cleanup -->
+    <section id="cleanup">
+        <h2>Automatic Cleanup</h2>
+        <p>A daily WordPress cron job runs automatically and performs two tasks:</p>
+        <ul>
+            <li><strong>Rate limit records</strong> — entries older than 1 day are deleted from the <code>wp_integrity_rate_limits</code> table.</li>
+            <li><strong>Audit log entries</strong> — entries older than the configured retention period (default 90 days) are deleted from <code>wp_integrity_audit_log</code>.</li>
+        </ul>
+        <p>The cron is scheduled on plugin activation and cleared on deactivation.</p>
+    </section>
+
+    <!-- Troubleshooting -->
+    <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+
+        <div class="card">
+            <h3>401 "Invalid or expired API key"</h3>
+            <p>Check that you're sending the full key (including the <code>int_</code> prefix) in the Authorization header. If the key has an expiration date, verify it hasn't passed. If the key was revoked, it will also return 401.</p>
+        </div>
+
+        <div class="card">
+            <h3>403 "HTTPS is required"</h3>
+            <p>The "Require HTTPS" setting is on and you're making a request over plain HTTP. Either use HTTPS or disable the setting (not recommended for production). During development with <code>WP_DEBUG</code> enabled, this check is bypassed.</p>
+        </div>
+
+        <div class="card">
+            <h3>403 "Insufficient permissions"</h3>
+            <p>Your API key doesn't have the required permission for this endpoint. Go to Integrity API → API Keys and check the permissions assigned to this key.</p>
+        </div>
+
+        <div class="card">
+            <h3>429 "Rate limit exceeded"</h3>
+            <p>You've exceeded the hourly request limit for this key. Check the <code>X-RateLimit-Reset</code> header for when the window resets. You can increase the per-key rate limit on the API Keys page.</p>
+        </div>
+
+        <div class="card">
+            <h3>API returns 503 on health check</h3>
+            <p>Unity is not available. Verify that the Unity plugin is activated. The health endpoint will return <code>"status": "degraded"</code> with <code>"unity_available": false</code>.</p>
+        </div>
+
+        <div class="card">
+            <h3>IP whitelist blocking legitimate requests</h3>
+            <p>If your client is behind a proxy or load balancer, the IP seen by Integrity may differ from your expected IP. Integrity checks Cloudflare (<code>CF-Connecting-IP</code>), <code>X-Forwarded-For</code>, and <code>X-Real-IP</code> headers in that order. Verify which IP is being logged in the audit trail and add it to the whitelist.</p>
+        </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq">
+        <h2>FAQ</h2>
+
+        <div class="card">
+            <h3>Can I retrieve a key after creation?</h3>
+            <p>No. Only the Argon2id hash is stored. If you lose the key, revoke the old one and create a new one.</p>
+        </div>
+
+        <div class="card">
+            <h3>Does the audit log store personal data?</h3>
+            <p>Request parameters are sanitised before logging — keys containing words like "password", "token", "secret", or "credit_card" are automatically redacted. Long values are truncated to 200 characters.</p>
+        </div>
+
+        <div class="card">
+            <h3>What happens if I send an obscured email/phone to the update member endpoint?</h3>
+            <p>Integrity detects values containing bullet characters (•) — the masking pattern used by Scrutiny — and preserves the existing value instead of overwriting it. This prevents accidentally replacing real data with masked placeholders.</p>
+        </div>
+
+        <div class="card">
+            <h3>Can I have multiple API keys?</h3>
+            <p>Yes. Create as many keys as you need — one per application or integration is a good practice. Each key has its own permissions, rate limit, IP whitelist, and expiration.</p>
+        </div>
+
+        <div class="card">
+            <h3>What's the expand parameter on groups?</h3>
+            <p>By default, group responses include just meeting IDs. Adding <code>?expand=meetings</code> replaces those IDs with full meeting objects, saving you from making separate requests for each meeting.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:0;">
+            <h3>Where's the .NET client library?</h3>
+            <p style="margin-bottom:0;">See the <a href="#dotnet-overview">.NET Client Library</a> section above. The client library is in <code>sharp/TheBleedingDeacons.Unity.Client/</code> and the models in <code>sharp/TheBleedingDeacons.Unity.Models/</code>.</p>
+        </div>
+    </section>
+
+</main>
+
+<script>
+    function toggleNav() {
+        document.getElementById('sidebar').classList.toggle('open');
+        document.querySelector('.overlay').classList.toggle('visible');
+    }
+    const sections = document.querySelectorAll('section[id]');
+    const navLinks = document.querySelectorAll('.nav-link');
+    function updateActiveLink() {
+        let current = '';
+        const scrollY = window.scrollY + 100;
+        sections.forEach(s => { if (s.offsetTop <= scrollY) current = s.getAttribute('id'); });
+        navLinks.forEach(l => {
+            l.classList.remove('active');
+            if (l.getAttribute('href') === '#' + current) l.classList.add('active');
+        });
+    }
+    window.addEventListener('scroll', updateActiveLink, { passive: true });
+    navLinks.forEach(l => l.addEventListener('click', () => { if (window.innerWidth <= 860) toggleNav(); }));
+</script>
+</body>
+</html>
