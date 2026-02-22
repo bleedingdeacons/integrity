@@ -333,7 +333,7 @@ if (intergroupMeetings.Success && intergroupMeetings.Data != null)
     Console.WriteLine($"Found {intergroupMeetings.Data.Count} intergroup meetings");
     foreach (var meeting in intergroupMeetings.Data)
     {
-        Console.WriteLine($"  - ID: {meeting.Id}, Date: {meeting.Date}, GroupAttendees: {meeting.GroupAttendees.Count}, OfficersAttending: {meeting.OfficersAttending.Count}");
+        Console.WriteLine($"  - ID: {meeting.Id}, Title: {meeting.Title}, Date: {meeting.Date}, GroupAttendees: {meeting.GroupAttendees.Count}, OfficersAttending: {meeting.OfficersAttending.Count}");
         if (meeting.GroupAttendees.Count > 0)
         {
             Console.WriteLine($"    Group Attendees:");
@@ -378,7 +378,7 @@ if (recentIntergroupMeetings.Success && recentIntergroupMeetings.Data != null)
     Console.WriteLine($"Found {recentIntergroupMeetings.Data.Count} intergroup meetings in the last 30 days");
     foreach (var meeting in recentIntergroupMeetings.Data)
     {
-        Console.WriteLine($"  - {meeting.Date}: {meeting.GroupAttendees.Count} group attendees, {meeting.OfficersAttending.Count} officers");
+        Console.WriteLine($"  - {meeting.Date} ({meeting.Title}): {meeting.GroupAttendees.Count} group attendees, {meeting.OfficersAttending.Count} officers");
     }
 }
 else
@@ -399,7 +399,7 @@ if (upcomingIntergroupMeetings.Success && upcomingIntergroupMeetings.Data != nul
     Console.WriteLine($"Found {upcomingIntergroupMeetings.Data.Count} upcoming intergroup meetings");
     foreach (var meeting in upcomingIntergroupMeetings.Data)
     {
-        Console.WriteLine($"  - {meeting.Date}: {meeting.GroupAttendees.Count} group attendees, {meeting.OfficersAttending.Count} officers");
+        Console.WriteLine($"  - {meeting.Date} ({meeting.Title}): {meeting.GroupAttendees.Count} group attendees, {meeting.OfficersAttending.Count} officers");
     }
 }
 else
@@ -416,7 +416,7 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
     var targetMeeting = intergroupMeetings.Data.First();
     var targetMember = members.Data.First();
 
-    Console.WriteLine($"Registering member '{targetMember.AnonymousName}' (ID: {targetMember.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Date})");
+    Console.WriteLine($"Registering member '{targetMember.AnonymousName}' (ID: {targetMember.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Title} - {targetMeeting.Date})");
 
     var registerResult = await client.RegisterAttendeeAsync(
         targetMeeting.Id,
@@ -551,7 +551,7 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
     var targetMeeting = intergroupMeetings.Data.First();
     var targetOfficer = members.Data.First();
 
-    Console.WriteLine($"Registering officer '{targetOfficer.AnonymousName}' (ID: {targetOfficer.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Date})");
+    Console.WriteLine($"Registering officer '{targetOfficer.AnonymousName}' (ID: {targetOfficer.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Title} - {targetMeeting.Date})");
 
     var registerOfficerResult = await client.RegisterOfficerAsync(
         targetMeeting.Id,

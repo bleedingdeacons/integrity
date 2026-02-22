@@ -2919,6 +2919,7 @@ class RestController
 
         return [
             'id' => $intergroupMeeting->getId(),
+            'title' => $intergroupMeeting->getTitle(),
             'date' => $intergroupMeeting->getDate(),
             'group_attendee_ids' => $groupAttendeeIds,
             'group_attendees' => $groupAttendees,

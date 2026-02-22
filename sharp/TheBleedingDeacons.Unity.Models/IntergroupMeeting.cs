@@ -13,6 +13,7 @@ namespace TheBleedingDeacons.Unity.Models
     public class IntergroupMeeting
     {
         public int Id { get; init; }
+        public string Title { get; init; } = string.Empty;
         public string Date { get; init; } = string.Empty;
 
         /// <summary>
