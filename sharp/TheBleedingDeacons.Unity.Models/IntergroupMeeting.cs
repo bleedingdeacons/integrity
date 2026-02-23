@@ -37,6 +37,18 @@ namespace TheBleedingDeacons.Unity.Models
         public List<IntergroupMeetingAttendee> OfficersAttending { get; init; } = [];
 
         /// <summary>
+        /// Array of group post IDs attending the meeting (maps to ACF field: attending_groups).
+        /// </summary>
+        [JsonPropertyName("attending_groups")]
+        public int[] AttendingGroups { get; init; } = [];
+
+        /// <summary>
+        /// Array of officer/member post IDs attending the meeting (maps to ACF field: attending_officers).
+        /// </summary>
+        [JsonPropertyName("attending_officers")]
+        public int[] AttendingOfficers { get; init; } = [];
+
+        /// <summary>
         /// Gets the meeting date as a DateOnly value, if valid.
         /// </summary>
         [JsonIgnore]

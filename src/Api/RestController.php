@@ -2925,6 +2925,8 @@ class RestController
             'group_attendees' => $groupAttendees,
             'officers_attending_ids' => $officersAttendingIds,
             'officers_attending' => $officersAttending,
+            'attending_groups' => $groupAttendeeIds,
+            'attending_officers' => $officersAttendingIds,
         ];
     }
 
