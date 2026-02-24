@@ -327,19 +327,19 @@ public sealed class UnityRestSharp : IDisposable
     }
 
     /// <summary>
-    /// Registers a member as an attendee of an intergroup meeting.
+    /// Registers a group as an attendee of an intergroup meeting.
     /// </summary>
     /// <param name="intergroupMeetingId">The intergroup meeting ID</param>
-    /// <param name="memberId">The member ID to register</param>
-    /// <param name="meetingGroup">The meeting or group name (plain text)</param>
+    /// <param name="groupId">The group CPT post ID to register</param>
+    /// <param name="memberId">The member ID of the GSR (optional, 0 if not applicable)</param>
     /// <param name="gsrName">The GSR name (plain text)</param>
     /// <param name="gsrProxy">Whether a proxy attended in place of the GSR</param>
     /// <param name="gsrProxyName">The proxy name when a proxy attended</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public async Task<ApiResponse<IntergroupMeetingRegistration>> RegisterAttendeeAsync(
+    public async Task<ApiResponse<IntergroupMeetingRegistration>> RegisterGroupAsync(
         int intergroupMeetingId,
+        int groupId,
         int memberId,
-        string meetingGroup,
         string gsrName,
         bool gsrProxy = false,
         string? gsrProxyName = null,
@@ -348,8 +348,8 @@ public sealed class UnityRestSharp : IDisposable
         var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/register-group";
         var payload = new
         {
+            group_id = groupId,
             member_id = memberId,
-            meeting_group = meetingGroup,
             gsr_name = gsrName,
             gsr_proxy = gsrProxy,
             gsr_proxy_name = gsrProxyName ?? string.Empty
@@ -358,18 +358,18 @@ public sealed class UnityRestSharp : IDisposable
     }
 
     /// <summary>
-    /// Unregisters a member from an intergroup meeting.
+    /// Unregisters a group from an intergroup meeting.
     /// </summary>
     /// <param name="intergroupMeetingId">The intergroup meeting ID</param>
-    /// <param name="memberId">The member ID to unregister</param>
+    /// <param name="groupId">The group CPT post ID to unregister</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public async Task<ApiResponse<IntergroupMeetingRegistration>> UnregisterAttendeeAsync(
+    public async Task<ApiResponse<IntergroupMeetingRegistration>> UnregisterGroupAsync(
         int intergroupMeetingId,
-        int memberId,
+        int groupId,
         CancellationToken cancellationToken = default)
     {
         var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/unregister-group";
-        var payload = new { member_id = memberId };
+        var payload = new { group_id = groupId };
         return await PostAsync<IntergroupMeetingRegistration>(url, payload, cancellationToken);
     }
 

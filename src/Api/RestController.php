@@ -532,19 +532,20 @@ class RestController
                 },
                 'sanitize_callback' => 'absint',
             ],
-            'member_id' => [
+            'group_id' => [
                 'required' => true,
                 'validate_callback' => function ($param) {
                     return is_numeric($param) && $param > 0;
                 },
                 'sanitize_callback' => 'absint',
             ],
-            'meeting_group' => [
-                'required' => true,
+            'member_id' => [
+                'required' => false,
+                'default' => 0,
                 'validate_callback' => function ($param) {
-                    return is_string($param) && strlen(trim($param)) > 0;
+                    return is_numeric($param) && $param >= 0;
                 },
-                'sanitize_callback' => 'sanitize_text_field',
+                'sanitize_callback' => 'absint',
             ],
             'gsr_name' => [
                 'required' => true,
@@ -586,7 +587,7 @@ class RestController
                 },
                 'sanitize_callback' => 'absint',
             ],
-            'member_id' => [
+            'group_id' => [
                 'required' => true,
                 'validate_callback' => function ($param) {
                     return is_numeric($param) && $param > 0;
@@ -1873,15 +1874,15 @@ class RestController
     }
 
     /**
-     * Register a member as an attendee of an intergroup meeting
+     * Register a group as an attendee of an intergroup meeting
      */
     public static function registerIntergroupMeetingAttendee(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
         $meetingId = (int) $request->get_param('id');
+        $groupId = (int) $request->get_param('group_id');
         $memberId = (int) $request->get_param('member_id');
-        $meetingGroup = (string) $request->get_param('meeting_group');
         $gsrName = (string) $request->get_param('gsr_name');
         $gsrProxy = (bool) $request->get_param('gsr_proxy');
         $gsrProxyName = (string) $request->get_param('gsr_proxy_name');
@@ -1889,7 +1890,7 @@ class RestController
         try {
             $container = Plugin::getContainer();
             $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
-            $memberRepo = $container->get(MemberRepository::class);
+            $groupRepo = $container->get(GroupRepository::class);
             $attendanceRepo = $container->get(IntergroupMeetingGroupAttendanceRepository::class);
             $attendanceFactory = $container->get(
                 'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingGroupAttendanceFactory'
@@ -1903,7 +1904,7 @@ class RestController
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
-                    ['id' => $meetingId, 'member_id' => $memberId],
+                    ['id' => $meetingId, 'group_id' => $groupId],
                     404,
                     microtime(true) - $startTime
                 );
@@ -1917,15 +1918,15 @@ class RestController
                 ], 404);
             }
 
-            // Validate member exists
-            $member = $memberRepo->find($memberId);
+            // Validate group exists and look up the group name
+            $group = $groupRepo->findById($groupId);
 
-            if (!$member) {
+            if (!$group) {
                 AuditLogger::log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
-                    ['id' => $meetingId, 'member_id' => $memberId],
+                    ['id' => $meetingId, 'group_id' => $groupId],
                     404,
                     microtime(true) - $startTime
                 );
@@ -1933,19 +1934,21 @@ class RestController
                 return new WP_REST_Response([
                     'success' => false,
                     'error' => [
-                        'code' => 'member_not_found',
-                        'message' => 'Member not found',
+                        'code' => 'group_not_found',
+                        'message' => 'Group not found',
                     ],
                 ], 404);
             }
 
-            // Check if member is already registered
-            if ($intergroupMeeting->hasGroupAttendee($memberId)) {
+            $meetingGroup = $group->getTitle();
+
+            // Check if group is already registered
+            if ($intergroupMeeting->hasGroupAttendee($groupId)) {
                 AuditLogger::log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
-                    ['id' => $meetingId, 'member_id' => $memberId],
+                    ['id' => $meetingId, 'group_id' => $groupId],
                     409,
                     microtime(true) - $startTime
                 );
@@ -1954,13 +1957,13 @@ class RestController
                     'success' => false,
                     'error' => [
                         'code' => 'already_registered',
-                        'message' => 'Member is already registered for this intergroup meeting',
+                        'message' => 'Group is already registered for this intergroup meeting',
                     ],
                 ], 409);
             }
 
-            // Add the member as an attendee
-            $intergroupMeeting->addGroupAttendee($memberId);
+            // Add the group as an attendee
+            $intergroupMeeting->addGroupAttendee($groupId);
 
             // Save the updated intergroup meeting
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
@@ -1970,7 +1973,7 @@ class RestController
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
-                    ['id' => $meetingId, 'member_id' => $memberId],
+                    ['id' => $meetingId, 'group_id' => $groupId],
                     500,
                     microtime(true) - $startTime
                 );
@@ -1987,6 +1990,7 @@ class RestController
             // Create the attendance record in the custom table
             $attendance = $attendanceFactory->createNew(
                 $meetingId,
+                $groupId,
                 $memberId,
                 $meetingGroup,
                 $gsrName,
@@ -2001,7 +2005,7 @@ class RestController
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
-                    ['id' => $meetingId, 'member_id' => $memberId],
+                    ['id' => $meetingId, 'group_id' => $groupId],
                     500,
                     microtime(true) - $startTime
                 );
@@ -2019,7 +2023,7 @@ class RestController
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
-                ['id' => $meetingId, 'member_id' => $memberId],
+                ['id' => $meetingId, 'group_id' => $groupId],
                 201,
                 microtime(true) - $startTime
             );
@@ -2028,8 +2032,8 @@ class RestController
                 'success' => true,
                 'data' => [
                     'intergroup_meeting_id' => $meetingId,
+                    'group_id' => $groupId,
                     'member_id' => $memberId,
-                    'member_name' => $member->getAnonymousName(),
                     'meeting_group' => $meetingGroup,
                     'gsr_name' => $gsrName,
                     'gsr_proxy' => $gsrProxy,
@@ -2048,7 +2052,7 @@ class RestController
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
-                ['id' => $meetingId, 'member_id' => $memberId],
+                ['id' => $meetingId, 'group_id' => $groupId],
                 500,
                 microtime(true) - $startTime
             );
@@ -2068,7 +2072,7 @@ class RestController
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
         $meetingId = (int) $request->get_param('id');
-        $memberId = (int) $request->get_param('member_id');
+        $groupId = (int) $request->get_param('group_id');
 
         try {
             $container = Plugin::getContainer();
@@ -2083,7 +2087,7 @@ class RestController
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
-                    ['id' => $meetingId, 'member_id' => $memberId],
+                    ['id' => $meetingId, 'group_id' => $groupId],
                     404,
                     microtime(true) - $startTime
                 );
@@ -2097,13 +2101,13 @@ class RestController
                 ], 404);
             }
 
-            // Check if member is actually registered
-            if (!$intergroupMeeting->hasGroupAttendee($memberId)) {
+            // Check if group is actually registered
+            if (!$intergroupMeeting->hasGroupAttendee($groupId)) {
                 AuditLogger::log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
-                    ['id' => $meetingId, 'member_id' => $memberId],
+                    ['id' => $meetingId, 'group_id' => $groupId],
                     404,
                     microtime(true) - $startTime
                 );
@@ -2112,13 +2116,13 @@ class RestController
                     'success' => false,
                     'error' => [
                         'code' => 'not_registered',
-                        'message' => 'Member is not registered for this intergroup meeting',
+                        'message' => 'Group is not registered for this intergroup meeting',
                     ],
                 ], 404);
             }
 
-            // Remove the member
-            $intergroupMeeting->removeGroupAttendee($memberId);
+            // Remove the group
+            $intergroupMeeting->removeGroupAttendee($groupId);
 
             // Save the updated intergroup meeting
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
@@ -2128,7 +2132,7 @@ class RestController
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
-                    ['id' => $meetingId, 'member_id' => $memberId],
+                    ['id' => $meetingId, 'group_id' => $groupId],
                     500,
                     microtime(true) - $startTime
                 );
@@ -2142,14 +2146,14 @@ class RestController
                 ], 500);
             }
 
-            // Delete the attendance record for this member at this meeting
-            $attendanceRepo->deleteByIntergroupMeetingAndMember($meetingId, $memberId);
+            // Delete the attendance record for this group at this meeting
+            $attendanceRepo->deleteByIntergroupMeetingAndGroup($meetingId, $groupId);
 
             AuditLogger::log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
-                ['id' => $meetingId, 'member_id' => $memberId],
+                ['id' => $meetingId, 'group_id' => $groupId],
                 200,
                 microtime(true) - $startTime
             );
@@ -2158,7 +2162,7 @@ class RestController
                 'success' => true,
                 'data' => [
                     'intergroup_meeting_id' => $meetingId,
-                    'member_id' => $memberId,
+                    'group_id' => $groupId,
                     'registered' => false,
                 ],
             ], 200);
@@ -2173,7 +2177,7 @@ class RestController
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
-                ['id' => $meetingId, 'member_id' => $memberId],
+                ['id' => $meetingId, 'group_id' => $groupId],
                 500,
                 microtime(true) - $startTime
             );
@@ -2896,13 +2900,13 @@ class RestController
         $groupAttendeeIds = $intergroupMeeting->getGroupAttendees();
         $groupAttendees = [];
 
-        foreach ($groupAttendeeIds as $attendeeId) {
-            if (isset($memberCache[$attendeeId])) {
-                $groupAttendees[] = [
-                    'id' => $attendeeId,
-                    'name' => $memberCache[$attendeeId]->getAnonymousName(),
-                ];
-            }
+        // Resolve group names from the group CPT
+        foreach ($groupAttendeeIds as $groupId) {
+            $groupTitle = get_the_title($groupId);
+            $groupAttendees[] = [
+                'id' => $groupId,
+                'name' => is_string($groupTitle) ? $groupTitle : '',
+            ];
         }
 
         $officersAttendingIds = $intergroupMeeting->getOfficersAttending();
