@@ -203,3 +203,18 @@ add_action('integrity/cleanup_cron', function (): void {
         $retentionDays
     ));
 });
+
+add_filter('rest_pre_dispatch', function ($result, $server, $request) {
+    if (strpos($request->get_route(), '/integrity/') === 0) {
+        $check = $request->has_valid_params();
+        if (is_wp_error($check)) {
+            error_log('Integrity 400 validation failure: ' . wp_json_encode([
+                    'route'  => $request->get_route(),
+                    'errors' => $check->get_error_messages(),
+                    'data'   => $check->get_error_data(),
+                    'params' => $request->get_params(),
+                ]));
+        }
+    }
+    return $result;
+}, 10, 3);

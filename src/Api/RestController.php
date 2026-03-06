@@ -147,6 +147,13 @@ class RestController
             'args' => self::getUpdateMemberArgs(),
         ]);
 
+        register_rest_route(self::NAMESPACE, '/members/create', [
+            'methods' => 'POST',
+            'callback' => [self::class, 'createMember'],
+            'permission_callback' => [self::class, 'checkPermission'],
+            'args' => self::getCreateMemberArgs(),
+        ]);
+
         // Intergroup Meetings endpoints
         register_rest_route(self::NAMESPACE, '/intergroup-meetings', [
             'methods' => 'GET',
@@ -468,6 +475,59 @@ class RestController
                     return $date && $date->format('Y-m-d') === $param;
                 },
                 'sanitize_callback' => 'sanitize_text_field',
+            ],
+        ];
+    }
+
+    /**
+     * Get arguments for create member endpoint
+     */
+    private static function getCreateMemberArgs(): array
+    {
+        return [
+            'anonymous_name' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen(trim($param)) > 0 && strlen($param) <= 255;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'personal_email' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && ($param === '' || is_email($param));
+                },
+                'sanitize_callback' => 'sanitize_email',
+            ],
+            'mobile_number' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen($param) <= 50;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'home_group_id' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param >= 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'is_gsr' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_bool($param) || in_array($param, ['true', 'false', '1', '0', 1, 0], true);
+                },
+                'sanitize_callback' => function ($param) {
+                    return filter_var($param, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+                },
+            ],
+            'intergroup_position_id' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param >= 0;
+                },
+                'sanitize_callback' => 'absint',
             ],
         ];
     }
@@ -811,7 +871,7 @@ class RestController
         }
 
         if (strpos($endpoint, '/members') !== false) {
-            if (strpos($endpoint, '/update') !== false) {
+            if (strpos($endpoint, '/update') !== false || strpos($endpoint, '/create') !== false) {
                 return 'members:write';
             }
             return 'members:read';
@@ -1683,6 +1743,186 @@ class RestController
                 $request->get_route(),
                 $request->get_method(),
                 ['id' => $id],
+                500,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => false,
+                'error' => [
+                    'code' => 'internal_error',
+                    'message' => 'An internal error occurred',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Create a new member
+     */
+    public static function createMember(WP_REST_Request $request): WP_REST_Response
+    {
+        $startTime = $request->get_param('_integrity_start_time');
+        $keyData = $request->get_param('_integrity_key_data');
+
+        try {
+            $container = Plugin::getContainer();
+            $memberRepo = $container->get(MemberRepository::class);
+            $memberFactory = $container->get(MemberFactory::class);
+
+            $anonymousName = $request->get_param('anonymous_name');
+            $personalEmail = $request->get_param('personal_email') ?? '';
+            $mobileNumber = $request->get_param('mobile_number') ?? '';
+            $homeGroupId = $request->has_param('home_group_id')
+                ? (int) $request->get_param('home_group_id')
+                : 0;
+            $isGsr = $request->has_param('is_gsr')
+                ? $request->get_param('is_gsr')
+                : false;
+            $intergroupPositionId = $request->has_param('intergroup_position_id')
+                ? (int) $request->get_param('intergroup_position_id')
+                : 0;
+
+            // Validate referenced entities exist
+            if ($homeGroupId > 0) {
+                $groupRepo = $container->get(GroupRepository::class);
+                $group = $groupRepo->findById($homeGroupId);
+                if (!$group || !$group->isValid()) {
+                    AuditLogger::log(
+                        $keyData['api_key_id'],
+                        $request->get_route(),
+                        $request->get_method(),
+                        ['home_group_id' => $homeGroupId],
+                        422,
+                        microtime(true) - $startTime
+                    );
+
+                    return new WP_REST_Response([
+                        'success' => false,
+                        'error' => [
+                            'code' => 'invalid_home_group',
+                            'message' => 'The specified home group does not exist',
+                        ],
+                    ], 422);
+                }
+            }
+
+            if ($intergroupPositionId > 0) {
+                $positionRepo = $container->get(PositionRepository::class);
+                $positions = $positionRepo->findAll([
+                    'post__in' => [$intergroupPositionId],
+                    'posts_per_page' => 1,
+                ]);
+                if (empty($positions)) {
+                    AuditLogger::log(
+                        $keyData['api_key_id'],
+                        $request->get_route(),
+                        $request->get_method(),
+                        ['intergroup_position_id' => $intergroupPositionId],
+                        422,
+                        microtime(true) - $startTime
+                    );
+
+                    return new WP_REST_Response([
+                        'success' => false,
+                        'error' => [
+                            'code' => 'invalid_intergroup_position',
+                            'message' => 'The specified intergroup position does not exist',
+                        ],
+                    ], 422);
+                }
+            }
+
+            // Create the WordPress post for the new member
+            $postId = wp_insert_post([
+                'post_type' => 'intergroup-member',
+                'post_title' => $anonymousName,
+                'post_status' => 'publish',
+            ], true);
+
+            if (is_wp_error($postId)) {
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['anonymous_name' => $anonymousName],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'create_failed',
+                        'message' => 'Failed to create member post: ' . $postId->get_error_message(),
+                    ],
+                ], 500);
+            }
+
+            // Build the member object with all fields via the factory
+            $newMember = $memberFactory->createNew(
+                $postId,
+                $anonymousName,
+                false,   // show_anonymous_name
+                false,   // show_member_profile
+                '',      // anonymous_profile
+                $intergroupPositionId,
+                '',      // intergroup_position_rotation
+                $homeGroupId,
+                $isGsr,
+                null,    // meeting_po
+                $personalEmail,
+                $mobileNumber,
+            );
+
+            // Save ACF / meta fields
+            $saved = $memberRepo->save($newMember);
+
+            if (!$saved) {
+                // Clean up the orphaned post
+                wp_delete_post($postId, true);
+
+                AuditLogger::log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['post_id' => $postId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'save_failed',
+                        'message' => 'Failed to save member fields',
+                    ],
+                ], 500);
+            }
+
+            // Re-fetch the saved member to return the latest state
+            $savedMember = $memberRepo->find($postId);
+
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                ['id' => $postId, 'anonymous_name' => $anonymousName],
+                201,
+                microtime(true) - $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'data' => self::transformMember($savedMember ?? $newMember),
+            ], 201);
+
+        } catch (\Exception $e) {
+            AuditLogger::log(
+                $keyData['api_key_id'],
+                $request->get_route(),
+                $request->get_method(),
+                null,
                 500,
                 microtime(true) - $startTime
             );

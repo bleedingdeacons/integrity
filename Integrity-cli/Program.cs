@@ -324,6 +324,120 @@ else
 }
 Console.WriteLine();
 
+// Create Member (GSR for a group)
+Console.WriteLine("=== CREATE MEMBER (GSR) ===");
+if (groups.Success && groups.Data?.Count > 0)
+{
+    var targetGroup = groups.Data.First();
+    Console.WriteLine($"Creating a new GSR member for group '{targetGroup.Title}' (ID: {targetGroup.Id})");
+
+    var createGsrResult = await client.CreateMemberAsync(new CreateMemberRequest
+    {
+        AnonymousName = "Test GSR Member",
+        PersonalEmail = "test.gsr@example.com",
+        MobileNumber = "555-0100",
+        HomeGroupId = targetGroup.Id,
+        IsGsr = true,
+    });
+    Console.WriteLine($"Status Code: {createGsrResult.StatusCode}");
+
+    if (createGsrResult.Success && createGsrResult.Data != null)
+    {
+        var created = createGsrResult.Data;
+        Console.WriteLine($"  Created ID: {created.Id}");
+        Console.WriteLine($"  Name: {created.AnonymousName}");
+        Console.WriteLine($"  Email: {created.PersonalEmail}");
+        Console.WriteLine($"  Mobile: {created.MobileNumber}");
+        Console.WriteLine($"  Home Group: {created.HomeGroupName} (ID: {created.HomeGroupId})");
+        Console.WriteLine($"  Is GSR: {created.IsGsr}");
+
+        // Verify by re-fetching
+        Console.WriteLine();
+        Console.WriteLine("  Verifying created member...");
+        var verifyCreated = await client.GetMemberAsync(created.Id);
+        if (verifyCreated.Success && verifyCreated.Data != null)
+        {
+            Console.WriteLine($"  Fetched Name: {verifyCreated.Data.AnonymousName}");
+            Console.WriteLine($"  Fetched GSR: {verifyCreated.Data.IsGsr}");
+            Console.WriteLine($"  Fetched Home Group ID: {verifyCreated.Data.HomeGroupId}");
+        }
+        else
+        {
+            Console.WriteLine($"  Verify Error: {verifyCreated.Error?.Code} - {verifyCreated.Error?.Message}");
+        }
+    }
+    else
+    {
+        Console.WriteLine($"  Error: {createGsrResult.Error?.Code} - {createGsrResult.Error?.Message}");
+    }
+}
+else
+{
+    Console.WriteLine("Skipped: requires groups data");
+}
+Console.WriteLine();
+
+// Create Member (Position Holder)
+Console.WriteLine("=== CREATE MEMBER (POSITION HOLDER) ===");
+if (positions.Success && positions.Data?.Count > 0)
+{
+    var targetPosition = positions.Data.First();
+    Console.WriteLine($"Creating a new position holder for '{targetPosition.LongName}' (ID: {targetPosition.Id})");
+
+    var createHolderResult = await client.CreateMemberAsync(new CreateMemberRequest
+    {
+        AnonymousName = "Test Position Holder",
+        PersonalEmail = "test.holder@example.com",
+        MobileNumber = "555-0200",
+        IntergroupPositionId = targetPosition.Id,
+    });
+    Console.WriteLine($"Status Code: {createHolderResult.StatusCode}");
+
+    if (createHolderResult.Success && createHolderResult.Data != null)
+    {
+        var created = createHolderResult.Data;
+        Console.WriteLine($"  Created ID: {created.Id}");
+        Console.WriteLine($"  Name: {created.AnonymousName}");
+        Console.WriteLine($"  Email: {created.PersonalEmail}");
+        Console.WriteLine($"  Mobile: {created.MobileNumber}");
+        Console.WriteLine($"  Position: {created.IntergroupPositionName} (ID: {created.IntergroupPositionId})");
+    }
+    else
+    {
+        Console.WriteLine($"  Error: {createHolderResult.Error?.Code} - {createHolderResult.Error?.Message}");
+    }
+}
+else
+{
+    Console.WriteLine("Skipped: requires positions data");
+}
+Console.WriteLine();
+
+// Create Member - Validation Tests
+Console.WriteLine("=== CREATE MEMBER (VALIDATION) ===");
+
+// Test with invalid home group (should return 422)
+Console.WriteLine("  Testing create with invalid home group...");
+var invalidGroupCreate = await client.CreateMemberAsync(new CreateMemberRequest
+{
+    AnonymousName = "Bad Group Member",
+    HomeGroupId = 999999,
+});
+Console.WriteLine($"  Status Code: {invalidGroupCreate.StatusCode} (expected 422)");
+Console.WriteLine($"  Error: {invalidGroupCreate.Error?.Code} - {invalidGroupCreate.Error?.Message}");
+
+// Test with invalid position (should return 422)
+Console.WriteLine();
+Console.WriteLine("  Testing create with invalid position...");
+var invalidPositionCreate = await client.CreateMemberAsync(new CreateMemberRequest
+{
+    AnonymousName = "Bad Position Member",
+    IntergroupPositionId = 999999,
+});
+Console.WriteLine($"  Status Code: {invalidPositionCreate.StatusCode} (expected 422)");
+Console.WriteLine($"  Error: {invalidPositionCreate.Error?.Code} - {invalidPositionCreate.Error?.Message}");
+Console.WriteLine();
+
 // Intergroup Meetings
 Console.WriteLine("=== INTERGROUP MEETINGS ===");
 var intergroupMeetings = await client.GetIntergroupMeetingsAsync();
@@ -408,20 +522,22 @@ else
 }
 Console.WriteLine();
 
-// Register Attendee for Intergroup Meeting
-Console.WriteLine("=== REGISTER ATTENDEE FOR INTERGROUP MEETING ===");
+// Register Group for Intergroup Meeting
+Console.WriteLine("=== REGISTER GROUP FOR INTERGROUP MEETING ===");
 if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
+    && groups.Success && groups.Data?.Count > 0
     && members.Success && members.Data?.Count > 0)
 {
     var targetMeeting = intergroupMeetings.Data.First();
+    var targetGroup = groups.Data.First();
     var targetMember = members.Data.First();
 
-    Console.WriteLine($"Registering member '{targetMember.AnonymousName}' (ID: {targetMember.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Title} - {targetMeeting.Date})");
+    Console.WriteLine($"Registering group '{targetGroup.Title}' (ID: {targetGroup.Id}) with GSR '{targetMember.AnonymousName}' (ID: {targetMember.Id}) for intergroup meeting ID: {targetMeeting.Id} ({targetMeeting.Title} - {targetMeeting.Date})");
 
-    var registerResult = await client.RegisterAttendeeAsync(
+    var registerResult = await client.RegisterGroupAsync(
         targetMeeting.Id,
+        targetGroup.Id,
         targetMember.Id,
-        meetingGroup: "Saturday Morning Group",
         gsrName: targetMember.AnonymousName,
         gsrProxy: false
     );
@@ -431,6 +547,7 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
     {
         Console.WriteLine($"  Registered: {registerResult.Data.Registered}");
         Console.WriteLine($"  Member: {registerResult.Data.MemberName} (ID: {registerResult.Data.MemberId})");
+        Console.WriteLine($"  Group ID: {registerResult.Data.GroupId}");
         Console.WriteLine($"  Meeting ID: {registerResult.Data.IntergroupMeetingId}");
         Console.WriteLine($"  Meeting/Group: {registerResult.Data.MeetingGroup}");
         Console.WriteLine($"  GSR Name: {registerResult.Data.GsrName}");
@@ -449,18 +566,18 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
     var verifyMeeting = await client.GetIntergroupMeetingAsync(targetMeeting.Id);
     if (verifyMeeting.Success && verifyMeeting.Data != null)
     {
-        var isAttending = verifyMeeting.Data.GroupAttendeeIds.Contains(targetMember.Id);
-        Console.WriteLine($"  Member {targetMember.Id} in attendees: {isAttending}");
+        var isAttending = verifyMeeting.Data.AttendingGroups.Contains(targetGroup.Id);
+        Console.WriteLine($"  Group {targetGroup.Id} in attending groups: {isAttending}");
         Console.WriteLine($"  Total group attendees: {verifyMeeting.Data.GroupAttendees.Count}");
     }
 
     // Test duplicate registration (should return 409)
     Console.WriteLine();
     Console.WriteLine("  Testing duplicate registration...");
-    var duplicateResult = await client.RegisterAttendeeAsync(
+    var duplicateResult = await client.RegisterGroupAsync(
         targetMeeting.Id,
+        targetGroup.Id,
         targetMember.Id,
-        meetingGroup: "Saturday Morning Group",
         gsrName: targetMember.AnonymousName
     );
     Console.WriteLine($"  Status Code: {duplicateResult.StatusCode} (expected 409)");
@@ -468,16 +585,17 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
 
     // Test registration with a proxy
     Console.WriteLine();
-    Console.WriteLine("=== REGISTER ATTENDEE WITH PROXY ===");
-    if (members.Data.Count > 1)
+    Console.WriteLine("=== REGISTER GROUP WITH PROXY ===");
+    if (groups.Data.Count > 1)
     {
-        var proxyMember = members.Data[1];
-        Console.WriteLine($"Registering member '{proxyMember.AnonymousName}' (ID: {proxyMember.Id}) with proxy for meeting ID: {targetMeeting.Id}");
+        var proxyGroup = groups.Data[1];
+        var proxyMember = members.Data.Count > 1 ? members.Data[1] : targetMember;
+        Console.WriteLine($"Registering group '{proxyGroup.Title}' (ID: {proxyGroup.Id}) with proxy for meeting ID: {targetMeeting.Id}");
 
-        var proxyResult = await client.RegisterAttendeeAsync(
+        var proxyResult = await client.RegisterGroupAsync(
             targetMeeting.Id,
+            proxyGroup.Id,
             proxyMember.Id,
-            meetingGroup: "Tuesday Night Big Book",
             gsrName: proxyMember.AnonymousName,
             gsrProxy: true,
             gsrProxyName: "Jane S."
@@ -487,6 +605,7 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
         if (proxyResult.Success && proxyResult.Data != null)
         {
             Console.WriteLine($"  Registered: {proxyResult.Data.Registered}");
+            Console.WriteLine($"  Group ID: {proxyResult.Data.GroupId}");
             Console.WriteLine($"  GSR Name: {proxyResult.Data.GsrName}");
             Console.WriteLine($"  GSR Proxy: {proxyResult.Data.GsrProxy}");
             Console.WriteLine($"  Proxy Name: {proxyResult.Data.GsrProxyName}");
@@ -496,10 +615,10 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
             Console.WriteLine($"  Result: {proxyResult.Error?.Code} - {proxyResult.Error?.Message}");
         }
 
-        // Unregister the proxy member
+        // Unregister the proxy group
         Console.WriteLine();
-        Console.WriteLine($"  Unregistering proxy member '{proxyMember.AnonymousName}'...");
-        var unregisterProxy = await client.UnregisterAttendeeAsync(targetMeeting.Id, proxyMember.Id);
+        Console.WriteLine($"  Unregistering proxy group '{proxyGroup.Title}'...");
+        var unregisterProxy = await client.UnregisterGroupAsync(targetMeeting.Id, proxyGroup.Id);
         Console.WriteLine($"  Status Code: {unregisterProxy.StatusCode}");
         if (unregisterProxy.Success && unregisterProxy.Data != null)
         {
@@ -511,17 +630,18 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
         }
     }
 
-    // Unregister the attendee
+    // Unregister the group
     Console.WriteLine();
-    Console.WriteLine("=== UNREGISTER ATTENDEE FROM INTERGROUP MEETING ===");
-    Console.WriteLine($"Unregistering member '{targetMember.AnonymousName}' (ID: {targetMember.Id}) from intergroup meeting ID: {targetMeeting.Id}");
+    Console.WriteLine("=== UNREGISTER GROUP FROM INTERGROUP MEETING ===");
+    Console.WriteLine($"Unregistering group '{targetGroup.Title}' (ID: {targetGroup.Id}) from intergroup meeting ID: {targetMeeting.Id}");
 
-    var unregisterResult = await client.UnregisterAttendeeAsync(targetMeeting.Id, targetMember.Id);
+    var unregisterResult = await client.UnregisterGroupAsync(targetMeeting.Id, targetGroup.Id);
     Console.WriteLine($"Status Code: {unregisterResult.StatusCode}");
 
     if (unregisterResult.Success && unregisterResult.Data != null)
     {
         Console.WriteLine($"  Registered: {unregisterResult.Data.Registered}");
+        Console.WriteLine($"  Group ID: {unregisterResult.Data.GroupId}");
         Console.WriteLine($"  Member ID: {unregisterResult.Data.MemberId}");
         Console.WriteLine($"  Meeting ID: {unregisterResult.Data.IntergroupMeetingId}");
     }
@@ -533,13 +653,13 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
     // Test unregister when not registered (should return 404)
     Console.WriteLine();
     Console.WriteLine("  Testing unregister when not registered...");
-    var notRegisteredResult = await client.UnregisterAttendeeAsync(targetMeeting.Id, targetMember.Id);
+    var notRegisteredResult = await client.UnregisterGroupAsync(targetMeeting.Id, targetGroup.Id);
     Console.WriteLine($"  Status Code: {notRegisteredResult.StatusCode} (expected 404)");
     Console.WriteLine($"  Error: {notRegisteredResult.Error?.Code} - {notRegisteredResult.Error?.Message}");
 }
 else
 {
-    Console.WriteLine("Skipped: requires intergroup meetings and members data");
+    Console.WriteLine("Skipped: requires intergroup meetings, groups, and members data");
 }
 Console.WriteLine();
 
@@ -579,8 +699,8 @@ if (intergroupMeetings.Success && intergroupMeetings.Data?.Count > 0
     var verifyOfficerMeeting = await client.GetIntergroupMeetingAsync(targetMeeting.Id);
     if (verifyOfficerMeeting.Success && verifyOfficerMeeting.Data != null)
     {
-        var isAttending = verifyOfficerMeeting.Data.OfficersAttendingIds.Contains(targetOfficer.Id);
-        Console.WriteLine($"  Officer {targetOfficer.Id} in officers attending: {isAttending}");
+        var isAttending = verifyOfficerMeeting.Data.AttendingOfficers.Contains(targetOfficer.Id);
+        Console.WriteLine($"  Officer {targetOfficer.Id} in attending officers: {isAttending}");
         Console.WriteLine($"  Total officers attending: {verifyOfficerMeeting.Data.OfficersAttending.Count}");
     }
 

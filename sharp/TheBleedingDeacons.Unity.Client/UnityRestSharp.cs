@@ -263,6 +263,20 @@ public sealed class UnityRestSharp : IDisposable
     }
 
     /// <summary>
+    /// Creates a new member.
+    /// Requires the members:write permission.
+    /// </summary>
+    /// <param name="request">The member data to create</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    public async Task<ApiResponse<Member>> CreateMemberAsync(
+        CreateMemberRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var url = $"{_baseUrl}/wp-json/integrity/v1/members/create";
+        return await PostAsync<Member>(url, request, cancellationToken);
+    }
+
+    /// <summary>
     /// Updates a member. Only the fields set on the request object will be changed (partial update).
     /// Requires the members:write permission.
     /// </summary>
@@ -336,7 +350,7 @@ public sealed class UnityRestSharp : IDisposable
     /// <param name="gsrProxy">Whether a proxy attended in place of the GSR</param>
     /// <param name="gsrProxyName">The proxy name when a proxy attended</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public async Task<ApiResponse<IntergroupMeetingRegistration>> RegisterGroupAsync(
+    public async Task<ApiResponse<IntergroupMeetingGroupRegistration>> RegisterGroupAsync(
         int intergroupMeetingId,
         int groupId,
         int memberId,
@@ -354,7 +368,7 @@ public sealed class UnityRestSharp : IDisposable
             gsr_proxy = gsrProxy,
             gsr_proxy_name = gsrProxyName ?? string.Empty
         };
-        return await PostAsync<IntergroupMeetingRegistration>(url, payload, cancellationToken);
+        return await PostAsync<IntergroupMeetingGroupRegistration>(url, payload, cancellationToken);
     }
 
     /// <summary>
@@ -363,14 +377,14 @@ public sealed class UnityRestSharp : IDisposable
     /// <param name="intergroupMeetingId">The intergroup meeting ID</param>
     /// <param name="groupId">The group CPT post ID to unregister</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public async Task<ApiResponse<IntergroupMeetingRegistration>> UnregisterGroupAsync(
+    public async Task<ApiResponse<IntergroupMeetingGroupRegistration>> UnregisterGroupAsync(
         int intergroupMeetingId,
         int groupId,
         CancellationToken cancellationToken = default)
     {
         var url = $"{_baseUrl}/wp-json/integrity/v1/intergroup-meetings/{intergroupMeetingId}/unregister-group";
         var payload = new { group_id = groupId };
-        return await PostAsync<IntergroupMeetingRegistration>(url, payload, cancellationToken);
+        return await PostAsync<IntergroupMeetingGroupRegistration>(url, payload, cancellationToken);
     }
 
     /// <summary>
