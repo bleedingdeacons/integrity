@@ -36,5 +36,12 @@ namespace TheBleedingDeacons.Unity.Models
         /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? IntergroupPositionId { get; init; }
+
+        /// <summary>
+        /// The rotation date for the intergroup position (e.g. "2025-09-01").
+        /// Required when <see cref="IntergroupPositionId"/> is set.
+        /// </summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? IntergroupPositionRotation { get; init; }
     }
 }
