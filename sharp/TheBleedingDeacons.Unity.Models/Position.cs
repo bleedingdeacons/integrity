@@ -19,7 +19,7 @@ namespace TheBleedingDeacons.Unity.Models
         public int MinimumSobriety { get; init; }
         public int TermYears { get; init; }
         public string Link { get; init; } = string.Empty;
-        public string Updated { get; init; } = string.Empty;
+        public DateTime? Updated { get; init; }
     }
 
 }

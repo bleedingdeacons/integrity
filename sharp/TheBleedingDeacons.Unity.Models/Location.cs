@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace TheBleedingDeacons.Unity.Models
@@ -25,7 +26,9 @@ namespace TheBleedingDeacons.Unity.Models
         public double? Longitude { get; init; }
         public string Timezone { get; init; } = string.Empty;
         public string FormattedAddress { get; init; } = string.Empty;
-        public string Updated { get; init; } = string.Empty;
+
+        [JsonConverter(typeof(EmptyStringToNullDateTimeConverter))]
+        public DateTime? Updated { get; init; }
     }
 
 }

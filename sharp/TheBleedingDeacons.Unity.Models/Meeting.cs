@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace TheBleedingDeacons.Unity.Models
@@ -27,7 +28,9 @@ namespace TheBleedingDeacons.Unity.Models
         public string OnlineNotes { get; init; } = string.Empty;
         public List<Contact> Contacts { get; init; } = [];
         public Dictionary<string, object>? Meta { get; init; }
-        public string Updated { get; init; } = string.Empty;
+
+        [JsonConverter(typeof(EmptyStringToNullDateTimeConverter))]
+        public DateTime? Updated { get; init; }
     }
 
 

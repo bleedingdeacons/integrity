@@ -2800,7 +2800,7 @@ class RestController
                 'square' => $group->getSquare(),
                 'has_options' => $group->hasContributionOptions(),
             ],
-            'updated' => $group->getUpdated(),
+            'updated' => self::formatUpdatedTimestamp($group->getUpdated()),
         ];
     }
 
@@ -2829,7 +2829,7 @@ class RestController
             'online_notes' => $meeting->getOnlineNotes(),
             'contacts' => !empty($contacts) ? array_map([self::class, 'transformContact'], $contacts) : [],
             'meta' => $meeting->getMeta(),
-            'updated' => $meeting->getUpdated(),
+            'updated' => self::formatUpdatedTimestamp($meeting->getUpdated()),
         ];
     }
 
@@ -2856,7 +2856,7 @@ class RestController
             'longitude' => $location->getLongitude(),
             'timezone' => $location->getTimezone(),
             'formatted_address' => $location->getFormattedAddress(),
-            'updated' => $location->getUpdated(),
+            'updated' => self::formatUpdatedTimestamp($location->getUpdated()),
         ];
     }
 
@@ -2873,7 +2873,7 @@ class RestController
                 'name' => $contact->getName(),
                 'email' => Mask::email($contact->getEmail()),
                 'phone' => Mask::phone($contact->getPhone()),
-                'updated' => $contact->getUpdated(),
+                'updated' => self::formatUpdatedTimestamp($contact->getUpdated()),
             ];
         }
 
@@ -2883,7 +2883,7 @@ class RestController
                 'name' => $contact['name'] ?? '',
                 'email' => Mask::email($contact['email'] ?? ''),
                 'phone' => Mask::phone($contact['phone'] ?? ''),
-                'updated' => $contact['updated'] ?? '',
+                'updated' => self::formatUpdatedTimestamp($contact['updated'] ?? ''),
             ];
         }
 
@@ -2912,7 +2912,7 @@ class RestController
             'minimum_sobriety' => $position->getMinimumSobriety(),
             'term_years' => $position->getTermYears(),
             'link' => $position->getLink(),
-            'updated' => $position->getUpdated(),
+            'updated' => self::formatUpdatedTimestamp($position->getUpdated()),
         ];
     }
 
@@ -3028,7 +3028,7 @@ class RestController
             'intergroup_position_name' => $intergroupPositionName,
             'intergroup_position_rotation' => $member->getIntergroupPositionRotation(),
             'link' => $link,
-            'updated' => $member->getUpdated(),
+            'updated' => self::formatUpdatedTimestamp($member->getUpdated()),
         ];
     }
 
@@ -3179,6 +3179,7 @@ class RestController
             'officers_attending' => $officersAttending,
             'attending_groups' => $groupAttendeeIds,
             'attending_officers' => $officersAttendingIds,
+            'updated' => self::formatUpdatedTimestamp($intergroupMeeting->getUpdated()),
         ];
     }
 
@@ -3239,6 +3240,31 @@ class RestController
 
         // Two or more consecutive asterisks indicate an obscured phone number
         return (bool) preg_match('/\*{2,}/', $value);
+    }
+
+    /**
+     * Format a WordPress datetime string to ISO 8601 UTC with milliseconds
+     *
+     * Converts values like "2025-03-09 14:30:00" (WordPress post_modified)
+     * to "2025-03-09T14:30:00.000Z".
+     *
+     * Returns an empty string when the input is empty or unparseable.
+     *
+     * @param string $datetime The datetime string to format
+     * @return string Formatted as YYYY-MM-DDTHH:mm:ss.fffZ or empty string
+     */
+    private static function formatUpdatedTimestamp(string $datetime): string
+    {
+        if (empty($datetime)) {
+            return '';
+        }
+
+        try {
+            $dt = new \DateTimeImmutable($datetime, new \DateTimeZone('UTC'));
+            return $dt->format('Y-m-d\TH:i:s') . '.000Z';
+        } catch (\Exception $e) {
+            return '';
+        }
     }
 
 

@@ -49,6 +49,12 @@ namespace TheBleedingDeacons.Unity.Models
         public int[] AttendingOfficers { get; init; } = [];
 
         /// <summary>
+        /// Last updated datetime from WordPress post_modified.
+        /// </summary>
+        [JsonConverter(typeof(EmptyStringToNullDateTimeConverter))]
+        public DateTime? Updated { get; init; }
+
+        /// <summary>
         /// Gets the meeting date as a DateOnly value, if valid.
         /// </summary>
         [JsonIgnore]

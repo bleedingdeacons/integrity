@@ -3,6 +3,9 @@ using TheBleedingDeacons.Unity.Client;
 using TheBleedingDeacons.Unity.Models;
 
 Console.WriteLine("Integrity CLI");
+
+static string Fmt(DateTime? dt) => dt?.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'") ?? "";
+
 using var client = new UnityRestSharp(
     "http://unity-dev.local/",
     "int_64f2033a119dddd8f57395945e0369b4ead79b1a81143f3a31071b7cb39b27ef"
@@ -22,7 +25,7 @@ if (groups.Success && groups.Data != null)
     Console.WriteLine($"Found {groups.Data.Count} groups");
     foreach (var group in groups.Data)
     {
-        Console.WriteLine($"  - {group.Title} (Meetings: {group.Meetings.Count}, Updated: {group.Updated})");
+        Console.WriteLine($"  - {group.Title} (Meetings: {group.Meetings.Count}, Updated: {Fmt(group.Updated)})");
         if (group.Contacts.Count > 0)
         {
             foreach (var contact in group.Contacts)
@@ -47,7 +50,7 @@ if (onlineMeetings.Success && onlineMeetings.Data != null)
     Console.WriteLine($"Found {onlineMeetings.Data.Count} online meetings");
     foreach (var meeting in onlineMeetings.Data)
     {
-        Console.WriteLine($"  - {meeting.Name} (Updated: {meeting.Updated})");
+        Console.WriteLine($"  - {meeting.Name} (Updated: {Fmt(meeting.Updated)})");
         if (meeting.Contacts.Count > 0)
         {
             foreach (var contact in meeting.Contacts)
@@ -147,7 +150,7 @@ if (members.Success && members.Data != null)
     Console.WriteLine($"Found {members.Data.Count} members");
     foreach (var member in members.Data)
     {
-        Console.WriteLine($"  - {member.AnonymousName} ({member.Email}) - GSR: {member.IsGsr}, Updated: {member.Updated}");
+        Console.WriteLine($"  - {member.AnonymousName} ({member.Email}) - GSR: {member.IsGsr}, Updated: {Fmt(member.Updated)}");
     }
 }
 else
@@ -226,7 +229,7 @@ if (members.Success && members.Data?.Count > 0)
     {
         Console.WriteLine($"  Updated Name: {updateResult.Data.AnonymousName}");
         Console.WriteLine($"  GSR unchanged: {updateResult.Data.IsGsr} (was {originalGsr})");
-        Console.WriteLine($"  Updated: {updateResult.Data.Updated}");
+        Console.WriteLine($"  Updated: {Fmt(updateResult.Data.Updated)}");
     }
     else
     {
@@ -240,7 +243,7 @@ if (members.Success && members.Data?.Count > 0)
     if (verifyMember.Success && verifyMember.Data != null)
     {
         Console.WriteLine($"  Fetched Name: {verifyMember.Data.AnonymousName}");
-        Console.WriteLine($"  Fetched Updated: {verifyMember.Data.Updated}");
+        Console.WriteLine($"  Fetched Updated: {Fmt(verifyMember.Data.Updated)}");
     }
 
     // Update multiple fields at once
@@ -259,7 +262,7 @@ if (members.Success && members.Data?.Count > 0)
         Console.WriteLine($"  Name restored: {multiUpdate.Data.AnonymousName}");
         Console.WriteLine($"  GSR toggled: {multiUpdate.Data.IsGsr} (was {originalGsr})");
         Console.WriteLine($"  Show Anonymous Name: {multiUpdate.Data.ShowAnonymousName}");
-        Console.WriteLine($"  Updated: {multiUpdate.Data.Updated}");
+        Console.WriteLine($"  Updated: {Fmt(multiUpdate.Data.Updated)}");
     }
     else
     {
@@ -277,7 +280,7 @@ if (members.Success && members.Data?.Count > 0)
     if (restoreResult.Success && restoreResult.Data != null)
     {
         Console.WriteLine($"  GSR restored: {restoreResult.Data.IsGsr}");
-        Console.WriteLine($"  Updated: {restoreResult.Data.Updated}");
+        Console.WriteLine($"  Updated: {Fmt(restoreResult.Data.Updated)}");
     }
     else
     {
@@ -319,7 +322,7 @@ if (positions.Success && positions.Data != null)
     Console.WriteLine($"Found {positions.Data.Count} positions");
     foreach (var position in positions.Data)
     {
-        Console.WriteLine($"  - {position.LongName} (Updated: {position.Updated})");
+        Console.WriteLine($"  - {position.LongName} (Updated: {Fmt(position.Updated)})");
     }
 }
 else
@@ -354,7 +357,7 @@ if (groups.Success && groups.Data?.Count > 0)
         Console.WriteLine($"  Mobile: {created.MobileNumber}");
         Console.WriteLine($"  Home Group: {created.HomeGroupName} (ID: {created.HomeGroupId})");
         Console.WriteLine($"  Is GSR: {created.IsGsr}");
-        Console.WriteLine($"  Updated: {created.Updated}");
+        Console.WriteLine($"  Updated: {Fmt(created.Updated)}");
 
         // Verify by re-fetching
         Console.WriteLine();
@@ -365,7 +368,7 @@ if (groups.Success && groups.Data?.Count > 0)
             Console.WriteLine($"  Fetched Name: {verifyCreated.Data.AnonymousName}");
             Console.WriteLine($"  Fetched GSR: {verifyCreated.Data.IsGsr}");
             Console.WriteLine($"  Fetched Home Group ID: {verifyCreated.Data.HomeGroupId}");
-            Console.WriteLine($"  Fetched Updated: {verifyCreated.Data.Updated}");
+            Console.WriteLine($"  Fetched Updated: {Fmt(verifyCreated.Data.Updated)}");
         }
         else
         {
@@ -407,7 +410,7 @@ if (positions.Success && positions.Data?.Count > 0)
         Console.WriteLine($"  Email: {created.PersonalEmail}");
         Console.WriteLine($"  Mobile: {created.MobileNumber}");
         Console.WriteLine($"  Position: {created.IntergroupPositionName} (ID: {created.IntergroupPositionId})");
-        Console.WriteLine($"  Updated: {created.Updated}");
+        Console.WriteLine($"  Updated: {Fmt(created.Updated)}");
     }
     else
     {

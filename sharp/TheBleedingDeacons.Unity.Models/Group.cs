@@ -31,7 +31,9 @@ namespace TheBleedingDeacons.Unity.Models
 
         public List<Contact> Contacts { get; init; } = [];
         public ContributionOptions? ContributionOptions { get; init; }
-        public string Updated { get; init; } = string.Empty;
+
+        [JsonConverter(typeof(EmptyStringToNullDateTimeConverter))]
+        public DateTime? Updated { get; init; }
 
         /// <summary>
         /// Gets whether this group has expanded meeting data.
