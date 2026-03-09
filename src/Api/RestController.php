@@ -2800,6 +2800,7 @@ class RestController
                 'square' => $group->getSquare(),
                 'has_options' => $group->hasContributionOptions(),
             ],
+            'updated' => $group->getUpdated(),
         ];
     }
 
@@ -2828,6 +2829,7 @@ class RestController
             'online_notes' => $meeting->getOnlineNotes(),
             'contacts' => !empty($contacts) ? array_map([self::class, 'transformContact'], $contacts) : [],
             'meta' => $meeting->getMeta(),
+            'updated' => $meeting->getUpdated(),
         ];
     }
 
@@ -2854,6 +2856,7 @@ class RestController
             'longitude' => $location->getLongitude(),
             'timezone' => $location->getTimezone(),
             'formatted_address' => $location->getFormattedAddress(),
+            'updated' => $location->getUpdated(),
         ];
     }
 
@@ -2870,6 +2873,7 @@ class RestController
                 'name' => $contact->getName(),
                 'email' => Mask::email($contact->getEmail()),
                 'phone' => Mask::phone($contact->getPhone()),
+                'updated' => $contact->getUpdated(),
             ];
         }
 
@@ -2879,6 +2883,7 @@ class RestController
                 'name' => $contact['name'] ?? '',
                 'email' => Mask::email($contact['email'] ?? ''),
                 'phone' => Mask::phone($contact['phone'] ?? ''),
+                'updated' => $contact['updated'] ?? '',
             ];
         }
 
@@ -2886,6 +2891,7 @@ class RestController
             'name' => '',
             'email' => '',
             'phone' => '',
+            'updated' => '',
         ];
     }
 
@@ -2906,6 +2912,7 @@ class RestController
             'minimum_sobriety' => $position->getMinimumSobriety(),
             'term_years' => $position->getTermYears(),
             'link' => $position->getLink(),
+            'updated' => $position->getUpdated(),
         ];
     }
 
@@ -3021,6 +3028,7 @@ class RestController
             'intergroup_position_name' => $intergroupPositionName,
             'intergroup_position_rotation' => $member->getIntergroupPositionRotation(),
             'link' => $link,
+            'updated' => $member->getUpdated(),
         ];
     }
 

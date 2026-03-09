@@ -31,6 +31,7 @@ namespace TheBleedingDeacons.Unity.Models
 
         public List<Contact> Contacts { get; init; } = [];
         public ContributionOptions? ContributionOptions { get; init; }
+        public string Updated { get; init; } = string.Empty;
 
         /// <summary>
         /// Gets whether this group has expanded meeting data.

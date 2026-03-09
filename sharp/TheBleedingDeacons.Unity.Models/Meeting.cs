@@ -27,6 +27,7 @@ namespace TheBleedingDeacons.Unity.Models
         public string OnlineNotes { get; init; } = string.Empty;
         public List<Contact> Contacts { get; init; } = [];
         public Dictionary<string, object>? Meta { get; init; }
+        public string Updated { get; init; } = string.Empty;
     }
 
 

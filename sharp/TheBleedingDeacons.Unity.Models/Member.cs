@@ -36,6 +36,7 @@ namespace TheBleedingDeacons.Unity.Models
         public string IntergroupPositionName { get; init; } = string.Empty;
         public string IntergroupPositionRotation { get; init; } = string.Empty;
         public string Link { get; init; } = string.Empty;
+        public string Updated { get; init; } = string.Empty;
 
         /// <summary>
         /// Gets whether this member has expanded home group data.

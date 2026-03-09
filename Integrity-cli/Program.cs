@@ -22,7 +22,7 @@ if (groups.Success && groups.Data != null)
     Console.WriteLine($"Found {groups.Data.Count} groups");
     foreach (var group in groups.Data)
     {
-        Console.WriteLine($"  - {group.Title} (Meetings: {group.Meetings.Count})");
+        Console.WriteLine($"  - {group.Title} (Meetings: {group.Meetings.Count}, Updated: {group.Updated})");
         if (group.Contacts.Count > 0)
         {
             foreach (var contact in group.Contacts)
@@ -47,7 +47,7 @@ if (onlineMeetings.Success && onlineMeetings.Data != null)
     Console.WriteLine($"Found {onlineMeetings.Data.Count} online meetings");
     foreach (var meeting in onlineMeetings.Data)
     {
-        Console.WriteLine($"  - {meeting.Name}");
+        Console.WriteLine($"  - {meeting.Name} (Updated: {meeting.Updated})");
         if (meeting.Contacts.Count > 0)
         {
             foreach (var contact in meeting.Contacts)
@@ -147,7 +147,7 @@ if (members.Success && members.Data != null)
     Console.WriteLine($"Found {members.Data.Count} members");
     foreach (var member in members.Data)
     {
-        Console.WriteLine($"  - {member.AnonymousName} ({member.Email}) - GSR: {member.IsGsr}");
+        Console.WriteLine($"  - {member.AnonymousName} ({member.Email}) - GSR: {member.IsGsr}, Updated: {member.Updated}");
     }
 }
 else
@@ -226,6 +226,7 @@ if (members.Success && members.Data?.Count > 0)
     {
         Console.WriteLine($"  Updated Name: {updateResult.Data.AnonymousName}");
         Console.WriteLine($"  GSR unchanged: {updateResult.Data.IsGsr} (was {originalGsr})");
+        Console.WriteLine($"  Updated: {updateResult.Data.Updated}");
     }
     else
     {
@@ -239,6 +240,7 @@ if (members.Success && members.Data?.Count > 0)
     if (verifyMember.Success && verifyMember.Data != null)
     {
         Console.WriteLine($"  Fetched Name: {verifyMember.Data.AnonymousName}");
+        Console.WriteLine($"  Fetched Updated: {verifyMember.Data.Updated}");
     }
 
     // Update multiple fields at once
@@ -257,6 +259,7 @@ if (members.Success && members.Data?.Count > 0)
         Console.WriteLine($"  Name restored: {multiUpdate.Data.AnonymousName}");
         Console.WriteLine($"  GSR toggled: {multiUpdate.Data.IsGsr} (was {originalGsr})");
         Console.WriteLine($"  Show Anonymous Name: {multiUpdate.Data.ShowAnonymousName}");
+        Console.WriteLine($"  Updated: {multiUpdate.Data.Updated}");
     }
     else
     {
@@ -274,6 +277,7 @@ if (members.Success && members.Data?.Count > 0)
     if (restoreResult.Success && restoreResult.Data != null)
     {
         Console.WriteLine($"  GSR restored: {restoreResult.Data.IsGsr}");
+        Console.WriteLine($"  Updated: {restoreResult.Data.Updated}");
     }
     else
     {
@@ -315,7 +319,7 @@ if (positions.Success && positions.Data != null)
     Console.WriteLine($"Found {positions.Data.Count} positions");
     foreach (var position in positions.Data)
     {
-        Console.WriteLine($"  - {position.LongName}");
+        Console.WriteLine($"  - {position.LongName} (Updated: {position.Updated})");
     }
 }
 else
@@ -350,6 +354,7 @@ if (groups.Success && groups.Data?.Count > 0)
         Console.WriteLine($"  Mobile: {created.MobileNumber}");
         Console.WriteLine($"  Home Group: {created.HomeGroupName} (ID: {created.HomeGroupId})");
         Console.WriteLine($"  Is GSR: {created.IsGsr}");
+        Console.WriteLine($"  Updated: {created.Updated}");
 
         // Verify by re-fetching
         Console.WriteLine();
@@ -360,6 +365,7 @@ if (groups.Success && groups.Data?.Count > 0)
             Console.WriteLine($"  Fetched Name: {verifyCreated.Data.AnonymousName}");
             Console.WriteLine($"  Fetched GSR: {verifyCreated.Data.IsGsr}");
             Console.WriteLine($"  Fetched Home Group ID: {verifyCreated.Data.HomeGroupId}");
+            Console.WriteLine($"  Fetched Updated: {verifyCreated.Data.Updated}");
         }
         else
         {
@@ -401,6 +407,7 @@ if (positions.Success && positions.Data?.Count > 0)
         Console.WriteLine($"  Email: {created.PersonalEmail}");
         Console.WriteLine($"  Mobile: {created.MobileNumber}");
         Console.WriteLine($"  Position: {created.IntergroupPositionName} (ID: {created.IntergroupPositionId})");
+        Console.WriteLine($"  Updated: {created.Updated}");
     }
     else
     {

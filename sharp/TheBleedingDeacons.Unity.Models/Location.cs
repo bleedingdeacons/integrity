@@ -25,6 +25,7 @@ namespace TheBleedingDeacons.Unity.Models
         public double? Longitude { get; init; }
         public string Timezone { get; init; } = string.Empty;
         public string FormattedAddress { get; init; } = string.Empty;
+        public string Updated { get; init; } = string.Empty;
     }
 
 }
