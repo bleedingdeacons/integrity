@@ -26,6 +26,7 @@ if (groups.Success && groups.Data != null)
     foreach (var group in groups.Data)
     {
         Console.WriteLine($"  - {group.Title} (Meetings: {group.Meetings.Count}, Updated: {Fmt(group.Updated)})");
+        Console.WriteLine($"    Group Email: {group.GroupEmail} (Active: {group.GroupEmailActive})");
         if (group.Contacts.Count > 0)
         {
             foreach (var contact in group.Contacts)
@@ -192,6 +193,7 @@ if (membersExpanded.Success && membersExpanded.Data != null)
             Console.WriteLine($"  - {member.AnonymousName} (GSR: {member.IsGsr})");
             Console.WriteLine($"    Home Group: {member.HomeGroup.Title}");
             Console.WriteLine($"    Group Email: {member.HomeGroup.Email}");
+            Console.WriteLine($"    Group Email (Dedicated): {member.HomeGroup.GroupEmail} (Active: {member.HomeGroup.GroupEmailActive})");
             Console.WriteLine($"    Group Meetings: {member.HomeGroup.MeetingIds.Count}");
         }
         else

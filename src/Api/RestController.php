@@ -2790,6 +2790,8 @@ class RestController
             'website' => $group->getWebsite(),
             'link' => $group->getLink(),
             'notes' => $group->getGroupNotes(),
+            'group_email' => $group->getGroupEmail(),
+            'group_email_active' => $group->isGroupEmailActive(),
             'district_id' => $group->getDistrictId(),
             'last_contact' => $group->getLastContact(),
             $expandMeetings ? 'meetings' : 'meeting_ids' => $meetingData,
