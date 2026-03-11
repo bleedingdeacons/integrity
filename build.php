@@ -91,6 +91,10 @@ class PluginBuilder
 
         // Vendor (no production dependencies needed)
             'vendor',
+            // C# Rest Client and Models
+            'sharp',
+            'Integrity-cli',
+            'csharp-client'
     ];
 
     // Files and directories to exclude in dev builds
