@@ -42,6 +42,16 @@ class RestController
     private AuditLogger $auditLogger;
     private RateLimiter $rateLimiter;
 
+    /**
+     * The currently registered rest_post_dispatch filter callback.
+     *
+     * Stored so it can be removed after each request, preventing closure
+     * accumulation when WordPress handles multiple REST calls in one process.
+     *
+     * @var callable|null
+     */
+    private $rateLimitFilter = null;
+
     public function __construct(
         ApiKeyManager $apiKeyManager,
         AuditLogger $auditLogger,
@@ -792,14 +802,7 @@ class RestController
             );
 
             // Add rate limit headers
-            add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $rateLimit) {
-                if ($result instanceof WP_REST_Response) {
-                    foreach ($this->rateLimiter->getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
-                        $result->header($header, $value);
-                    }
-                }
-                return $result;
-            });
+            $this->attachRateLimitFilter($rateLimit, $rateLimitResult);
 
             return $response;
         }
@@ -827,16 +830,41 @@ class RestController
         $request->set_param('_integrity_rate_limit', $rateLimitResult);
 
         // Add rate limit headers to successful responses
-        add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $rateLimit) {
-            if ($result instanceof WP_REST_Response) {
-                foreach ($this->rateLimiter->getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
-                    $result->header($header, $value);
-                }
-            }
-            return $result;
-        });
+        $this->attachRateLimitFilter($rateLimit, $rateLimitResult);
 
         return true;
+    }
+
+    /**
+     * Attach rate limit headers via rest_post_dispatch, replacing any previous filter.
+     *
+     * The callback is stored in $this->rateLimitFilter so that:
+     *  1. Any previously registered callback is removed first (prevents accumulation).
+     *  2. The callback removes itself after firing (one-shot per request).
+     *
+     * @param int   $rateLimit       The rate limit ceiling for this API key
+     * @param array $rateLimitResult Result from RateLimiter::checkLimit()
+     */
+    private function attachRateLimitFilter(int $rateLimit, array $rateLimitResult): void
+    {
+        // Remove any filter left over from a previous call in the same process
+        if ($this->rateLimitFilter !== null) {
+            remove_filter('rest_post_dispatch', $this->rateLimitFilter);
+        }
+
+        $this->rateLimitFilter = function (WP_REST_Response $result) use ($rateLimit, $rateLimitResult): WP_REST_Response {
+            foreach ($this->rateLimiter->getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
+                $result->header($header, $value);
+            }
+
+            // Self-remove so this closure never fires again
+            remove_filter('rest_post_dispatch', $this->rateLimitFilter);
+            $this->rateLimitFilter = null;
+
+            return $result;
+        };
+
+        add_filter('rest_post_dispatch', $this->rateLimitFilter);
     }
 
     /**
