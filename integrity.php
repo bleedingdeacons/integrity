@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Integrity
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
- * Version: 1.7.2
+ * Version: 1.8.0
  * Requires at least: 6.0
  * Requires Plugins: scrutiny
  * Requires PHP: 8.0
@@ -56,14 +56,14 @@ spl_autoload_register(function ($class) {
 // Initialize plugin after Unity is fully loaded
 add_action('unity/loaded', function ($container): void {
     try {
-        // Initialize Integrity
-        \Integrity\Plugin::init();
+        // Initialize Integrity with Unity's container (same pattern as Scrutiny)
+        \Integrity\Plugin::init($container);
 
         /**
          * Fires after Integrity is fully loaded.
          * Use this hook for code that depends on Integrity being available.
          */
-        do_action('integrity_loaded');
+        do_action('integrity_loaded', \Integrity\Plugin::getContainer());
 
     } catch (\Exception $e) {
         error_log('Integrity Plugin Initialization Error: ' . $e->getMessage());

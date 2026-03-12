@@ -32,29 +32,44 @@ use WP_Error;
  * REST API Controller
  *
  * Handles all REST API routes with authentication, rate limiting, and audit logging.
+ * Dependencies are injected via constructor following the Scrutiny DI pattern.
  */
 class RestController
 {
     private const NAMESPACE = 'integrity/v1';
 
+    private ApiKeyManager $apiKeyManager;
+    private AuditLogger $auditLogger;
+    private RateLimiter $rateLimiter;
+
+    public function __construct(
+        ApiKeyManager $apiKeyManager,
+        AuditLogger $auditLogger,
+        RateLimiter $rateLimiter
+    ) {
+        $this->apiKeyManager = $apiKeyManager;
+        $this->auditLogger = $auditLogger;
+        $this->rateLimiter = $rateLimiter;
+    }
+
 
     /**
      * Register REST API routes
      */
-    public static function register(): void
+    public function register(): void
     {
         // Groups endpoints
         register_rest_route(self::NAMESPACE, '/groups', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getGroups'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getGroupsArgs(),
+            'callback' => [$this, 'getGroups'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getGroupsArgs(),
         ]);
 
         register_rest_route(self::NAMESPACE, '/groups/(?P<id>\d+)', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getGroup'],
-            'permission_callback' => [self::class, 'checkPermission'],
+            'callback' => [$this, 'getGroup'],
+            'permission_callback' => [$this, 'checkPermission'],
             'args' => [
                 'id' => [
                     'required' => true,
@@ -77,15 +92,15 @@ class RestController
         // Meetings endpoints
         register_rest_route(self::NAMESPACE, '/meetings', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getMeetings'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getMeetingsArgs(),
+            'callback' => [$this, 'getMeetings'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getMeetingsArgs(),
         ]);
 
         register_rest_route(self::NAMESPACE, '/meetings/(?P<id>\d+)', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getMeeting'],
-            'permission_callback' => [self::class, 'checkPermission'],
+            'callback' => [$this, 'getMeeting'],
+            'permission_callback' => [$this, 'checkPermission'],
             'args' => [
                 'id' => [
                     'required' => true,
@@ -99,15 +114,15 @@ class RestController
         // Positions endpoints
         register_rest_route(self::NAMESPACE, '/positions', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getPositions'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getPositionsArgs(),
+            'callback' => [$this, 'getPositions'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getPositionsArgs(),
         ]);
 
         register_rest_route(self::NAMESPACE, '/positions/(?P<id>\d+)', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getPosition'],
-            'permission_callback' => [self::class, 'checkPermission'],
+            'callback' => [$this, 'getPosition'],
+            'permission_callback' => [$this, 'checkPermission'],
             'args' => [
                 'id' => [
                     'required' => true,
@@ -121,15 +136,15 @@ class RestController
         // Members endpoints
         register_rest_route(self::NAMESPACE, '/members', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getMembers'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getMembersArgs(),
+            'callback' => [$this, 'getMembers'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getMembersArgs(),
         ]);
 
         register_rest_route(self::NAMESPACE, '/members/(?P<id>\d+)', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getMember'],
-            'permission_callback' => [self::class, 'checkPermission'],
+            'callback' => [$this, 'getMember'],
+            'permission_callback' => [$this, 'checkPermission'],
             'args' => [
                 'id' => [
                     'required' => true,
@@ -142,30 +157,30 @@ class RestController
 
         register_rest_route(self::NAMESPACE, '/members/(?P<id>\d+)/update', [
             'methods' => 'POST',
-            'callback' => [self::class, 'updateMember'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getUpdateMemberArgs(),
+            'callback' => [$this, 'updateMember'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getUpdateMemberArgs(),
         ]);
 
         register_rest_route(self::NAMESPACE, '/members/create', [
             'methods' => 'POST',
-            'callback' => [self::class, 'createMember'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getCreateMemberArgs(),
+            'callback' => [$this, 'createMember'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getCreateMemberArgs(),
         ]);
 
         // Intergroup Meetings endpoints
         register_rest_route(self::NAMESPACE, '/intergroup-meetings', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getIntergroupMeetings'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getIntergroupMeetingsArgs(),
+            'callback' => [$this, 'getIntergroupMeetings'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getIntergroupMeetingsArgs(),
         ]);
 
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)', [
             'methods' => 'GET',
-            'callback' => [self::class, 'getIntergroupMeeting'],
-            'permission_callback' => [self::class, 'checkPermission'],
+            'callback' => [$this, 'getIntergroupMeeting'],
+            'permission_callback' => [$this, 'checkPermission'],
             'args' => [
                 'id' => [
                     'required' => true,
@@ -179,39 +194,39 @@ class RestController
         // Intergroup Meeting Group Registration endpoint
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/register-group', [
             'methods' => 'POST',
-            'callback' => [self::class, 'registerIntergroupMeetingAttendee'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getRegisterAttendeeArgs(),
+            'callback' => [$this, 'registerIntergroupMeetingAttendee'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getRegisterAttendeeArgs(),
         ]);
 
         // Intergroup Meeting Group Unregister endpoint
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/unregister-group', [
             'methods' => 'POST',
-            'callback' => [self::class, 'unregisterIntergroupMeetingAttendee'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getUnregisterAttendeeArgs(),
+            'callback' => [$this, 'unregisterIntergroupMeetingAttendee'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getUnregisterAttendeeArgs(),
         ]);
 
         // Intergroup Meeting Officer Registration endpoint
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/register-officer', [
             'methods' => 'POST',
-            'callback' => [self::class, 'registerIntergroupMeetingOfficer'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getRegisterOfficerArgs(),
+            'callback' => [$this, 'registerIntergroupMeetingOfficer'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getRegisterOfficerArgs(),
         ]);
 
         // Intergroup Meeting Officer Unregister endpoint
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/unregister-officer', [
             'methods' => 'POST',
-            'callback' => [self::class, 'unregisterIntergroupMeetingOfficer'],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'args' => self::getUnregisterOfficerArgs(),
+            'callback' => [$this, 'unregisterIntergroupMeetingOfficer'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->getUnregisterOfficerArgs(),
         ]);
 
         // Health check endpoint (no auth required)
         register_rest_route(self::NAMESPACE, '/health', [
             'methods' => 'GET',
-            'callback' => [self::class, 'healthCheck'],
+            'callback' => [$this, 'healthCheck'],
             'permission_callback' => '__return_true',
         ]);
     }
@@ -219,7 +234,7 @@ class RestController
     /**
      * Get arguments for groups endpoint
      */
-    private static function getGroupsArgs(): array
+    private function getGroupsArgs(): array
     {
         return [
             'per_page' => [
@@ -264,7 +279,7 @@ class RestController
     /**
      * Get arguments for meetings endpoint
      */
-    private static function getMeetingsArgs(): array
+    private function getMeetingsArgs(): array
     {
         return [
             'per_page' => [
@@ -322,7 +337,7 @@ class RestController
     /**
      * Get arguments for positions endpoint
      */
-    private static function getPositionsArgs(): array
+    private function getPositionsArgs(): array
     {
         return [
             'per_page' => [
@@ -349,7 +364,7 @@ class RestController
     /**
      * Get arguments for members endpoint
      */
-    private static function getMembersArgs(): array
+    private function getMembersArgs(): array
     {
         return [
             'per_page' => [
@@ -385,7 +400,7 @@ class RestController
     /**
      * Get arguments for update member endpoint
      */
-    private static function getUpdateMemberArgs(): array
+    private function getUpdateMemberArgs(): array
     {
         return [
             'id' => [
@@ -482,7 +497,7 @@ class RestController
     /**
      * Get arguments for create member endpoint
      */
-    private static function getCreateMemberArgs(): array
+    private function getCreateMemberArgs(): array
     {
         return [
             'anonymous_name' => [
@@ -535,7 +550,7 @@ class RestController
     /**
      * Get arguments for intergroup meetings endpoint
      */
-    private static function getIntergroupMeetingsArgs(): array
+    private function getIntergroupMeetingsArgs(): array
     {
         return [
             'per_page' => [
@@ -582,7 +597,7 @@ class RestController
     /**
      * Get arguments for register attendee endpoint
      */
-    private static function getRegisterAttendeeArgs(): array
+    private function getRegisterAttendeeArgs(): array
     {
         return [
             'id' => [
@@ -637,7 +652,7 @@ class RestController
     /**
      * Get arguments for unregister attendee endpoint
      */
-    private static function getUnregisterAttendeeArgs(): array
+    private function getUnregisterAttendeeArgs(): array
     {
         return [
             'id' => [
@@ -660,7 +675,7 @@ class RestController
     /**
      * Get arguments for register officer endpoint
      */
-    private static function getRegisterOfficerArgs(): array
+    private function getRegisterOfficerArgs(): array
     {
         return [
             'id' => [
@@ -697,7 +712,7 @@ class RestController
     /**
      * Get arguments for unregister officer endpoint
      */
-    private static function getUnregisterOfficerArgs(): array
+    private function getUnregisterOfficerArgs(): array
     {
         return [
             'id' => [
@@ -723,13 +738,13 @@ class RestController
      * @param WP_REST_Request $request
      * @return bool|WP_Error
      */
-    public static function checkPermission(WP_REST_Request $request)
+    public function checkPermission(WP_REST_Request $request)
     {
         $startTime = microtime(true);
 
         // Require HTTPS in production
         if (get_option('integrity_require_https', true) && !is_ssl() && !(defined('WP_DEBUG') && WP_DEBUG)) {
-            self::logFailedRequest($request, 403, $startTime);
+            $this->logFailedRequest($request, 403, $startTime);
             return new WP_Error(
                 'https_required',
                 'HTTPS is required for API access',
@@ -738,10 +753,10 @@ class RestController
         }
 
         // Get API key from header
-        $apiKey = self::extractApiKey($request);
+        $apiKey = $this->extractApiKey($request);
 
         if (!$apiKey) {
-            self::logFailedRequest($request, 401, $startTime);
+            $this->logFailedRequest($request, 401, $startTime);
             return new WP_Error(
                 'missing_api_key',
                 'API key is required. Provide it in the Authorization header as: Bearer <api_key>',
@@ -750,11 +765,11 @@ class RestController
         }
 
         // Validate API key
-        $clientIp = AuditLogger::getClientIp();
-        $keyData = ApiKeyManager::validateKey($apiKey, $clientIp);
+        $clientIp = $this->auditLogger->getClientIp();
+        $keyData = $this->apiKeyManager->validateKey($apiKey, $clientIp);
 
         if (!$keyData) {
-            self::logFailedRequest($request, 401, $startTime);
+            $this->logFailedRequest($request, 401, $startTime);
             return new WP_Error(
                 'invalid_api_key',
                 'Invalid or expired API key',
@@ -765,10 +780,10 @@ class RestController
         // Check rate limits (cast to int as database returns strings)
         $apiKeyId = (int) $keyData['id'];
         $rateLimit = (int) $keyData['rate_limit'];
-        $rateLimitResult = RateLimiter::checkLimit($apiKeyId, $rateLimit);
+        $rateLimitResult = $this->rateLimiter->checkLimit($apiKeyId, $rateLimit);
 
         if (!$rateLimitResult['allowed']) {
-            self::logFailedRequest($request, 429, $startTime, $apiKeyId);
+            $this->logFailedRequest($request, 429, $startTime, $apiKeyId);
 
             $response = new WP_Error(
                 'rate_limit_exceeded',
@@ -779,7 +794,7 @@ class RestController
             // Add rate limit headers
             add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $rateLimit) {
                 if ($result instanceof WP_REST_Response) {
-                    foreach (RateLimiter::getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
+                    foreach ($this->rateLimiter->getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
                         $result->header($header, $value);
                     }
                 }
@@ -790,14 +805,14 @@ class RestController
         }
 
         // Increment rate limit counter
-        RateLimiter::incrementCount($apiKeyId);
+        $this->rateLimiter->incrementCount($apiKeyId);
 
         // Check endpoint-specific permissions
         $endpoint = $request->get_route();
-        $requiredPermission = self::getRequiredPermission($endpoint);
+        $requiredPermission = $this->getRequiredPermission($endpoint);
 
         if ($requiredPermission && !in_array($requiredPermission, $keyData['permissions'], true) && !in_array('*', $keyData['permissions'], true)) {
-            self::logFailedRequest($request, 403, $startTime, $apiKeyId);
+            $this->logFailedRequest($request, 403, $startTime, $apiKeyId);
             return new WP_Error(
                 'insufficient_permissions',
                 "This API key does not have permission to access: {$requiredPermission}",
@@ -814,7 +829,7 @@ class RestController
         // Add rate limit headers to successful responses
         add_filter('rest_post_dispatch', function ($result) use ($rateLimitResult, $rateLimit) {
             if ($result instanceof WP_REST_Response) {
-                foreach (RateLimiter::getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
+                foreach ($this->rateLimiter->getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
                     $result->header($header, $value);
                 }
             }
@@ -827,7 +842,7 @@ class RestController
     /**
      * Extract API key from request
      */
-    private static function extractApiKey(WP_REST_Request $request): ?string
+    private function extractApiKey(WP_REST_Request $request): ?string
     {
         // Try Authorization header first (preferred)
         $authHeader = $request->get_header('Authorization');
@@ -848,7 +863,7 @@ class RestController
     /**
      * Get required permission for an endpoint
      */
-    private static function getRequiredPermission(string $endpoint): ?string
+    private function getRequiredPermission(string $endpoint): ?string
     {
         // Check registration endpoints before general intergroup-meetings (more specific first)
         if (strpos($endpoint, '/intergroup-meetings') !== false
@@ -887,9 +902,9 @@ class RestController
     /**
      * Log a failed request
      */
-    private static function logFailedRequest(WP_REST_Request $request, int $code, float $startTime, ?int $keyId = null): void
+    private function logFailedRequest(WP_REST_Request $request, int $code, float $startTime, ?int $keyId = null): void
     {
-        AuditLogger::log(
+        $this->auditLogger->log(
             $keyId,
             $request->get_route(),
             $request->get_method(),
@@ -902,7 +917,7 @@ class RestController
     /**
      * Get all groups
      */
-    public static function getGroups(WP_REST_Request $request): WP_REST_Response
+    public function getGroups(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -940,11 +955,11 @@ class RestController
 
             // Transform to API response format
             $data = array_map(function($group) use ($expand) {
-                return self::transformGroup($group, $expand);
+                return $this->transformGroup($group, $expand);
             }, $groups);
 
             // Log successful request
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -964,7 +979,7 @@ class RestController
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -986,7 +1001,7 @@ class RestController
     /**
      * Get a single group
      */
-    public static function getGroup(WP_REST_Request $request): WP_REST_Response
+    public function getGroup(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -999,7 +1014,7 @@ class RestController
             $group = $groupRepo->findById($id);
 
             if (!$group || !$group->isValid()) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -1017,7 +1032,7 @@ class RestController
                 ], 404);
             }
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1032,11 +1047,11 @@ class RestController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => self::transformGroup($group, $expand),
+                'data' => $this->transformGroup($group, $expand),
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1058,7 +1073,7 @@ class RestController
     /**
      * Get all meetings
      */
-    public static function getMeetings(WP_REST_Request $request): WP_REST_Response
+    public function getMeetings(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1128,13 +1143,13 @@ class RestController
             $total = count($meetings);
 
             // Transform to API response format
-            $data = array_map([self::class, 'transformMeeting'], $meetings);
+            $data = array_map([$this, 'transformMeeting'], $meetings);
 
             $perPage = $request->get_param('per_page');
             $page = $request->get_param('page');
             $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 1;
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1155,7 +1170,7 @@ class RestController
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1177,7 +1192,7 @@ class RestController
     /**
      * Get a single meeting
      */
-    public static function getMeeting(WP_REST_Request $request): WP_REST_Response
+    public function getMeeting(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1190,7 +1205,7 @@ class RestController
             $meeting = $meetingRepo->find($id);
 
             if (!$meeting) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -1208,7 +1223,7 @@ class RestController
                 ], 404);
             }
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1219,11 +1234,11 @@ class RestController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => self::transformMeeting($meeting),
+                'data' => $this->transformMeeting($meeting),
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1245,7 +1260,7 @@ class RestController
     /**
      * Get all positions
      */
-    public static function getPositions(WP_REST_Request $request): WP_REST_Response
+    public function getPositions(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1270,7 +1285,7 @@ class RestController
             $perPage = (int) $request->get_param('per_page');
             $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 1;
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1281,7 +1296,7 @@ class RestController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => array_map([self::class, 'transformPosition'], $positions),
+                'data' => array_map([$this, 'transformPosition'], $positions),
                 'meta' => [
                     'total' => $total,
                     'page' => (int) $request->get_param('page'),
@@ -1291,7 +1306,7 @@ class RestController
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1313,7 +1328,7 @@ class RestController
     /**
      * Get a single position
      */
-    public static function getPosition(WP_REST_Request $request): WP_REST_Response
+    public function getPosition(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1327,7 +1342,7 @@ class RestController
             $position = $positionRepo->findById($id);
 
             if (!$position) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -1345,7 +1360,7 @@ class RestController
                 ], 404);
             }
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1356,11 +1371,11 @@ class RestController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => self::transformPosition($position),
+                'data' => $this->transformPosition($position),
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1382,7 +1397,7 @@ class RestController
     /**
      * Get all members
      */
-    public static function getMembers(WP_REST_Request $request): WP_REST_Response
+    public function getMembers(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1441,16 +1456,16 @@ class RestController
             }
 
             // Batch fetch using repositories
-            $groupCache = self::batchGetGroups($groupRepo, array_unique($groupIds));
-            $positionCache = self::batchGetPositions($positionRepo, array_unique($positionIds));
-            $meetingCache = self::batchGetMeetings($meetingRepo, array_unique($meetingIds));
+            $groupCache = $this->batchGetGroups($groupRepo, array_unique($groupIds));
+            $positionCache = $this->batchGetPositions($positionRepo, array_unique($positionIds));
+            $meetingCache = $this->batchGetMeetings($meetingRepo, array_unique($meetingIds));
 
             // Transform with cached data
             $transformedMembers = array_map(function ($member) use ($groupCache, $positionCache, $meetingCache) {
-                return self::transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache);
+                return $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache);
             }, $members);
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1471,7 +1486,7 @@ class RestController
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1493,7 +1508,7 @@ class RestController
     /**
      * Get a single member
      */
-    public static function getMember(WP_REST_Request $request): WP_REST_Response
+    public function getMember(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1506,7 +1521,7 @@ class RestController
             $member = $memberRepo->find($id);
 
             if (!$member) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -1524,7 +1539,7 @@ class RestController
                 ], 404);
             }
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1535,11 +1550,11 @@ class RestController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => self::transformMember($member),
+                'data' => $this->transformMember($member),
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1561,7 +1576,7 @@ class RestController
     /**
      * Update a member
      */
-    public static function updateMember(WP_REST_Request $request): WP_REST_Response
+    public function updateMember(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1576,7 +1591,7 @@ class RestController
             $existingMember = $memberRepo->find($id);
 
             if (!$existingMember) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -1603,7 +1618,7 @@ class RestController
                 $groupRepo = $container->get(GroupRepository::class);
                 $group = $groupRepo->findById($homeGroupId);
                 if (!$group || !$group->isValid()) {
-                    AuditLogger::log(
+                    $this->auditLogger->log(
                         $keyData['api_key_id'],
                         $request->get_route(),
                         $request->get_method(),
@@ -1633,7 +1648,7 @@ class RestController
                     'posts_per_page' => 1,
                 ]);
                 if (empty($positions)) {
-                    AuditLogger::log(
+                    $this->auditLogger->log(
                         $keyData['api_key_id'],
                         $request->get_route(),
                         $request->get_method(),
@@ -1656,7 +1671,7 @@ class RestController
             $personalEmail = $existingMember->getPersonalEmail();
             if ($request->has_param('personal_email')) {
                 $submittedEmail = $request->get_param('personal_email');
-                if (!self::isObscuredEmail($submittedEmail)) {
+                if (!$this->isObscuredEmail($submittedEmail)) {
                     $personalEmail = $submittedEmail;
                 }
             }
@@ -1665,7 +1680,7 @@ class RestController
             $mobileNumber = $existingMember->getMobileNumber();
             if ($request->has_param('mobile_number')) {
                 $submittedMobile = $request->get_param('mobile_number');
-                if (!self::isObscuredPhone($submittedMobile)) {
+                if (!$this->isObscuredPhone($submittedMobile)) {
                     $mobileNumber = $submittedMobile;
                 }
             }
@@ -1702,7 +1717,7 @@ class RestController
             $saved = $memberRepo->save($updatedMember);
 
             if (!$saved) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -1723,7 +1738,7 @@ class RestController
             // Re-fetch the saved member to return the latest state
             $savedMember = $memberRepo->find($id);
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1734,11 +1749,11 @@ class RestController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => self::transformMember($savedMember ?? $updatedMember),
+                'data' => $this->transformMember($savedMember ?? $updatedMember),
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1760,7 +1775,7 @@ class RestController
     /**
      * Create a new member
      */
-    public static function createMember(WP_REST_Request $request): WP_REST_Response
+    public function createMember(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1788,7 +1803,7 @@ class RestController
                 $groupRepo = $container->get(GroupRepository::class);
                 $group = $groupRepo->findById($homeGroupId);
                 if (!$group || !$group->isValid()) {
-                    AuditLogger::log(
+                    $this->auditLogger->log(
                         $keyData['api_key_id'],
                         $request->get_route(),
                         $request->get_method(),
@@ -1814,7 +1829,7 @@ class RestController
                     'posts_per_page' => 1,
                 ]);
                 if (empty($positions)) {
-                    AuditLogger::log(
+                    $this->auditLogger->log(
                         $keyData['api_key_id'],
                         $request->get_route(),
                         $request->get_method(),
@@ -1841,7 +1856,7 @@ class RestController
             ], true);
 
             if (is_wp_error($postId)) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -1882,7 +1897,7 @@ class RestController
                 // Clean up the orphaned post
                 wp_delete_post($postId, true);
 
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -1903,7 +1918,7 @@ class RestController
             // Re-fetch the saved member to return the latest state
             $savedMember = $memberRepo->find($postId);
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1914,11 +1929,11 @@ class RestController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => self::transformMember($savedMember ?? $newMember),
+                'data' => $this->transformMember($savedMember ?? $newMember),
             ], 201);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -1940,7 +1955,7 @@ class RestController
     /**
      * Get all intergroup meetings
      */
-    public static function getIntergroupMeetings(WP_REST_Request $request): WP_REST_Response
+    public function getIntergroupMeetings(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -1998,14 +2013,14 @@ class RestController
             $allMemberIds = array_unique(array_filter($allMemberIds));
 
             // Batch fetch all members at once using repository
-            $memberCache = self::batchGetMembers($memberRepo, $allMemberIds);
+            $memberCache = $this->batchGetMembers($memberRepo, $allMemberIds);
 
             // Transform with cached members
             $transformedMeetings = array_map(function ($meeting) use ($memberCache) {
-                return self::transformIntergroupMeetingWithCache($meeting, $memberCache);
+                return $this->transformIntergroupMeetingWithCache($meeting, $memberCache);
             }, $intergroupMeetings);
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2026,7 +2041,7 @@ class RestController
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2048,7 +2063,7 @@ class RestController
     /**
      * Get a single intergroup meeting
      */
-    public static function getIntergroupMeeting(WP_REST_Request $request): WP_REST_Response
+    public function getIntergroupMeeting(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -2061,7 +2076,7 @@ class RestController
             $intergroupMeeting = $intergroupMeetingRepo->find($id);
 
             if (!$intergroupMeeting) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2079,7 +2094,7 @@ class RestController
                 ], 404);
             }
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2090,11 +2105,11 @@ class RestController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => self::transformIntergroupMeeting($intergroupMeeting),
+                'data' => $this->transformIntergroupMeeting($intergroupMeeting),
             ], 200);
 
         } catch (\Exception $e) {
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2116,7 +2131,7 @@ class RestController
     /**
      * Register a group as an attendee of an intergroup meeting
      */
-    public static function registerIntergroupMeetingAttendee(WP_REST_Request $request): WP_REST_Response
+    public function registerIntergroupMeetingAttendee(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -2140,7 +2155,7 @@ class RestController
             $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
 
             if (!$intergroupMeeting) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2162,7 +2177,7 @@ class RestController
             $group = $groupRepo->findById($groupId);
 
             if (!$group) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2184,7 +2199,7 @@ class RestController
 
             // Check if group is already registered
             if ($intergroupMeeting->hasGroupAttendee($groupId)) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2209,7 +2224,7 @@ class RestController
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
 
             if (!$saved) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2241,7 +2256,7 @@ class RestController
             $attendanceSaved = $attendanceRepo->save($attendance);
 
             if (!$attendanceSaved) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2259,7 +2274,7 @@ class RestController
                 ], 500);
             }
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2288,7 +2303,7 @@ class RestController
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
             error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2306,7 +2321,7 @@ class RestController
             ], 500);
         }
     }
-    public static function unregisterIntergroupMeetingAttendee(WP_REST_Request $request): WP_REST_Response
+    public function unregisterIntergroupMeetingAttendee(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -2322,7 +2337,7 @@ class RestController
             $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
 
             if (!$intergroupMeeting) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2342,7 +2357,7 @@ class RestController
 
             // Check if group is actually registered
             if (!$intergroupMeeting->hasGroupAttendee($groupId)) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2367,7 +2382,7 @@ class RestController
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
 
             if (!$saved) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2388,7 +2403,7 @@ class RestController
             // Delete the attendance record for this group at this meeting
             $attendanceRepo->deleteByIntergroupMeetingAndGroup($meetingId, $groupId);
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2412,7 +2427,7 @@ class RestController
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
             error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2433,7 +2448,7 @@ class RestController
     /**
      * Register an officer as an attendee of an intergroup meeting
      */
-    public static function registerIntergroupMeetingOfficer(WP_REST_Request $request): WP_REST_Response
+    public function registerIntergroupMeetingOfficer(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -2455,7 +2470,7 @@ class RestController
             $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
 
             if (!$intergroupMeeting) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2477,7 +2492,7 @@ class RestController
             $member = $memberRepo->find($officerId);
 
             if (!$member) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2497,7 +2512,7 @@ class RestController
 
             // Check if officer is already registered
             if ($intergroupMeeting->hasOfficerAttendee($officerId)) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2522,7 +2537,7 @@ class RestController
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
 
             if (!$saved) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2551,7 +2566,7 @@ class RestController
             $attendanceSaved = $attendanceRepo->save($attendance);
 
             if (!$attendanceSaved) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2569,7 +2584,7 @@ class RestController
                 ], 500);
             }
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2595,7 +2610,7 @@ class RestController
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
             error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2617,7 +2632,7 @@ class RestController
     /**
      * Unregister an officer from an intergroup meeting
      */
-    public static function unregisterIntergroupMeetingOfficer(WP_REST_Request $request): WP_REST_Response
+    public function unregisterIntergroupMeetingOfficer(WP_REST_Request $request): WP_REST_Response
     {
         $startTime = $request->get_param('_integrity_start_time');
         $keyData = $request->get_param('_integrity_key_data');
@@ -2633,7 +2648,7 @@ class RestController
             $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
 
             if (!$intergroupMeeting) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2653,7 +2668,7 @@ class RestController
 
             // Check if officer is actually registered
             if (!$intergroupMeeting->hasOfficerAttendee($officerId)) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2678,7 +2693,7 @@ class RestController
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
 
             if (!$saved) {
-                AuditLogger::log(
+                $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
                     $request->get_method(),
@@ -2699,7 +2714,7 @@ class RestController
             // Delete the attendance record for this officer at this meeting
             $attendanceRepo->deleteByIntergroupMeetingAndOfficer($meetingId, $officerId);
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2723,7 +2738,7 @@ class RestController
             // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
             error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
 
-            AuditLogger::log(
+            $this->auditLogger->log(
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
@@ -2741,7 +2756,7 @@ class RestController
             ], 500);
         }
     }
-    public static function healthCheck(WP_REST_Request $request): WP_REST_Response
+    public function healthCheck(WP_REST_Request $request): WP_REST_Response
     {
         $unityAvailable = class_exists('Unity\\Plugin');
 
@@ -2760,7 +2775,7 @@ class RestController
      * @param array $expand Array of fields to expand (e.g., ['meetings'])
      * @return array
      */
-    private static function transformGroup(Group $group, array $expand = []): array
+    private function transformGroup(Group $group, array $expand = []): array
     {
         $contacts = $group->getContacts();
         $meetings = $group->getMeetings();
@@ -2770,7 +2785,7 @@ class RestController
 
         if ($expandMeetings) {
             // Return full meeting data
-            $meetingData = array_map([self::class, 'transformMeeting'], $meetings);
+            $meetingData = array_map([$this, 'transformMeeting'], $meetings);
         } else {
             // Return just meeting IDs for backwards compatibility
             $meetingData = array_map(function($meeting) {
@@ -2790,21 +2805,21 @@ class RestController
             'district_id' => $group->getDistrictId(),
             'last_contact' => $group->getLastContact(),
             $expandMeetings ? 'meetings' : 'meeting_ids' => $meetingData,
-            'contacts' => !empty($contacts) ? array_map([self::class, 'transformContact'], $contacts) : [],
+            'contacts' => !empty($contacts) ? array_map([$this, 'transformContact'], $contacts) : [],
             'contribution_options' => [
                 'venmo' => $group->getVenmo(),
                 'paypal' => $group->getPaypal(),
                 'square' => $group->getSquare(),
                 'has_options' => $group->hasContributionOptions(),
             ],
-            'updated' => self::formatUpdatedTimestamp($group->getUpdated()),
+            'updated' => $this->formatUpdatedTimestamp($group->getUpdated()),
         ];
     }
 
     /**
      * Transform a Meeting object to API response format
      */
-    private static function transformMeeting(Meeting $meeting): array
+    private function transformMeeting(Meeting $meeting): array
     {
         $contacts = $meeting->getContacts();
         $location = $meeting->getLocation();
@@ -2813,7 +2828,7 @@ class RestController
             'id' => $meeting->getId(),
             'name' => $meeting->getName(),
             'slug' => $meeting->getSlug(),
-            'location' => $location !== null ? self::transformLocation($location) : null,
+            'location' => $location !== null ? $this->transformLocation($location) : null,
             'url' => $meeting->getUrl(),
             'day' => $meeting->getDay(),
             'day_of_week' => $meeting->getDayOfWeek(),
@@ -2824,9 +2839,9 @@ class RestController
             'is_online' => $meeting->isOnline(),
             'online_link' => $meeting->getOnlineLink(),
             'online_notes' => $meeting->getOnlineNotes(),
-            'contacts' => !empty($contacts) ? array_map([self::class, 'transformContact'], $contacts) : [],
+            'contacts' => !empty($contacts) ? array_map([$this, 'transformContact'], $contacts) : [],
             'meta' => $meeting->getMeta(),
-            'updated' => self::formatUpdatedTimestamp($meeting->getUpdated()),
+            'updated' => $this->formatUpdatedTimestamp($meeting->getUpdated()),
         ];
     }
 
@@ -2836,7 +2851,7 @@ class RestController
      * @param Location $location
      * @return array
      */
-    private static function transformLocation(Location $location): array
+    private function transformLocation(Location $location): array
     {
         return [
             'id' => $location->getId(),
@@ -2853,7 +2868,7 @@ class RestController
             'longitude' => $location->getLongitude(),
             'timezone' => $location->getTimezone(),
             'formatted_address' => $location->getFormattedAddress(),
-            'updated' => self::formatUpdatedTimestamp($location->getUpdated()),
+            'updated' => $this->formatUpdatedTimestamp($location->getUpdated()),
         ];
     }
 
@@ -2863,14 +2878,14 @@ class RestController
      * @param Contact|array $contact
      * @return array
      */
-    private static function transformContact($contact): array
+    private function transformContact($contact): array
     {
         if ($contact instanceof Contact) {
             return [
                 'name' => $contact->getName(),
                 'email' => Mask::email($contact->getEmail()),
                 'phone' => Mask::phone($contact->getPhone()),
-                'updated' => self::formatUpdatedTimestamp($contact->getUpdated()),
+                'updated' => $this->formatUpdatedTimestamp($contact->getUpdated()),
             ];
         }
 
@@ -2880,7 +2895,7 @@ class RestController
                 'name' => $contact['name'] ?? '',
                 'email' => Mask::email($contact['email'] ?? ''),
                 'phone' => Mask::phone($contact['phone'] ?? ''),
-                'updated' => self::formatUpdatedTimestamp($contact['updated'] ?? ''),
+                'updated' => $this->formatUpdatedTimestamp($contact['updated'] ?? ''),
             ];
         }
 
@@ -2898,7 +2913,7 @@ class RestController
      * @param Position $position
      * @return array
      */
-    private static function transformPosition(Position $position): array
+    private function transformPosition(Position $position): array
     {
         return [
             'id' => $position->getId(),
@@ -2909,7 +2924,7 @@ class RestController
             'minimum_sobriety' => $position->getMinimumSobriety(),
             'term_years' => $position->getTermYears(),
             'link' => $position->getLink(),
-            'updated' => self::formatUpdatedTimestamp($position->getUpdated()),
+            'updated' => $this->formatUpdatedTimestamp($position->getUpdated()),
         ];
     }
 
@@ -2920,7 +2935,7 @@ class RestController
      * @return array
      * @deprecated Use transformMemberWithCache for better performance
      */
-    private static function transformMember(Member $member): array
+    private function transformMember(Member $member): array
     {
         $container = Plugin::getContainer();
         $groupRepo = $container->get(GroupRepository::class);
@@ -2946,11 +2961,11 @@ class RestController
         }
 
         // Batch fetch
-        $groupCache = self::batchGetGroups($groupRepo, $groupIds);
-        $positionCache = self::batchGetPositions($positionRepo, $positionIds);
-        $meetingCache = self::batchGetMeetings($meetingRepo, $meetingIds);
+        $groupCache = $this->batchGetGroups($groupRepo, $groupIds);
+        $positionCache = $this->batchGetPositions($positionRepo, $positionIds);
+        $meetingCache = $this->batchGetMeetings($meetingRepo, $meetingIds);
 
-        return self::transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache);
+        return $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache);
     }
 
     /**
@@ -2962,7 +2977,7 @@ class RestController
      * @param array<int, Meeting> $meetingCache
      * @return array
      */
-    private static function transformMemberWithCache(
+    private function transformMemberWithCache(
         Member $member,
         array $groupCache,
         array $positionCache,
@@ -3025,7 +3040,7 @@ class RestController
             'intergroup_position_name' => $intergroupPositionName,
             'intergroup_position_rotation' => $member->getIntergroupPositionRotation(),
             'link' => $link,
-            'updated' => self::formatUpdatedTimestamp($member->getUpdated()),
+            'updated' => $this->formatUpdatedTimestamp($member->getUpdated()),
         ];
     }
 
@@ -3036,7 +3051,7 @@ class RestController
      * @param array<int> $memberIds
      * @return array<int, Member> Map of member ID to member object
      */
-    private static function batchGetMembers(MemberRepository $memberRepo, array $memberIds): array
+    private function batchGetMembers(MemberRepository $memberRepo, array $memberIds): array
     {
         if (empty($memberIds)) {
             return [];
@@ -3062,7 +3077,7 @@ class RestController
      * @param array<int> $groupIds
      * @return array<int, Group> Map of group ID to group object
      */
-    private static function batchGetGroups(GroupRepository $groupRepo, array $groupIds): array
+    private function batchGetGroups(GroupRepository $groupRepo, array $groupIds): array
     {
         if (empty($groupIds)) {
             return [];
@@ -3088,7 +3103,7 @@ class RestController
      * @param array<int> $positionIds
      * @return array<int, Position> Map of position ID to position object
      */
-    private static function batchGetPositions(PositionRepository $positionRepo, array $positionIds): array
+    private function batchGetPositions(PositionRepository $positionRepo, array $positionIds): array
     {
         if (empty($positionIds)) {
             return [];
@@ -3114,7 +3129,7 @@ class RestController
      * @param array<int> $meetingIds
      * @return array<int, Meeting> Map of meeting ID to meeting object
      */
-    private static function batchGetMeetings(MeetingRepository $meetingRepo, array $meetingIds): array
+    private function batchGetMeetings(MeetingRepository $meetingRepo, array $meetingIds): array
     {
         if (empty($meetingIds)) {
             return [];
@@ -3140,7 +3155,7 @@ class RestController
      * @param array<int, Member> $memberCache
      * @return array
      */
-    private static function transformIntergroupMeetingWithCache(IntergroupMeeting $intergroupMeeting, array $memberCache): array
+    private function transformIntergroupMeetingWithCache(IntergroupMeeting $intergroupMeeting, array $memberCache): array
     {
         $groupAttendeeIds = $intergroupMeeting->getGroupAttendees();
         $groupAttendees = [];
@@ -3176,7 +3191,7 @@ class RestController
             'officers_attending' => $officersAttending,
             'attending_groups' => $groupAttendeeIds,
             'attending_officers' => $officersAttendingIds,
-            'updated' => self::formatUpdatedTimestamp($intergroupMeeting->getUpdated()),
+            'updated' => $this->formatUpdatedTimestamp($intergroupMeeting->getUpdated()),
         ];
     }
 
@@ -3187,7 +3202,7 @@ class RestController
      * @return array
      * @deprecated Use transformIntergroupMeetingWithCache for better performance
      */
-    private static function transformIntergroupMeeting(IntergroupMeeting $intergroupMeeting): array
+    private function transformIntergroupMeeting(IntergroupMeeting $intergroupMeeting): array
     {
         $container = Plugin::getContainer();
         $memberRepo = $container->get(MemberRepository::class);
@@ -3196,9 +3211,9 @@ class RestController
         $officersAttendingIds = $intergroupMeeting->getOfficersAttending();
 
         $allMemberIds = array_unique(array_merge($groupAttendeeIds, $officersAttendingIds));
-        $memberCache = self::batchGetMembers($memberRepo, $allMemberIds);
+        $memberCache = $this->batchGetMembers($memberRepo, $allMemberIds);
 
-        return self::transformIntergroupMeetingWithCache($intergroupMeeting, $memberCache);
+        return $this->transformIntergroupMeetingWithCache($intergroupMeeting, $memberCache);
     }
 
     /**
@@ -3210,7 +3225,7 @@ class RestController
      * @param string $value The submitted email value
      * @return bool True if the value appears to be obscured
      */
-    private static function isObscuredEmail(string $value): bool
+    private function isObscuredEmail(string $value): bool
     {
         if (empty($value)) {
             return false;
@@ -3229,7 +3244,7 @@ class RestController
      * @param string $value The submitted phone value
      * @return bool True if the value appears to be obscured
      */
-    private static function isObscuredPhone(string $value): bool
+    private function isObscuredPhone(string $value): bool
     {
         if (empty($value)) {
             return false;
@@ -3250,7 +3265,7 @@ class RestController
      * @param string $datetime The datetime string to format
      * @return string Formatted as YYYY-MM-DDTHH:mm:ss.fffZ or empty string
      */
-    private static function formatUpdatedTimestamp(string $datetime): string
+    private function formatUpdatedTimestamp(string $datetime): string
     {
         if (empty($datetime)) {
             return '';

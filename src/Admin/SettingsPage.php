@@ -18,24 +18,33 @@ class SettingsPage
     private const MENU_SLUG = 'integrity-settings';
     private const NONCE_ACTION = 'integrity_admin_action';
 
+    private ApiKeyManager $apiKeyManager;
+    private AuditLogger $auditLogger;
+
+    public function __construct(ApiKeyManager $apiKeyManager, AuditLogger $auditLogger)
+    {
+        $this->apiKeyManager = $apiKeyManager;
+        $this->auditLogger = $auditLogger;
+    }
+
     /**
      * Initialize admin hooks
      */
-    public static function init(): void
+    public function init(): void
     {
-        add_action('admin_menu', [self::class, 'addMenuPage']);
-        add_action('admin_init', [self::class, 'registerSettings']);
-        add_action('admin_post_integrity_create_key', [self::class, 'handleCreateKey']);
-        add_action('admin_post_integrity_revoke_key', [self::class, 'handleRevokeKey']);
-        add_action('admin_post_integrity_delete_key', [self::class, 'handleDeleteKey']);
-        add_action('admin_post_integrity_clear_logs', [self::class, 'handleClearLogs']);
-        add_action('admin_enqueue_scripts', [self::class, 'enqueueAssets']);
+        add_action('admin_menu', [$this, 'addMenuPage']);
+        add_action('admin_init', [$this, 'registerSettings']);
+        add_action('admin_post_integrity_create_key', [$this, 'handleCreateKey']);
+        add_action('admin_post_integrity_revoke_key', [$this, 'handleRevokeKey']);
+        add_action('admin_post_integrity_delete_key', [$this, 'handleDeleteKey']);
+        add_action('admin_post_integrity_clear_logs', [$this, 'handleClearLogs']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
     }
 
     /**
      * Enqueue admin assets
      */
-    public static function enqueueAssets(string $hook): void
+    public function enqueueAssets(string $hook): void
     {
         if (strpos($hook, self::MENU_SLUG) === false) {
             return;
@@ -52,14 +61,14 @@ class SettingsPage
     /**
      * Add menu page
      */
-    public static function addMenuPage(): void
+    public function addMenuPage(): void
     {
         add_menu_page(
             __('Integrity API', 'integrity'),
             __('Integrity API', 'integrity'),
             self::CAPABILITY,
             self::MENU_SLUG,
-            [self::class, 'renderPage'],
+            [$this, 'renderPage'],
             'dashicons-rest-api',
             80
         );
@@ -70,7 +79,7 @@ class SettingsPage
             __('API Keys', 'integrity'),
             self::CAPABILITY,
             self::MENU_SLUG,
-            [self::class, 'renderPage']
+            [$this, 'renderPage']
         );
 
         add_submenu_page(
@@ -79,7 +88,7 @@ class SettingsPage
             __('Audit Log', 'integrity'),
             self::CAPABILITY,
             self::MENU_SLUG . '-audit',
-            [self::class, 'renderAuditPage']
+            [$this, 'renderAuditPage']
         );
 
         add_submenu_page(
@@ -88,14 +97,14 @@ class SettingsPage
             __('Settings', 'integrity'),
             self::CAPABILITY,
             self::MENU_SLUG . '-config',
-            [self::class, 'renderSettingsPage']
+            [$this, 'renderSettingsPage']
         );
     }
 
     /**
      * Register settings
      */
-    public static function registerSettings(): void
+    public function registerSettings(): void
     {
         register_setting('integrity_settings', 'integrity_enable_audit_log');
         register_setting('integrity_settings', 'integrity_audit_log_retention_days');
@@ -106,13 +115,13 @@ class SettingsPage
     /**
      * Render main API keys page
      */
-    public static function renderPage(): void
+    public function renderPage(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(__('You do not have permission to access this page.', 'integrity'));
         }
 
-        $keys = ApiKeyManager::getAllKeys();
+        $keys = $this->apiKeyManager->getAllKeys();
         $newKey = get_transient('integrity_new_key_' . get_current_user_id());
 
         if ($newKey) {
@@ -125,7 +134,7 @@ class SettingsPage
     /**
      * Render audit log page
      */
-    public static function renderAuditPage(): void
+    public function renderAuditPage(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(__('You do not have permission to access this page.', 'integrity'));
@@ -142,13 +151,13 @@ class SettingsPage
             'date_to' => isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : null,
         ];
 
-        $result = AuditLogger::getLogs(array_merge($filters, [
+        $result = $this->auditLogger->getLogs(array_merge($filters, [
             'page' => $page,
             'per_page' => $perPage,
         ]));
 
-        $stats = AuditLogger::getStats(30);
-        $keys = ApiKeyManager::getAllKeys();
+        $stats = $this->auditLogger->getStats(30);
+        $keys = $this->apiKeyManager->getAllKeys();
 
         include INTEGRITY_PLUGIN_DIR . 'templates/admin-audit.php';
     }
@@ -156,7 +165,7 @@ class SettingsPage
     /**
      * Render settings page
      */
-    public static function renderSettingsPage(): void
+    public function renderSettingsPage(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(__('You do not have permission to access this page.', 'integrity'));
@@ -168,7 +177,7 @@ class SettingsPage
     /**
      * Handle API key creation
      */
-    public static function handleCreateKey(): void
+    public function handleCreateKey(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(__('You do not have permission to perform this action.', 'integrity'));
@@ -214,11 +223,9 @@ class SettingsPage
             $permissions = ['groups:read', 'meetings:read'];
         }
 
-        // Parse optional settings
         $rateLimit = !empty($_POST['rate_limit']) ? (int) $_POST['rate_limit'] : null;
         $expiresAt = !empty($_POST['expires_at']) ? sanitize_text_field($_POST['expires_at']) . ' 23:59:59' : null;
 
-        // Parse IP whitelist
         $ipWhitelist = null;
         if (!empty($_POST['ip_whitelist'])) {
             $ips = array_map('trim', explode("\n", sanitize_textarea_field($_POST['ip_whitelist'])));
@@ -228,10 +235,9 @@ class SettingsPage
             }
         }
 
-        $result = ApiKeyManager::createKey($name, $permissions, $rateLimit, $expiresAt, $ipWhitelist);
+        $result = $this->apiKeyManager->createKey($name, $permissions, $rateLimit, $expiresAt, $ipWhitelist);
 
         if ($result['success']) {
-            // Store the new key temporarily so we can show it once
             set_transient('integrity_new_key_' . get_current_user_id(), $result['key'], 60);
             wp_redirect(add_query_arg('created', '1', admin_url('admin.php?page=' . self::MENU_SLUG)));
         } else {
@@ -243,7 +249,7 @@ class SettingsPage
     /**
      * Handle API key revocation
      */
-    public static function handleRevokeKey(): void
+    public function handleRevokeKey(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(__('You do not have permission to perform this action.', 'integrity'));
@@ -253,7 +259,7 @@ class SettingsPage
 
         $keyId = isset($_POST['key_id']) ? (int) $_POST['key_id'] : 0;
 
-        if ($keyId > 0 && ApiKeyManager::revokeKey($keyId)) {
+        if ($keyId > 0 && $this->apiKeyManager->revokeKey($keyId)) {
             wp_redirect(add_query_arg('revoked', '1', admin_url('admin.php?page=' . self::MENU_SLUG)));
         } else {
             wp_redirect(add_query_arg('error', 'revoke_failed', admin_url('admin.php?page=' . self::MENU_SLUG)));
@@ -264,7 +270,7 @@ class SettingsPage
     /**
      * Handle API key deletion
      */
-    public static function handleDeleteKey(): void
+    public function handleDeleteKey(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(__('You do not have permission to perform this action.', 'integrity'));
@@ -274,7 +280,7 @@ class SettingsPage
 
         $keyId = isset($_POST['key_id']) ? (int) $_POST['key_id'] : 0;
 
-        if ($keyId > 0 && ApiKeyManager::deleteKey($keyId)) {
+        if ($keyId > 0 && $this->apiKeyManager->deleteKey($keyId)) {
             wp_redirect(add_query_arg('deleted', '1', admin_url('admin.php?page=' . self::MENU_SLUG)));
         } else {
             wp_redirect(add_query_arg('error', 'delete_failed', admin_url('admin.php?page=' . self::MENU_SLUG)));
@@ -285,7 +291,7 @@ class SettingsPage
     /**
      * Handle clearing audit logs
      */
-    public static function handleClearLogs(): void
+    public function handleClearLogs(): void
     {
         if (!current_user_can(self::CAPABILITY)) {
             wp_die(__('You do not have permission to perform this action.', 'integrity'));
@@ -301,7 +307,7 @@ class SettingsPage
             ? (int) $_POST['api_key_id']
             : null;
 
-        $deleted = AuditLogger::clearLogs($olderThanDays, $apiKeyId);
+        $deleted = $this->auditLogger->clearLogs($olderThanDays, $apiKeyId);
 
         wp_redirect(add_query_arg(
             ['logs_cleared' => $deleted],
