@@ -2274,8 +2274,8 @@ class RestController
 
             $meetingGroup = $group->getTitle();
 
-            // Check if group is already registered
-            if ($intergroupMeeting->hasGroupAttendee($groupId)) {
+            // Check if group is already registered (DB-level check via unique index)
+            if ($attendanceRepo->existsForMeetingAndGroup($meetingId, $groupId)) {
                 $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
@@ -2294,10 +2294,68 @@ class RestController
                 ], 409);
             }
 
-            // Add the group as an attendee
+            // Create the attendance record in the custom table first.
+            // The UNIQUE constraint on (intergroup_meeting_id, group_id) is the
+            // authoritative guard against duplicates — if a concurrent request
+            // slips past the check above, the INSERT will fail here instead of
+            // creating a duplicate row.
+            $attendance = $attendanceFactory->createNew(
+                $meetingId,
+                $groupId,
+                $memberId,
+                $meetingGroup,
+                $gsrName,
+                $gsrProxy,
+                $gsrProxyName
+            );
+
+            $attendanceSaved = $attendanceRepo->save($attendance);
+
+            if (!$attendanceSaved) {
+                // Distinguish a genuine duplicate (concurrent race) from other failures
+                global $wpdb;
+                if ($wpdb->last_error && str_contains($wpdb->last_error, 'Duplicate entry')) {
+                    $this->auditLogger->log(
+                        $keyData['api_key_id'],
+                        $request->get_route(),
+                        $request->get_method(),
+                        ['id' => $meetingId, 'group_id' => $groupId],
+                        409,
+                        microtime(true) - $startTime
+                    );
+
+                    return new WP_REST_Response([
+                        'success' => false,
+                        'error' => [
+                            'code' => 'already_registered',
+                            'message' => 'Group is already registered for this intergroup meeting',
+                        ],
+                    ], 409);
+                }
+
+                $this->auditLogger->log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'group_id' => $groupId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'attendance_save_failed',
+                        'message' => 'Failed to save attendance record',
+                    ],
+                ], 500);
+            }
+
+            // Add the group to the ACF relationship field (post meta).
+            // This is done after the attendance row succeeds so the two
+            // stores don't diverge on a duplicate-key rejection above.
             $intergroupMeeting->addGroupAttendee($groupId);
 
-            // Save the updated intergroup meeting
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
 
             if (!$saved) {
@@ -2315,38 +2373,6 @@ class RestController
                     'error' => [
                         'code' => 'save_failed',
                         'message' => 'Failed to register attendee',
-                    ],
-                ], 500);
-            }
-
-            // Create the attendance record in the custom table
-            $attendance = $attendanceFactory->createNew(
-                $meetingId,
-                $groupId,
-                $memberId,
-                $meetingGroup,
-                $gsrName,
-                $gsrProxy,
-                $gsrProxyName
-            );
-
-            $attendanceSaved = $attendanceRepo->save($attendance);
-
-            if (!$attendanceSaved) {
-                $this->auditLogger->log(
-                    $keyData['api_key_id'],
-                    $request->get_route(),
-                    $request->get_method(),
-                    ['id' => $meetingId, 'group_id' => $groupId],
-                    500,
-                    microtime(true) - $startTime
-                );
-
-                return new WP_REST_Response([
-                    'success' => false,
-                    'error' => [
-                        'code' => 'attendance_save_failed',
-                        'message' => 'Failed to save attendance record',
                     ],
                 ], 500);
             }
@@ -2587,8 +2613,8 @@ class RestController
                 ], 404);
             }
 
-            // Check if officer is already registered
-            if ($intergroupMeeting->hasOfficerAttendee($officerId)) {
+            // Check if officer is already registered (DB-level check via unique index)
+            if ($attendanceRepo->existsForMeetingAndOfficer($meetingId, $officerId)) {
                 $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
@@ -2607,10 +2633,65 @@ class RestController
                 ], 409);
             }
 
-            // Add the officer as an attendee
+            // Create the attendance record in the custom table first.
+            // The UNIQUE constraint on (intergroup_meeting_id, officer_id) is the
+            // authoritative guard against duplicates — if a concurrent request
+            // slips past the check above, the INSERT will fail here instead of
+            // creating a duplicate row.
+            $attendance = $attendanceFactory->createNew(
+                $meetingId,
+                $officerId,
+                $positionName,
+                $officerName
+            );
+
+            $attendanceSaved = $attendanceRepo->save($attendance);
+
+            if (!$attendanceSaved) {
+                // Distinguish a genuine duplicate (concurrent race) from other failures
+                global $wpdb;
+                if ($wpdb->last_error && str_contains($wpdb->last_error, 'Duplicate entry')) {
+                    $this->auditLogger->log(
+                        $keyData['api_key_id'],
+                        $request->get_route(),
+                        $request->get_method(),
+                        ['id' => $meetingId, 'officer_id' => $officerId],
+                        409,
+                        microtime(true) - $startTime
+                    );
+
+                    return new WP_REST_Response([
+                        'success' => false,
+                        'error' => [
+                            'code' => 'already_registered',
+                            'message' => 'Officer is already registered for this intergroup meeting',
+                        ],
+                    ], 409);
+                }
+
+                $this->auditLogger->log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    500,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'attendance_save_failed',
+                        'message' => 'Failed to save officer attendance record',
+                    ],
+                ], 500);
+            }
+
+            // Add the officer to the ACF relationship field (post meta).
+            // This is done after the attendance row succeeds so the two
+            // stores don't diverge on a duplicate-key rejection above.
             $intergroupMeeting->addOfficerAttendee($officerId);
 
-            // Save the updated intergroup meeting
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
 
             if (!$saved) {
@@ -2628,35 +2709,6 @@ class RestController
                     'error' => [
                         'code' => 'save_failed',
                         'message' => 'Failed to register officer',
-                    ],
-                ], 500);
-            }
-
-            // Create the attendance record in the custom table
-            $attendance = $attendanceFactory->createNew(
-                $meetingId,
-                $officerId,
-                $positionName,
-                $officerName
-            );
-
-            $attendanceSaved = $attendanceRepo->save($attendance);
-
-            if (!$attendanceSaved) {
-                $this->auditLogger->log(
-                    $keyData['api_key_id'],
-                    $request->get_route(),
-                    $request->get_method(),
-                    ['id' => $meetingId, 'officer_id' => $officerId],
-                    500,
-                    microtime(true) - $startTime
-                );
-
-                return new WP_REST_Response([
-                    'success' => false,
-                    'error' => [
-                        'code' => 'attendance_save_failed',
-                        'message' => 'Failed to save officer attendance record',
                     ],
                 ], 500);
             }
