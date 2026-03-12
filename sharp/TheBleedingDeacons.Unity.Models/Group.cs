@@ -14,8 +14,6 @@ namespace TheBleedingDeacons.Unity.Models
         public string Website { get; init; } = string.Empty;
         public string Link { get; init; } = string.Empty;
         public string Notes { get; init; } = string.Empty;
-        public string GroupEmail { get; init; } = string.Empty;
-        public bool GroupEmailActive { get; init; }
         public int? DistrictId { get; init; }
         public string? LastContact { get; init; }
 
