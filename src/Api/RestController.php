@@ -2302,7 +2302,6 @@ class RestController
                 'error' => [
                     'code' => 'internal_error',
                     'message' => 'An internal error occurred',
-                    'debug' => WP_DEBUG ? $e->getMessage() : null,
                 ],
             ], 500);
         }
@@ -2427,7 +2426,6 @@ class RestController
                 'error' => [
                     'code' => 'internal_error',
                     'message' => 'An internal error occurred',
-                    'debug' => WP_DEBUG ? $e->getMessage() : null,
                 ],
             ], 500);
         }
@@ -2611,7 +2609,6 @@ class RestController
                 'error' => [
                     'code' => 'internal_error',
                     'message' => 'An internal error occurred',
-                    'debug' => WP_DEBUG ? $e->getMessage() : null,
                 ],
             ], 500);
         }
@@ -2740,7 +2737,6 @@ class RestController
                 'error' => [
                     'code' => 'internal_error',
                     'message' => 'An internal error occurred',
-                    'debug' => WP_DEBUG ? $e->getMessage() : null,
                 ],
             ], 500);
         }
