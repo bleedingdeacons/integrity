@@ -2,7 +2,6 @@
     "name": "bleeding-deacons/integrity",
     "description": "Secure REST API bridge for Unity WordPress plugin - provides authenticated access to Groups and Meetings for external applications",
     "type": "wordpress-plugin",
-    "version": "1.0.0",
     "license": "GPL-2.0-or-later",
     "authors": [
         {
