@@ -309,11 +309,13 @@ class AuditLogger
         }
 
         if (empty($where)) {
-            $wpdb->query("TRUNCATE TABLE {$tableName}");
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names cannot be parameterised with prepare(); esc_sql used as defence-in-depth
+            $wpdb->query("TRUNCATE TABLE `" . esc_sql($tableName) . "`");
             return $wpdb->rows_affected ?? 0;
         }
 
-        $sql = "DELETE FROM {$tableName} WHERE " . implode(' AND ', $where);
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names cannot be parameterised with prepare(); esc_sql used as defence-in-depth
+        $sql = "DELETE FROM `" . esc_sql($tableName) . "` WHERE " . implode(' AND ', $where);
 
         if (!empty($values)) {
             $sql = $wpdb->prepare($sql, ...$values);

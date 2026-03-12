@@ -193,13 +193,15 @@ add_action('integrity/cleanup_cron', function (): void {
 
     // Clean old rate limit records
     $rateLimitTable = $wpdb->prefix . 'integrity_rate_limits';
-    $wpdb->query("DELETE FROM $rateLimitTable WHERE window_start < DATE_SUB(NOW(), INTERVAL 1 DAY)");
+    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names cannot be parameterised with prepare(); esc_sql used as defence-in-depth
+    $wpdb->query("DELETE FROM `" . esc_sql($rateLimitTable) . "` WHERE window_start < DATE_SUB(NOW(), INTERVAL 1 DAY)");
 
     // Clean old audit logs based on retention setting
     $retentionDays = (int) get_option('integrity_audit_log_retention_days', 90);
     $auditTable = $wpdb->prefix . 'integrity_audit_log';
+    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names cannot be parameterised with prepare(); esc_sql used as defence-in-depth
     $wpdb->query($wpdb->prepare(
-        "DELETE FROM $auditTable WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY)",
+        "DELETE FROM `" . esc_sql($auditTable) . "` WHERE created_at < DATE_SUB(NOW(), INTERVAL %d DAY)",
         $retentionDays
     ));
 });
