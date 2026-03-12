@@ -1559,9 +1559,19 @@ class RestController
                 microtime(true) - $startTime
             );
 
+            // Resolve related entities in one pass (avoids N+1 from the deprecated transformMember)
+            $groupRepo = $container->get(GroupRepository::class);
+            $positionRepo = $container->get(PositionRepository::class);
+            $meetingRepo = $container->get(MeetingRepository::class);
+
+            $groupCache = $this->batchGetGroups($groupRepo, $member->getHomeGroup() > 0 ? [$member->getHomeGroup()] : []);
+            $positionCache = $this->batchGetPositions($positionRepo, $member->getIntergroupPosition() > 0 ? [$member->getIntergroupPosition()] : []);
+            $meetingPo = $member->getMeetingPO();
+            $meetingCache = $this->batchGetMeetings($meetingRepo, is_numeric($meetingPo) && (int) $meetingPo > 0 ? [(int) $meetingPo] : []);
+
             return new WP_REST_Response([
                 'success' => true,
-                'data' => $this->transformMember($member),
+                'data' => $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache),
             ], 200);
 
         } catch (\Exception $e) {
@@ -1758,9 +1768,19 @@ class RestController
                 microtime(true) - $startTime
             );
 
+            $returnMember = $savedMember ?? $updatedMember;
+            $groupRepo = $container->get(GroupRepository::class);
+            $positionRepo = $container->get(PositionRepository::class);
+            $meetingRepo = $container->get(MeetingRepository::class);
+
+            $groupCache = $this->batchGetGroups($groupRepo, $returnMember->getHomeGroup() > 0 ? [$returnMember->getHomeGroup()] : []);
+            $positionCache = $this->batchGetPositions($positionRepo, $returnMember->getIntergroupPosition() > 0 ? [$returnMember->getIntergroupPosition()] : []);
+            $meetingPo = $returnMember->getMeetingPO();
+            $meetingCache = $this->batchGetMeetings($meetingRepo, is_numeric($meetingPo) && (int) $meetingPo > 0 ? [(int) $meetingPo] : []);
+
             return new WP_REST_Response([
                 'success' => true,
-                'data' => $this->transformMember($savedMember ?? $updatedMember),
+                'data' => $this->transformMemberWithCache($returnMember, $groupCache, $positionCache, $meetingCache),
             ], 200);
 
         } catch (\Exception $e) {
@@ -1938,9 +1958,19 @@ class RestController
                 microtime(true) - $startTime
             );
 
+            $returnMember = $savedMember ?? $newMember;
+            $groupRepo = $container->get(GroupRepository::class);
+            $positionRepo = $container->get(PositionRepository::class);
+            $meetingRepo = $container->get(MeetingRepository::class);
+
+            $groupCache = $this->batchGetGroups($groupRepo, $returnMember->getHomeGroup() > 0 ? [$returnMember->getHomeGroup()] : []);
+            $positionCache = $this->batchGetPositions($positionRepo, $returnMember->getIntergroupPosition() > 0 ? [$returnMember->getIntergroupPosition()] : []);
+            $meetingPo = $returnMember->getMeetingPO();
+            $meetingCache = $this->batchGetMeetings($meetingRepo, is_numeric($meetingPo) && (int) $meetingPo > 0 ? [(int) $meetingPo] : []);
+
             return new WP_REST_Response([
                 'success' => true,
-                'data' => $this->transformMember($savedMember ?? $newMember),
+                'data' => $this->transformMemberWithCache($returnMember, $groupCache, $positionCache, $meetingCache),
             ], 201);
 
         } catch (\Exception $e) {
@@ -2114,9 +2144,17 @@ class RestController
                 microtime(true) - $startTime
             );
 
+            // Batch-fetch members for the attendee lists (avoids N+1 from deprecated transformIntergroupMeeting)
+            $memberRepo = $container->get(MemberRepository::class);
+            $allMemberIds = array_unique(array_merge(
+                $intergroupMeeting->getGroupAttendees(),
+                $intergroupMeeting->getOfficersAttending()
+            ));
+            $memberCache = $this->batchGetMembers($memberRepo, array_filter($allMemberIds));
+
             return new WP_REST_Response([
                 'success' => true,
-                'data' => $this->transformIntergroupMeeting($intergroupMeeting),
+                'data' => $this->transformIntergroupMeetingWithCache($intergroupMeeting, $memberCache),
             ], 200);
 
         } catch (\Exception $e) {
@@ -2940,46 +2978,6 @@ class RestController
     }
 
     /**
-     * Transform a Member object to API response format
-     *
-     * @param Member $member
-     * @return array
-     * @deprecated Use transformMemberWithCache for better performance
-     */
-    private function transformMember(Member $member): array
-    {
-        $container = Plugin::getContainer();
-        $groupRepo = $container->get(GroupRepository::class);
-        $positionRepo = $container->get(PositionRepository::class);
-        $meetingRepo = $container->get(MeetingRepository::class);
-
-        // Collect IDs
-        $groupIds = [];
-        $positionIds = [];
-        $meetingIds = [];
-
-        $homeGroup = $member->getHomeGroup();
-        if ($homeGroup > 0) {
-            $groupIds[] = $homeGroup;
-        }
-        $intergroupPosition = $member->getIntergroupPosition();
-        if ($intergroupPosition > 0) {
-            $positionIds[] = $intergroupPosition;
-        }
-        $meetingPo = $member->getMeetingPO();
-        if (is_numeric($meetingPo) && (int) $meetingPo > 0) {
-            $meetingIds[] = (int) $meetingPo;
-        }
-
-        // Batch fetch
-        $groupCache = $this->batchGetGroups($groupRepo, $groupIds);
-        $positionCache = $this->batchGetPositions($positionRepo, $positionIds);
-        $meetingCache = $this->batchGetMeetings($meetingRepo, $meetingIds);
-
-        return $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache);
-    }
-
-    /**
      * Transform a Member object to API response format using cached entities
      *
      * @param Member $member
@@ -3204,27 +3202,6 @@ class RestController
             'attending_officers' => $officersAttendingIds,
             'updated' => $this->formatUpdatedTimestamp($intergroupMeeting->getUpdated()),
         ];
-    }
-
-    /**
-     * Transform an IntergroupMeeting object to API response format
-     *
-     * @param IntergroupMeeting $intergroupMeeting
-     * @return array
-     * @deprecated Use transformIntergroupMeetingWithCache for better performance
-     */
-    private function transformIntergroupMeeting(IntergroupMeeting $intergroupMeeting): array
-    {
-        $container = Plugin::getContainer();
-        $memberRepo = $container->get(MemberRepository::class);
-
-        $groupAttendeeIds = $intergroupMeeting->getGroupAttendees();
-        $officersAttendingIds = $intergroupMeeting->getOfficersAttending();
-
-        $allMemberIds = array_unique(array_merge($groupAttendeeIds, $officersAttendingIds));
-        $memberCache = $this->batchGetMembers($memberRepo, $allMemberIds);
-
-        return $this->transformIntergroupMeetingWithCache($intergroupMeeting, $memberCache);
     }
 
     /**
