@@ -927,10 +927,13 @@ class RestController
             $container = Plugin::getContainer();
             $groupRepo = $container->get(GroupRepository::class);
 
+            $perPage = (int) $request->get_param('per_page');
+            $page = (int) $request->get_param('page');
+
             // Build query args
             $args = [
-                'posts_per_page' => $request->get_param('per_page'),
-                'paged' => $request->get_param('page'),
+                'posts_per_page' => $perPage,
+                'paged' => $page,
             ];
 
             $search = $request->get_param('search');
@@ -938,7 +941,7 @@ class RestController
                 $args['s'] = $search;
             }
 
-            // Get groups
+            // Get groups for the current page
             $groups = $groupRepo->findAll($args);
 
             // Filter by district if specified
@@ -948,6 +951,13 @@ class RestController
                     return $group->getDistrictId() === $districtId;
                 });
             }
+
+            // Get the true total across all pages (lightweight ID-only query)
+            $countArgs = array_diff_key($args, ['posts_per_page' => 0, 'paged' => 0]);
+            $countArgs['posts_per_page'] = -1;
+            $countArgs['fields'] = 'ids';
+            $total = count($groupRepo->findAll($countArgs));
+            $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 1;
 
             // Parse expand parameter
             $expandParam = $request->get_param('expand');
@@ -963,7 +973,7 @@ class RestController
                 $keyData['api_key_id'],
                 $request->get_route(),
                 $request->get_method(),
-                ['per_page' => $args['posts_per_page'], 'page' => $args['paged']],
+                ['per_page' => $perPage, 'page' => $page],
                 200,
                 microtime(true) - $startTime
             );
@@ -972,9 +982,10 @@ class RestController
                 'success' => true,
                 'data' => array_values($data),
                 'meta' => [
-                    'total' => count($data),
-                    'page' => $request->get_param('page'),
-                    'per_page' => $request->get_param('per_page'),
+                    'total' => $total,
+                    'page' => $page,
+                    'per_page' => $perPage,
+                    'total_pages' => $totalPages,
                 ],
             ], 200);
 
