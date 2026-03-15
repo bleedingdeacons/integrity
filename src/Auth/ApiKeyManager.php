@@ -218,8 +218,22 @@ class ApiKeyManager
             $ipHex = bin2hex($ipBin);
             $subnetHex = bin2hex($subnetBin);
 
-            $fullBytes = (int)($maskBits / 4);
-            return substr($ipHex, 0, $fullBytes) === substr($subnetHex, 0, $fullBytes);
+            $fullNibbles = intdiv($maskBits, 4);
+            $remainderBits = $maskBits % 4;
+
+            if (substr($ipHex, 0, $fullNibbles) !== substr($subnetHex, 0, $fullNibbles)) {
+                return false;
+            }
+
+            if ($remainderBits > 0) {
+                $ipNibble = intval($ipHex[$fullNibbles], 16);
+                $subnetNibble = intval($subnetHex[$fullNibbles], 16);
+                $nibbleMask = (0xF << (4 - $remainderBits)) & 0xF;
+
+                return ($ipNibble & $nibbleMask) === ($subnetNibble & $nibbleMask);
+            }
+
+            return true;
         }
 
         return false;
