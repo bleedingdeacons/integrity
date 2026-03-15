@@ -42,7 +42,7 @@ class ApiKeyManager
         return password_hash($key, PASSWORD_ARGON2ID, [
             'memory_cost' => 65536,
             'time_cost' => 4,
-            'threads' => 3,
+            'threads' => 1,
         ]);
     }
 
