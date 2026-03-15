@@ -3325,7 +3325,7 @@ class RestController
     /**
      * Format a WordPress datetime string to ISO 8601 UTC with milliseconds
      *
-     * Converts values like "2025-03-09 14:30:00" (WordPress post_modified)
+     * Converts values like "2025-03-09 14:30:00" (WordPress post_modified_gmt)
      * to "2025-03-09T14:30:00.000Z".
      *
      * Returns an empty string when the input is empty or unparseable.

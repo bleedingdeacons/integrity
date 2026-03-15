@@ -189,7 +189,7 @@ if (!defined('ABSPATH')) {
                         <td>
                             <?php echo esc_html(number_format($key['request_count'])); ?> requests
                             <?php if ($key['last_used']): ?>
-                                <br><small><?php echo esc_html__('Last:', 'integrity'); ?> <?php echo esc_html($key['last_used']); ?></small>
+                                <br><small><?php echo esc_html__('Last:', 'integrity'); ?> <?php echo esc_html(wp_date('j M Y, H:i', strtotime($key['last_used']))); ?></small>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -200,12 +200,12 @@ if (!defined('ABSPATH')) {
                             <?php else: ?>
                                 <span class="integrity-status active"><?php echo esc_html__('Active', 'integrity'); ?></span>
                                 <?php if ($key['expires_at']): ?>
-                                    <br><small><?php echo esc_html__('Expires:', 'integrity'); ?> <?php echo esc_html($key['expires_at']); ?></small>
+                                    <br><small><?php echo esc_html__('Expires:', 'integrity'); ?> <?php echo esc_html(wp_date('j M Y', strtotime($key['expires_at']))); ?></small>
                                 <?php endif; ?>
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php echo esc_html($key['created_at']); ?>
+                            <?php echo esc_html(wp_date('j M Y, H:i', strtotime($key['created_at']))); ?>
                             <br><small><?php
                                 $user = get_user_by('id', $key['created_by']);
                                 echo esc_html__('by', 'integrity') . ' ' . ($user ? esc_html($user->display_name) : esc_html__('Unknown', 'integrity'));

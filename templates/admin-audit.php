@@ -164,7 +164,7 @@ $totalPages = (int) ceil($result['total'] / $perPage);
                 <tbody>
                 <?php foreach ($result['logs'] as $log): ?>
                     <tr>
-                        <td><?php echo esc_html($log['created_at']); ?></td>
+                        <td><?php echo esc_html(wp_date('j M Y, H:i', strtotime($log['created_at']))); ?></td>
                         <td>
                             <?php
                             if ($log['api_key_id']) {
