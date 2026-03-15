@@ -1178,8 +1178,31 @@ class RestController
                 $meetings = $meetingRepo->findAll($args);
             }
 
-            // Get total count for pagination
-            $total = count($meetings);
+            // Get the true total across all pages.
+            // Build count args: same filters, but remove pagination keys so we
+            // count every matching record (count() sets posts_per_page=-1 and
+            // fields=ids internally).
+            $countArgs = array_diff_key($args, ['posts_per_page' => 0, 'paged' => 0]);
+
+            if ($day !== null && $online !== null) {
+                // day + online: both filters are in meta_query, so count() is accurate
+                $total = $meetingRepo->count($countArgs);
+            } elseif ($day !== null) {
+                // day only: filter is added by findByDay via meta_query, count() is accurate
+                $total = $meetingRepo->count($countArgs);
+            } elseif ($online !== null) {
+                // online/in-person: these use PHP-level array_filter inside the
+                // repository, so we must replicate that approach for the count.
+                $onlineFilter = in_array($online, ['true', '1', true], true);
+                if ($onlineFilter) {
+                    $total = count($meetingRepo->findOnline($countArgs));
+                } else {
+                    $total = count($meetingRepo->findInPerson($countArgs));
+                }
+            } else {
+                // No special filters: count() is accurate
+                $total = $meetingRepo->count($countArgs);
+            }
 
             // Transform to API response format
             $data = array_map([$this, 'transformMeeting'], $meetings);
