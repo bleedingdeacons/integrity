@@ -455,10 +455,15 @@ public sealed class UnityRestSharp : IDisposable
 
     private async Task<ApiResponse<T>> GetAsync<T>(string url, CancellationToken cancellationToken) where T : class
     {
+        int statusCode = 0;
+        string? contentSnippet = null;
+
         try
         {
             using var response = await _httpClient.GetAsync(url, cancellationToken);
+            statusCode = (int)response.StatusCode;
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            contentSnippet = content.Length > 500 ? content[..500] : content;
 
             // Parse rate limit headers
             var rateLimit = new RateLimitInfo
@@ -470,6 +475,23 @@ public sealed class UnityRestSharp : IDisposable
 
             if (!response.IsSuccessStatusCode)
             {
+                // If the response doesn't look like JSON, return the body snippet directly
+                var trimmed = content.TrimStart();
+                if (trimmed.Length > 0 && trimmed[0] != '{' && trimmed[0] != '[')
+                {
+                    return new ApiResponse<T>
+                    {
+                        Success = false,
+                        Error = new ApiError
+                        {
+                            Code = "unexpected_response",
+                            Message = $"HTTP {statusCode} from GET {url} — expected JSON but response starts with: {contentSnippet}"
+                        },
+                        StatusCode = statusCode,
+                        RateLimit = rateLimit
+                    };
+                }
+
                 var errorResponse = JsonSerializer.Deserialize<ApiErrorResponse>(content, _jsonOptions);
                 return new ApiResponse<T>
                 {
@@ -477,9 +499,9 @@ public sealed class UnityRestSharp : IDisposable
                     Error = errorResponse?.Error ?? new ApiError
                     {
                         Code = "unknown_error",
-                        Message = $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}"
+                        Message = $"HTTP {statusCode}: {response.ReasonPhrase}"
                     },
-                    StatusCode = (int)response.StatusCode,
+                    StatusCode = statusCode,
                     RateLimit = rateLimit
                 };
             }
@@ -491,7 +513,7 @@ public sealed class UnityRestSharp : IDisposable
                 Success = apiResponse?.Success ?? false,
                 Data = apiResponse?.Data,
                 Meta = apiResponse?.Meta,
-                StatusCode = (int)response.StatusCode,
+                StatusCode = statusCode,
                 RateLimit = rateLimit
             };
         }
@@ -500,7 +522,7 @@ public sealed class UnityRestSharp : IDisposable
             return new ApiResponse<T>
             {
                 Success = false,
-                Error = new ApiError { Code = "network_error", Message = ex.Message },
+                Error = new ApiError { Code = "network_error", Message = $"GET {url} failed: {ex.Message}" },
                 StatusCode = 0
             };
         }
@@ -509,14 +531,21 @@ public sealed class UnityRestSharp : IDisposable
             return new ApiResponse<T>
             {
                 Success = false,
-                Error = new ApiError { Code = "parse_error", Message = ex.Message },
-                StatusCode = 0
+                Error = new ApiError
+                {
+                    Code = "parse_error",
+                    Message = $"GET {url} returned HTTP {statusCode} — JSON parse failed: {ex.Message}. Response starts with: {contentSnippet}"
+                },
+                StatusCode = statusCode
             };
         }
     }
 
     private async Task<ApiResponse<T>> PostAsync<T>(string url, object payload, CancellationToken cancellationToken) where T : class
     {
+        int statusCode = 0;
+        string? contentSnippet = null;
+
         try
         {
             var jsonContent = new StringContent(
@@ -525,7 +554,9 @@ public sealed class UnityRestSharp : IDisposable
                 "application/json");
 
             using var response = await _httpClient.PostAsync(url, jsonContent, cancellationToken);
+            statusCode = (int)response.StatusCode;
             var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            contentSnippet = content.Length > 500 ? content[..500] : content;
 
             // Parse rate limit headers
             var rateLimit = new RateLimitInfo
@@ -537,6 +568,23 @@ public sealed class UnityRestSharp : IDisposable
 
             if (!response.IsSuccessStatusCode)
             {
+                // If the response doesn't look like JSON, return the body snippet directly
+                var trimmed = content.TrimStart();
+                if (trimmed.Length > 0 && trimmed[0] != '{' && trimmed[0] != '[')
+                {
+                    return new ApiResponse<T>
+                    {
+                        Success = false,
+                        Error = new ApiError
+                        {
+                            Code = "unexpected_response",
+                            Message = $"HTTP {statusCode} from POST {url} — expected JSON but response starts with: {contentSnippet}"
+                        },
+                        StatusCode = statusCode,
+                        RateLimit = rateLimit
+                    };
+                }
+
                 var errorResponse = JsonSerializer.Deserialize<ApiErrorResponse>(content, _jsonOptions);
                 return new ApiResponse<T>
                 {
@@ -544,9 +592,9 @@ public sealed class UnityRestSharp : IDisposable
                     Error = errorResponse?.Error ?? new ApiError
                     {
                         Code = "unknown_error",
-                        Message = $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}"
+                        Message = $"HTTP {statusCode}: {response.ReasonPhrase}"
                     },
-                    StatusCode = (int)response.StatusCode,
+                    StatusCode = statusCode,
                     RateLimit = rateLimit
                 };
             }
@@ -558,7 +606,7 @@ public sealed class UnityRestSharp : IDisposable
                 Success = apiResponse?.Success ?? false,
                 Data = apiResponse?.Data,
                 Meta = apiResponse?.Meta,
-                StatusCode = (int)response.StatusCode,
+                StatusCode = statusCode,
                 RateLimit = rateLimit
             };
         }
@@ -567,7 +615,7 @@ public sealed class UnityRestSharp : IDisposable
             return new ApiResponse<T>
             {
                 Success = false,
-                Error = new ApiError { Code = "network_error", Message = ex.Message },
+                Error = new ApiError { Code = "network_error", Message = $"POST {url} failed: {ex.Message}" },
                 StatusCode = 0
             };
         }
@@ -576,8 +624,12 @@ public sealed class UnityRestSharp : IDisposable
             return new ApiResponse<T>
             {
                 Success = false,
-                Error = new ApiError { Code = "parse_error", Message = ex.Message },
-                StatusCode = 0
+                Error = new ApiError
+                {
+                    Code = "parse_error",
+                    Message = $"POST {url} returned HTTP {statusCode} — JSON parse failed: {ex.Message}. Response starts with: {contentSnippet}"
+                },
+                StatusCode = statusCode
             };
         }
     }
