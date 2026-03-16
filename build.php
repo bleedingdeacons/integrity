@@ -94,7 +94,8 @@ class PluginBuilder
             // C# Rest Client and Models
             'sharp',
             'Integrity-cli',
-            'csharp-client'
+            'csharp-client',
+            'client'
     ];
 
     // Files and directories to exclude in dev builds
