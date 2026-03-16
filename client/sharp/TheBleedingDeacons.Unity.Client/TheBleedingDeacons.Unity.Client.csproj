@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>13</LangVersion>
-    
+	  
     <!-- Package Info -->
     <PackageId>Integrity.Client</PackageId>
     <Version>1.7.0</Version>

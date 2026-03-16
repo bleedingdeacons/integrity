@@ -211,7 +211,7 @@
     <a href="#" class="logo">
         <span>🔐</span> Integrity <span>Docs</span>
     </a>
-    <span class="version">February 2026</span>
+    <span class="version">v1.8.7 — March 2026</span>
 </header>
 
 <div class="overlay" onclick="toggleNav()"></div>
@@ -245,6 +245,12 @@
         <a href="#endpoint-positions" class="nav-link">Positions</a>
         <a href="#endpoint-members" class="nav-link">Members</a>
         <a href="#endpoint-ig-meetings" class="nav-link">Intergroup Meetings</a>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">PHP Client</div>
+        <a href="#php-overview" class="nav-link">Client Library</a>
+        <a href="#php-setup" class="nav-link">Setup</a>
+        <a href="#php-usage" class="nav-link">Usage Examples</a>
     </div>
     <div class="nav-section">
         <div class="nav-section-title">.NET Client</div>
@@ -288,7 +294,7 @@
         <h2>Requirements</h2>
         <ul>
             <li><strong>WordPress</strong> 6.0 or later</li>
-            <li><strong>PHP</strong> 8.0 or later (Argon2id password hashing required)</li>
+            <li><strong>PHP</strong> 8.1 or later (Argon2id password hashing required)</li>
             <li><strong>Unity plugin</strong> — must be installed and activated</li>
             <li><strong>Scrutiny plugin</strong> — listed as a required dependency</li>
             <li><strong>HTTPS</strong> — strongly recommended and enforced by default (see <a href="#settings">Settings</a>)</li>
@@ -348,7 +354,7 @@
             <tr><td><code>meetings:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view meetings</td></tr>
             <tr><td><code>positions:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view positions</td></tr>
             <tr><td><code>members:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view members</td></tr>
-            <tr><td><code>members:write</code></td><td><span class="perm-badge perm-write">Write</span></td><td>Update member data</td></tr>
+            <tr><td><code>members:write</code></td><td><span class="perm-badge perm-write">Write</span></td><td>Create and update member data</td></tr>
             <tr><td><code>intergroup-meetings:read</code></td><td><span class="perm-badge perm-read">Read</span></td><td>List and view intergroup meetings</td></tr>
             <tr><td><code>intergroup-meetings:write</code></td><td><span class="perm-badge perm-write">Write</span></td><td>Register/unregister group and officer attendance</td></tr>
             <tr><td><code>*</code></td><td><span class="perm-badge perm-all">All</span></td><td>Full access to all endpoints</td></tr>
@@ -495,7 +501,8 @@
                 <code>/integrity/v1/meetings</code>
             </div>
             <div class="endpoint-body">
-                <p>List all meetings. Supports pagination, search, and filtering by day, group, and type.</p>
+                <p>List all meetings. Supports pagination, search, and filtering by day, online status, and group.</p>
+                <p><strong>Parameters:</strong> <code>per_page</code> (1–500, default 100), <code>page</code>, <code>search</code>, <code>day</code> (0=Sunday … 6=Saturday), <code>online</code> (true/false), <code>group_id</code></p>
             </div>
         </div>
 
@@ -508,6 +515,8 @@
                 <p>Get a single meeting by ID.</p>
             </div>
         </div>
+
+        <p>Meeting responses include: id, name, slug, location (full object with coordinates), url, day, day_of_week, time, end_time, types, state, is_online, online_link, online_notes, contacts, and meta.</p>
     </section>
 
     <!-- Positions Endpoint -->
@@ -522,6 +531,7 @@
             </div>
             <div class="endpoint-body">
                 <p>List all intergroup positions. Supports pagination and search.</p>
+                <p><strong>Parameters:</strong> <code>per_page</code> (1–500, default 100), <code>page</code>, <code>search</code></p>
             </div>
         </div>
 
@@ -539,7 +549,7 @@
     <!-- Members Endpoint -->
     <section id="endpoint-members">
         <h2>Members</h2>
-        <p>Permission required: <code>members:read</code> for reading, <code>members:write</code> for updating.</p>
+        <p>Permission required: <code>members:read</code> for reading, <code>members:write</code> for creating and updating.</p>
 
         <div class="endpoint-card">
             <div class="endpoint-header">
@@ -547,7 +557,8 @@
                 <code>/integrity/v1/members</code>
             </div>
             <div class="endpoint-body">
-                <p>List all members. Supports pagination, search, and filtering by home group, position, and GSR status.</p>
+                <p>List all members. Supports pagination, search, and filtering by home group.</p>
+                <p><strong>Parameters:</strong> <code>per_page</code> (1–500, default 100), <code>page</code>, <code>search</code>, <code>home_group_id</code></p>
             </div>
         </div>
 
@@ -564,16 +575,28 @@
         <div class="endpoint-card">
             <div class="endpoint-header">
                 <span class="method-badge method-post">POST</span>
+                <code>/integrity/v1/members/create</code>
+            </div>
+            <div class="endpoint-body">
+                <p>Create a new member. <code>anonymous_name</code> is required; all other fields are optional. Referenced entities (<code>home_group_id</code>, <code>intergroup_position_id</code>) are validated to exist. Returns the created member with HTTP 201.</p>
+                <p><strong>Body parameters:</strong> <code>anonymous_name</code> (required), <code>personal_email</code>, <code>mobile_number</code>, <code>home_group_id</code>, <code>is_gsr</code>, <code>intergroup_position_id</code></p>
+            </div>
+        </div>
+
+        <div class="endpoint-card">
+            <div class="endpoint-header">
+                <span class="method-badge method-post">POST</span>
                 <code>/integrity/v1/members/{id}/update</code>
             </div>
             <div class="endpoint-body">
-                <p>Partial update — only send the fields you want to change. Omitted fields keep their current values. Referenced entities (home_group_id, intergroup_position_id) are validated to exist before saving. Obscured personal data values (from Scrutiny masking) are detected and ignored to prevent overwriting real data with bullet characters.</p>
+                <p>Partial update — only send the fields you want to change. Omitted fields keep their current values. Referenced entities (<code>home_group_id</code>, <code>intergroup_position_id</code>) are validated to exist before saving. Obscured personal data values (from Scrutiny masking) are detected and ignored to prevent overwriting real data.</p>
+                <p><strong>Body parameters:</strong> <code>anonymous_name</code>, <code>personal_email</code>, <code>mobile_number</code>, <code>show_anonymous_name</code>, <code>show_member_profile</code>, <code>anonymous_profile</code>, <code>home_group_id</code>, <code>is_gsr</code>, <code>intergroup_position_id</code>, <code>intergroup_position_rotation</code> (Y-m-d)</p>
             </div>
         </div>
 
         <div class="callout info">
             <span class="callout-icon">💡</span>
-            <div>The update endpoint is smart about Scrutiny's data obscuring. If the submitted <code>personal_email</code> or <code>mobile_number</code> contains bullet characters (•), the value is treated as obscured and the existing value is preserved.</div>
+            <div>The update endpoint is smart about Scrutiny's data obscuring. If the submitted <code>personal_email</code> contains consecutive underscores (___) or <code>mobile_number</code> contains consecutive asterisks (***), the value is treated as obscured and the existing value is preserved.</div>
         </div>
     </section>
 
@@ -589,6 +612,7 @@
             </div>
             <div class="endpoint-body">
                 <p>List intergroup meetings with attendance data. Supports pagination and date filtering.</p>
+                <p><strong>Parameters:</strong> <code>per_page</code> (1–500, default 100), <code>page</code>, <code>date_from</code> (Y-m-d), <code>date_to</code> (Y-m-d)</p>
             </div>
         </div>
 
@@ -609,6 +633,7 @@
             </div>
             <div class="endpoint-body">
                 <p>Register a group's attendance at an intergroup meeting.</p>
+                <p><strong>Body parameters:</strong> <code>group_id</code> (required), <code>gsr_name</code> (required), <code>member_id</code>, <code>gsr_proxy</code> (bool), <code>gsr_proxy_name</code></p>
             </div>
         </div>
 
@@ -619,6 +644,7 @@
             </div>
             <div class="endpoint-body">
                 <p>Remove a group's attendance registration.</p>
+                <p><strong>Body parameters:</strong> <code>group_id</code> (required)</p>
             </div>
         </div>
 
@@ -629,6 +655,7 @@
             </div>
             <div class="endpoint-body">
                 <p>Register an officer's attendance at an intergroup meeting.</p>
+                <p><strong>Body parameters:</strong> <code>officer_id</code> (required), <code>position_name</code> (required), <code>officer_name</code> (required)</p>
             </div>
         </div>
 
@@ -639,7 +666,106 @@
             </div>
             <div class="endpoint-body">
                 <p>Remove an officer's attendance registration.</p>
+                <p><strong>Body parameters:</strong> <code>officer_id</code> (required)</p>
             </div>
+        </div>
+    </section>
+
+    <!-- PHP Client Overview -->
+    <section id="php-overview">
+        <h2>PHP Client Library</h2>
+        <p>Integrity includes a standalone PHP client (<code>IntegrityClient</code>) for consuming the REST API from any PHP application. The client handles authentication, JSON serialisation, rate limit header parsing, cURL connection reuse, and error handling. No external dependencies are required beyond the cURL extension.</p>
+
+        <table class="status-table">
+            <thead><tr><th>Component</th><th>Location</th><th>Description</th></tr></thead>
+            <tbody>
+            <tr><td><strong>Client &amp; Models</strong></td><td><code>client/php/IntegrityClient.php</code></td><td>Complete single-file client with typed DTOs for every API resource.</td></tr>
+            <tr><td><strong>Example</strong></td><td><code>client/php/client-example.php</code></td><td>Quick-start script showing common API calls.</td></tr>
+            </tbody>
+        </table>
+
+        <div class="callout info">
+            <span class="callout-icon">💡</span>
+            <div>The PHP client requires <strong>PHP 8.1+</strong> (readonly constructor properties) and the <strong>cURL extension</strong>. It uses a persistent cURL handle for HTTP connection reuse across multiple requests.</div>
+        </div>
+    </section>
+
+    <!-- PHP Setup -->
+    <section id="php-setup">
+        <h2>Setup</h2>
+        <p>Include the client file in your project. No Composer package is required:</p>
+
+        <pre><code><span class="k">require_once</span> <span class="s">'path/to/IntegrityClient.php'</span>;
+
+<span class="k">$client</span> = <span class="k">new</span> IntegrityClient(
+    <span class="s">'https://example.com'</span>,    <span class="c">// WordPress site URL</span>
+    <span class="s">'int_a1b2c3d4e5f6...'</span>    <span class="c">// Your Integrity API key</span>
+);</code></pre>
+
+        <p>The client sets the <code>Authorization: Bearer</code> header automatically, along with <code>Accept: application/json</code> and a <code>IntegrityPHPClient/1.0</code> user-agent string.</p>
+    </section>
+
+    <!-- PHP Usage Examples -->
+    <section id="php-usage">
+        <h2>Usage Examples</h2>
+
+        <div class="card">
+            <h3>Health Check</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">$health</span> = <span class="k">$client</span>->checkHealth();
+echo <span class="s">"Status: {$health->data->status}\n"</span>;</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>List Groups (with expanded meetings)</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">$response</span> = <span class="k">$client</span>->getGroups(<span class="k">new</span> GroupsQuery(
+    expandMeetings: <span class="k">true</span>,
+    perPage: 50,
+));
+
+<span class="k">if</span> (<span class="k">$response</span>->success) {
+    <span class="k">foreach</span> (<span class="k">$response</span>->data <span class="k">as</span> <span class="k">$group</span>) {
+        echo <span class="s">"{$group->title}\n"</span>;
+    }
+}</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Create a Member</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">$response</span> = <span class="k">$client</span>->createMember(<span class="k">new</span> CreateMemberRequest(
+    anonymousName: <span class="s">'John D.'</span>,
+    homeGroupId: 15,
+    isGsr: <span class="k">true</span>,
+));
+
+<span class="k">if</span> (<span class="k">$response</span>->success) {
+    echo <span class="s">"Created member ID: {$response->data->id}\n"</span>;
+}</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Register Group Attendance</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">$response</span> = <span class="k">$client</span>->registerGroup(7, <span class="k">new</span> RegisterGroupRequest(
+    groupId: 12,
+    gsrName: <span class="s">'John D.'</span>,
+    memberId: 42,
+));</code></pre>
+        </div>
+
+        <div class="card">
+            <h3>Error Handling</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">$response</span> = <span class="k">$client</span>->getGroups();
+
+<span class="k">if</span> (!<span class="k">$response</span>->success) {
+    echo <span class="s">"Error {$response->httpStatus}: {$response->errorCode}\n"</span>;
+
+    <span class="c">// Check rate limiting</span>
+    <span class="k">if</span> (<span class="k">$response</span>->httpStatus === 429 && <span class="k">$response</span>->rateLimit) {
+        echo <span class="s">"Retry after: {$response->rateLimit->resetDateTime()->format('c')}\n"</span>;
+    }
+}
+
+<span class="c">// Pagination</span>
+echo <span class="s">"Page {$response->meta->page} of {$response->meta->totalPages}\n"</span>;</code></pre>
         </div>
     </section>
 
@@ -745,6 +871,17 @@ Console.WriteLine($<span class="s">"Status: {health?.Status}, Unity: {health?.Un
         </div>
 
         <div class="card">
+            <h3>Create a Member</h3>
+            <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.CreateMemberAsync(<span class="k">new</span> CreateMemberRequest
+{
+    AnonymousName = <span class="s">"Jane S."</span>,
+    HomeGroupId = 8,
+    IsGsr = <span class="k">false</span>,
+});
+<span class="c">// Returns HTTP 201 on success with the full member object</span></code></pre>
+        </div>
+
+        <div class="card">
             <h3>Register Group Attendance at an Intergroup Meeting</h3>
             <pre style="margin-bottom:0;"><code><span class="k">var</span> response = <span class="k">await</span> client.RegisterAttendeeAsync(
     intergroupMeetingId: 7,
@@ -780,6 +917,7 @@ Console.WriteLine($<span class="s">"Status: {health?.Status}, Unity: {health?.Un
             <tr><td><strong>Member</strong></td><td>Id, AnonymousName, PersonalEmail, MobileNumber, HomeGroupId/HomeGroup, IsGsr, IntergroupPositionId, IntergroupPositionRotation</td></tr>
             <tr><td><strong>IntergroupMeeting</strong></td><td>Id, Date, GroupAttendeeIds, GroupAttendees, OfficersAttendingIds, OfficersAttending</td></tr>
             <tr><td><strong>UpdateMemberRequest</strong></td><td>All Member fields as nullable — only non-null fields are sent (partial update).</td></tr>
+            <tr><td><strong>CreateMemberRequest</strong></td><td>AnonymousName (required), PersonalEmail, MobileNumber, HomeGroupId, IsGsr, IntergroupPositionId.</td></tr>
             <tr><td><strong>Contact</strong></td><td>Name, Email, Phone</td></tr>
             <tr><td><strong>Location</strong></td><td>Name, Address, City, State, PostalCode, Country, Latitude, Longitude</td></tr>
             <tr><td><strong>ContributionOptions</strong></td><td>Venmo, Paypal, Square, HasOptions</td></tr>
@@ -922,6 +1060,16 @@ Console.WriteLine($<span class="s">"Status: {health?.Status}, Unity: {health?.Un
             <h3>IP whitelist blocking legitimate requests</h3>
             <p>If your client is behind a proxy or load balancer, the IP seen by Integrity may differ from your expected IP. Integrity checks Cloudflare (<code>CF-Connecting-IP</code>), <code>X-Forwarded-For</code>, and <code>X-Real-IP</code> headers in that order. Verify which IP is being logged in the audit trail and add it to the whitelist.</p>
         </div>
+
+        <div class="card">
+            <h3>422 "The specified home group does not exist"</h3>
+            <p>When creating or updating a member, the <code>home_group_id</code> or <code>intergroup_position_id</code> you supplied doesn't match a valid entity. Verify the IDs by fetching the groups or positions list first.</p>
+        </div>
+
+        <div class="card">
+            <h3>409 "Already registered"</h3>
+            <p>You're trying to register a group or officer that is already registered for this intergroup meeting. The server enforces uniqueness at the database level to prevent duplicates, even under concurrent requests.</p>
+        </div>
     </section>
 
     <!-- FAQ -->
@@ -954,8 +1102,8 @@ Console.WriteLine($<span class="s">"Status: {health?.Status}, Unity: {health?.Un
         </div>
 
         <div class="card" style="margin-bottom:0;">
-            <h3>Where's the .NET client library?</h3>
-            <p style="margin-bottom:0;">See the <a href="#dotnet-overview">.NET Client Library</a> section above. The client library is in <code>sharp/TheBleedingDeacons.Unity.Client/</code> and the models in <code>sharp/TheBleedingDeacons.Unity.Models/</code>.</p>
+            <h3>Where are the client libraries?</h3>
+            <p style="margin-bottom:0;">The PHP client is in <code>client/php/IntegrityClient.php</code>. The .NET client library is in <code>client/sharp/TheBleedingDeacons.Unity.Client/</code> and its models in <code>client/sharp/TheBleedingDeacons.Unity.Models/</code>. See the <a href="#php-overview">PHP Client</a> and <a href="#dotnet-overview">.NET Client</a> sections above.</p>
         </div>
     </section>
 
