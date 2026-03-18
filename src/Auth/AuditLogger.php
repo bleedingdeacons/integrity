@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Integrity\Auth;
 
+// Prevent direct access
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Audit Logger
  *

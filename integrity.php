@@ -5,10 +5,10 @@ declare(strict_types=1);
 /**
  * Plugin Name: Integrity
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
- * Version: 1.8.7
+ * Version: 1.8.8
  * Requires at least: 6.0
  * Requires Plugins: scrutiny
- * Requires PHP: 8.0
+ * Requires HP: 8.0
  * Author: The Bleeding Deacons
  * Author URI: thebleedingdeacons@gmail.com
  * License: MIT (Modified)
@@ -47,8 +47,10 @@ spl_autoload_register(function ($class) {
             require $file;
         }
     } catch (\Exception $e) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Integrity Autoloader Error: ' . $e->getMessage());
     } catch (\Throwable $e) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Integrity Autoloader Fatal Error: ' . $e->getMessage());
     }
 });
@@ -66,7 +68,9 @@ add_action('unity/loaded', function ($container): void {
         do_action('integrity_loaded', \Integrity\Plugin::getContainer());
 
     } catch (\Exception $e) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Integrity Plugin Initialization Error: ' . $e->getMessage());
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Integrity Plugin Stack Trace: ' . $e->getTraceAsString());
 
         if (is_admin()) {
@@ -80,7 +84,9 @@ add_action('unity/loaded', function ($container): void {
         }
 
     } catch (\Throwable $e) {
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Integrity Plugin Fatal Error: ' . $e->getMessage());
+        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
         error_log('Integrity Plugin Stack Trace: ' . $e->getTraceAsString());
 
         if (is_admin()) {

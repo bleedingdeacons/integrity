@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Integrity\Api;
 
+// Prevent direct access
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\RateLimiter;
 use Integrity\Auth\AuditLogger;

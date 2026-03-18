@@ -2,6 +2,14 @@
 
 Secure REST API bridge for the [Unity](https://github.com/thebleedingdeacons/unity) WordPress plugin suite. Integrity provides authenticated, rate-limited access to Groups, Meetings, Members, Positions, and Intergroup Meetings for external applications — with client libraries for both PHP and .NET.
 
+**Version:** 1.8.7
+**Requires:** WordPress 6.0+ · PHP 8.0+
+**Dependencies:** Unity, Scrutiny
+**License:** MIT (Modified — see [License](#license))
+**Author:** [The Bleeding Deacons](mailto:thebleedingdeacons@gmail.com)
+
+---
+
 ## Features
 
 - **API Key Authentication** — cryptographically secure keys using Argon2id hashing; plain-text key shown once at creation

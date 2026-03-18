@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Integrity;
 
+// Prevent direct access
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 use Integrity\Admin\SettingsPage;
 use Integrity\Api\RestController;
 use Integrity\Auth\ApiKeyManager;
