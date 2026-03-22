@@ -54,6 +54,8 @@ class Plugin
         self::registerServices($unityContainer);
         self::$initialized = true;
 
+        self::logInfo('Integrity initialised', ['version' => defined('INTEGRITY_VERSION') ? INTEGRITY_VERSION : 'unknown']);
+
         // Register REST API routes (must resolve the instance so hooks are registered)
         add_action('rest_api_init', function () {
             self::$container->get(RestController::class)->register();
