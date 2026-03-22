@@ -29,6 +29,13 @@ use function is_admin;
  */
 class Plugin
 {
+    use \Integrity\Logger\HasLogger;
+
+    protected static function logChannel(): string
+    {
+        return 'integrity';
+    }
+
     private static ?ContainerInterface $container = null;
     private static bool $initialized = false;
 

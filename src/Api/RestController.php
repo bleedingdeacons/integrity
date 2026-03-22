@@ -67,7 +67,6 @@ class RestController
         $this->rateLimiter = $rateLimiter;
     }
 
-
     /**
      * Register REST API routes
      */
@@ -2429,10 +2428,8 @@ class RestController
             ], 201);
 
         } catch (\Throwable $e) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log('Integrity: registerIntergroupMeetingAttendee error: ' . $e->getMessage());
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
+            \Integrity\Plugin::logError('Integrity: registerIntergroupMeetingAttendee error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            // Stack trace now captured in logger context
 
             $this->auditLogger->log(
                 $keyData['api_key_id'],
@@ -2553,10 +2550,8 @@ class RestController
             ], 200);
 
         } catch (\Throwable $e) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log('Integrity: unregisterIntergroupMeetingAttendee error: ' . $e->getMessage());
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
+            \Integrity\Plugin::logError('Integrity: unregisterIntergroupMeetingAttendee error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            // Stack trace now captured in logger context
 
             $this->auditLogger->log(
                 $keyData['api_key_id'],
@@ -2762,10 +2757,8 @@ class RestController
             ], 201);
 
         } catch (\Throwable $e) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log('Integrity: registerIntergroupMeetingOfficer error: ' . $e->getMessage());
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
+            \Integrity\Plugin::logError('Integrity: registerIntergroupMeetingOfficer error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            // Stack trace now captured in logger context
 
             $this->auditLogger->log(
                 $keyData['api_key_id'],
@@ -2890,10 +2883,8 @@ class RestController
             ], 200);
 
         } catch (\Throwable $e) {
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log('Integrity: unregisterIntergroupMeetingOfficer error: ' . $e->getMessage());
-            // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-            error_log('Integrity: Stack trace: ' . $e->getTraceAsString());
+            \Integrity\Plugin::logError('Integrity: unregisterIntergroupMeetingOfficer error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            // Stack trace now captured in logger context
 
             $this->auditLogger->log(
                 $keyData['api_key_id'],
@@ -3374,6 +3365,5 @@ class RestController
             return '';
         }
     }
-
 
 }

@@ -5,16 +5,15 @@ declare(strict_types=1);
 /**
  * Plugin Name: Integrity
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
- * Version: 1.8.8
+ * Version: 1.10.0
  * Requires at least: 6.0
- * Requires Plugins: scrutiny
+ * Requires Plugins: sentinel, scrutiny
  * Requires HP: 8.0
  * Author: The Bleeding Deacons
  * Author URI: https://github.com/bleedingdeacons/integrity
  * Contact: thebleedingdeacons@gmail.com
  * License: MIT (Modified)
  */
-
 
 // Prevent direct access
 if (!defined('ABSPATH')) {
@@ -48,11 +47,13 @@ spl_autoload_register(function ($class) {
             require $file;
         }
     } catch (\Exception $e) {
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Integrity Autoloader Error: ' . $e->getMessage());
+        function_exists('wp_log')
+            ? wp_log('integrity')->error('Integrity Autoloader Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
+            : error_log('Integrity Autoloader Error: ' . $e->getMessage());
     } catch (\Throwable $e) {
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Integrity Autoloader Fatal Error: ' . $e->getMessage());
+        function_exists('wp_log')
+            ? wp_log('integrity')->critical('Integrity Autoloader Fatal Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
+            : error_log('Integrity Autoloader Fatal Error: ' . $e->getMessage());
     }
 });
 
@@ -69,10 +70,9 @@ add_action('unity/loaded', function ($container): void {
         do_action('integrity_loaded', \Integrity\Plugin::getContainer());
 
     } catch (\Exception $e) {
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Integrity Plugin Initialization Error: ' . $e->getMessage());
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Integrity Plugin Stack Trace: ' . $e->getTraceAsString());
+        function_exists('wp_log')
+            ? wp_log('integrity')->error('Integrity Plugin Initialization Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
+            : error_log('Integrity Plugin Initialization Error: ' . $e->getMessage());
 
         if (is_admin()) {
             add_action('admin_notices', function() use ($e) {
@@ -85,10 +85,9 @@ add_action('unity/loaded', function ($container): void {
         }
 
     } catch (\Throwable $e) {
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Integrity Plugin Fatal Error: ' . $e->getMessage());
-        // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-        error_log('Integrity Plugin Stack Trace: ' . $e->getTraceAsString());
+        function_exists('wp_log')
+            ? wp_log('integrity')->critical('Integrity Plugin Fatal Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
+            : error_log('Integrity Plugin Fatal Error: ' . $e->getMessage());
 
         if (is_admin()) {
             add_action('admin_notices', function() {
@@ -217,11 +216,16 @@ add_filter('rest_pre_dispatch', function ($result, $server, $request) {
     if (strpos($request->get_route(), '/integrity/') === 0) {
         $check = $request->has_valid_params();
         if (is_wp_error($check)) {
-            error_log('Integrity 400 validation failure: ' . wp_json_encode([
+            function_exists('wp_log')
+                ? wp_log('integrity')->error('Integrity 400 validation failure', [
                     'route'  => $request->get_route(),
                     'errors' => $check->get_error_messages(),
                     'data'   => $check->get_error_data(),
                     'params' => $request->get_params(),
+                ])
+                : error_log('Integrity 400 validation failure: ' . wp_json_encode([
+                    'route'  => $request->get_route(),
+                    'errors' => $check->get_error_messages(),
                 ]));
         }
     }
