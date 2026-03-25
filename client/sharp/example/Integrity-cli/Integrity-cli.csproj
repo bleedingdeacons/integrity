@@ -9,8 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\sharp\TheBleedingDeacons.Unity.Client\TheBleedingDeacons.Unity.Client.csproj" />
-    <ProjectReference Include="..\sharp\TheBleedingDeacons.Unity.Models\TheBleedingDeacons.Unity.Models.csproj" />
+    <ProjectReference Include="..\..\TheBleedingDeacons.Unity.Client\TheBleedingDeacons.Unity.Client.csproj" />
   </ItemGroup>
 
 </Project>
