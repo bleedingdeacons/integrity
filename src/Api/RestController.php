@@ -2101,19 +2101,36 @@ class RestController
             $perPage = (int) $request->get_param('per_page');
             $totalPages = $perPage > 0 ? (int) ceil($total / $perPage) : 1;
 
-            // Collect all member IDs needed for transformation
+            // Collect all member IDs needed for transformation (group attendees only;
+            // officer data is resolved from the attendance DB table, not the member cache)
             $allMemberIds = [];
             foreach ($intergroupMeetings as $meeting) {
-                $allMemberIds = array_merge($allMemberIds, $meeting->getGroupAttendees(), $meeting->getOfficersAttending());
+                $allMemberIds = array_merge($allMemberIds, $meeting->getGroupAttendees());
             }
             $allMemberIds = array_unique(array_filter($allMemberIds));
 
             // Batch fetch all members at once using repository
             $memberCache = $this->batchGetMembers($memberRepo, $allMemberIds);
 
-            // Transform with cached members
-            $transformedMeetings = array_map(function ($meeting) use ($memberCache) {
-                return $this->transformIntergroupMeetingWithCache($meeting, $memberCache);
+            // Batch fetch officer attendance records keyed by position ID.
+            // The officer_id column stores the position ID (matching the ACF
+            // attending_officers field values and Amber's sync convention).
+            $officerAttendanceRepo = $container->get(IntergroupMeetingOfficerAttendanceRepository::class);
+            $allOfficerAttendanceCache = [];
+            foreach ($intergroupMeetings as $meeting) {
+                $meetingOfficerRecords = $officerAttendanceRepo->findByIntergroupMeeting($meeting->getId());
+                $perMeetingCache = [];
+                foreach ($meetingOfficerRecords as $record) {
+                    // getOfficerId() returns the position ID stored in officer_id column
+                    $perMeetingCache[$record->getOfficerId()] = $record;
+                }
+                $allOfficerAttendanceCache[$meeting->getId()] = $perMeetingCache;
+            }
+
+            // Transform with cached members and officer attendance
+            $transformedMeetings = array_map(function ($meeting) use ($memberCache, $allOfficerAttendanceCache) {
+                $officerAttendanceCache = $allOfficerAttendanceCache[$meeting->getId()] ?? [];
+                return $this->transformIntergroupMeetingWithCache($meeting, $memberCache, $officerAttendanceCache);
             }, $intergroupMeetings);
 
             $this->auditLogger->log(
@@ -2199,17 +2216,28 @@ class RestController
                 microtime(true) - $startTime
             );
 
-            // Batch-fetch members for the attendee lists (avoids N+1 from deprecated transformIntergroupMeeting)
+            // Batch-fetch members for group attendee names (officer data is
+            // resolved from the attendance DB table, not the member cache)
             $memberRepo = $container->get(MemberRepository::class);
-            $allMemberIds = array_unique(array_merge(
-                $intergroupMeeting->getGroupAttendees(),
-                $intergroupMeeting->getOfficersAttending()
-            ));
-            $memberCache = $this->batchGetMembers($memberRepo, array_filter($allMemberIds));
+            $memberCache = $this->batchGetMembers(
+                $memberRepo,
+                array_filter($intergroupMeeting->getGroupAttendees())
+            );
+
+            // Fetch officer attendance records keyed by position ID.
+            // The officer_id column stores the position ID (matching the ACF
+            // attending_officers field values and Amber's sync convention).
+            $officerAttendanceRepo = $container->get(IntergroupMeetingOfficerAttendanceRepository::class);
+            $officerRecords = $officerAttendanceRepo->findByIntergroupMeeting($id);
+            $officerAttendanceCache = [];
+            foreach ($officerRecords as $record) {
+                // getOfficerId() returns the position ID stored in officer_id column
+                $officerAttendanceCache[$record->getOfficerId()] = $record;
+            }
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => $this->transformIntergroupMeetingWithCache($intergroupMeeting, $memberCache),
+                'data' => $this->transformIntergroupMeetingWithCache($intergroupMeeting, $memberCache, $officerAttendanceCache),
             ], 200);
 
         } catch (\Exception $e) {
@@ -2636,8 +2664,34 @@ class RestController
                 ], 404);
             }
 
-            // Check if officer is already registered (DB-level check via unique index)
-            if ($attendanceRepo->existsForMeetingAndOfficer($meetingId, $officerId)) {
+            // Resolve the member's intergroup position ID.
+            // The ACF attending_officers relationship field stores
+            // intergroup-position CPT post IDs (not member IDs).
+            $positionId = $member->getIntergroupPosition();
+
+            if ($positionId <= 0) {
+                $this->auditLogger->log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    422,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'no_intergroup_position',
+                        'message' => 'Officer does not have an intergroup position assigned',
+                    ],
+                ], 422);
+            }
+
+            // Check if officer's position is already registered (DB-level check via unique index).
+            // The officer_id column stores the position ID to stay consistent with
+            // Amber's syncOfficerAttendance, which writes position IDs from the ACF field.
+            if ($attendanceRepo->existsForMeetingAndOfficer($meetingId, $positionId)) {
                 $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
@@ -2661,9 +2715,10 @@ class RestController
             // authoritative guard against duplicates — if a concurrent request
             // slips past the check above, the INSERT will fail here instead of
             // creating a duplicate row.
+            // The officer_id column stores the position ID to match Amber's convention.
             $attendance = $attendanceFactory->createNew(
                 $meetingId,
-                $officerId,
+                $positionId,
                 $positionName,
                 $officerName
             );
@@ -2710,10 +2765,11 @@ class RestController
                 ], 500);
             }
 
-            // Add the officer to the ACF relationship field (post meta).
-            // This is done after the attendance row succeeds so the two
-            // stores don't diverge on a duplicate-key rejection above.
-            $intergroupMeeting->addOfficerAttendee($officerId);
+            // Add the officer's position to the ACF relationship field (post meta).
+            // The attending_officers field stores intergroup-position CPT post IDs,
+            // not member IDs. This is done after the attendance row succeeds so
+            // the two stores don't diverge on a duplicate-key rejection above.
+            $intergroupMeeting->addOfficerAttendee($positionId);
 
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
 
@@ -2793,6 +2849,7 @@ class RestController
             $container = Plugin::getContainer();
             $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
             $attendanceRepo = $container->get(IntergroupMeetingOfficerAttendanceRepository::class);
+            $memberRepo = $container->get(MemberRepository::class);
 
             // Validate intergroup meeting exists
             $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
@@ -2816,8 +2873,53 @@ class RestController
                 ], 404);
             }
 
-            // Check if officer is actually registered
-            if (!$intergroupMeeting->hasOfficerAttendee($officerId)) {
+            // Resolve the member's intergroup position ID.
+            // The ACF attending_officers relationship field stores
+            // intergroup-position CPT post IDs (not member IDs).
+            $member = $memberRepo->find($officerId);
+
+            if (!$member) {
+                $this->auditLogger->log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    404,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'officer_not_found',
+                        'message' => 'Officer not found',
+                    ],
+                ], 404);
+            }
+
+            $positionId = $member->getIntergroupPosition();
+
+            if ($positionId <= 0) {
+                $this->auditLogger->log(
+                    $keyData['api_key_id'],
+                    $request->get_route(),
+                    $request->get_method(),
+                    ['id' => $meetingId, 'officer_id' => $officerId],
+                    422,
+                    microtime(true) - $startTime
+                );
+
+                return new WP_REST_Response([
+                    'success' => false,
+                    'error' => [
+                        'code' => 'no_intergroup_position',
+                        'message' => 'Officer does not have an intergroup position assigned',
+                    ],
+                ], 422);
+            }
+
+            // Check if officer's position is actually registered in the ACF field
+            if (!$intergroupMeeting->hasOfficerAttendee($positionId)) {
                 $this->auditLogger->log(
                     $keyData['api_key_id'],
                     $request->get_route(),
@@ -2836,8 +2938,8 @@ class RestController
                 ], 404);
             }
 
-            // Remove the officer
-            $intergroupMeeting->removeOfficerAttendee($officerId);
+            // Remove the officer's position from the ACF relationship field
+            $intergroupMeeting->removeOfficerAttendee($positionId);
 
             // Save the updated intergroup meeting
             $saved = $intergroupMeetingRepo->save($intergroupMeeting);
@@ -2861,8 +2963,9 @@ class RestController
                 ], 500);
             }
 
-            // Delete the attendance record for this officer at this meeting
-            $attendanceRepo->deleteByIntergroupMeetingAndOfficer($meetingId, $officerId);
+            // Delete the attendance record for this officer's position at this meeting.
+            // The officer_id column stores the position ID (matching Amber's convention).
+            $attendanceRepo->deleteByIntergroupMeetingAndOfficer($meetingId, $positionId);
 
             $this->auditLogger->log(
                 $keyData['api_key_id'],
@@ -3257,14 +3360,23 @@ class RestController
     }
 
     /**
-     * Transform an IntergroupMeeting object to API response format using cached members
+     * Transform an IntergroupMeeting object to API response format using cached data
+     *
+     * The ACF attending_officers field stores intergroup-position CPT post IDs,
+     * while the officer attendance DB table stores member IDs, position names,
+     * and officer names. The attendance cache is keyed by position ID so it
+     * can be matched against the ACF field values.
      *
      * @param IntergroupMeeting $intergroupMeeting
      * @param array<int, Member> $memberCache
+     * @param array<int, IntergroupMeetingOfficerAttendance> $officerAttendanceCache Map of position ID to attendance record
      * @return array
      */
-    private function transformIntergroupMeetingWithCache(IntergroupMeeting $intergroupMeeting, array $memberCache): array
-    {
+    private function transformIntergroupMeetingWithCache(
+        IntergroupMeeting $intergroupMeeting,
+        array $memberCache,
+        array $officerAttendanceCache = []
+    ): array {
         $groupAttendeeIds = $intergroupMeeting->getGroupAttendees();
         $groupAttendees = [];
 
@@ -3277,16 +3389,22 @@ class RestController
             ];
         }
 
-        $officersAttendingIds = $intergroupMeeting->getOfficersAttending();
+        // The ACF field stores position IDs (intergroup-position CPT post IDs).
+        // Resolve officer details from the attendance DB table records.
+        $positionIds = $intergroupMeeting->getOfficersAttending();
         $officersAttending = [];
 
-        foreach ($officersAttendingIds as $officerId) {
-            if (isset($memberCache[$officerId])) {
-                $officersAttending[] = [
-                    'id' => $officerId,
-                    'name' => $memberCache[$officerId]->getAnonymousName(),
-                ];
+        foreach ($positionIds as $positionId) {
+            $entry = ['id' => $positionId];
+
+            if (isset($officerAttendanceCache[$positionId])) {
+                $record = $officerAttendanceCache[$positionId];
+                $entry['officer_id'] = $record->getOfficerId();
+                $entry['officer_name'] = $record->getOfficerName();
+                $entry['position_name'] = $record->getPositionName();
             }
+
+            $officersAttending[] = $entry;
         }
 
         return [
@@ -3295,10 +3413,10 @@ class RestController
             'date' => $intergroupMeeting->getDate(),
             'group_attendee_ids' => $groupAttendeeIds,
             'group_attendees' => $groupAttendees,
-            'officers_attending_ids' => $officersAttendingIds,
+            'officers_attending_ids' => $positionIds,
             'officers_attending' => $officersAttending,
             'attending_groups' => $groupAttendeeIds,
-            'attending_officers' => $officersAttendingIds,
+            'attending_officers' => $positionIds,
             'updated' => $this->formatUpdatedTimestamp($intergroupMeeting->getUpdated()),
         ];
     }
