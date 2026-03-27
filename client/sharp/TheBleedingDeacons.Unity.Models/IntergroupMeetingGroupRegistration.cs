@@ -12,6 +12,7 @@ namespace TheBleedingDeacons.Unity.Models
     public class IntergroupMeetingGroupRegistration
     {
         public int IntergroupMeetingId { get; init; }
+        public string MeetingLabel { get; init; } = string.Empty;
         public int MemberId { get; init; }
         public string MemberName { get; init; } = string.Empty;
         public int GroupId { get; init; }

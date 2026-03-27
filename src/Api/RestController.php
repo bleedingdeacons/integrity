@@ -29,6 +29,7 @@ use Unity\Members\Interfaces\MemberFactory;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Positions\Interfaces\Position;
 use Unity\Positions\Interfaces\PositionRepository;
+use Unity\Positions\Interfaces\PositionViewFactory;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -2329,6 +2330,10 @@ class RestController
 
             $meetingGroup = $group->getTitle();
 
+            // Build a denormalised label for the attendance record so the
+            // dashboard can filter without joining to the meetings table.
+            $meetingLabel = $this->buildMeetingLabel($intergroupMeeting);
+
             // Check if group is already registered (DB-level check via unique index)
             if ($attendanceRepo->existsForMeetingAndGroup($meetingId, $groupId)) {
                 $this->auditLogger->log(
@@ -2356,6 +2361,7 @@ class RestController
             // creating a duplicate row.
             $attendance = $attendanceFactory->createNew(
                 $meetingId,
+                $meetingLabel,
                 $groupId,
                 $memberId,
                 $meetingGroup,
@@ -2688,6 +2694,18 @@ class RestController
                 ], 422);
             }
 
+            // Resolve position name and officer name(s) server-side using
+            // the position view and member repository. If multiple members
+            // hold the same position with the same latest rotation date,
+            // all their names are included comma-separated.
+            $positionViewFactory = $container->get(PositionViewFactory::class);
+            $positionView = $positionViewFactory->createFrom($positionId);
+
+            if ($positionView) {
+                $positionName = $positionView->getPosition()->getLongName();
+                $officerName = $this->resolveOfficerNameForPosition($positionId, $memberRepo->findAll());
+            }
+
             // Check if officer's position is already registered (DB-level check via unique index).
             // The officer_id column stores the position ID to stay consistent with
             // Amber's syncOfficerAttendance, which writes position IDs from the ACF field.
@@ -2710,22 +2728,19 @@ class RestController
                 ], 409);
             }
 
-            // Resolve the officer display name from all members currently
-            // assigned to this position. Uses the latest rotation date; if
-            // multiple members share the same latest date all names are included.
-            $resolvedOfficerName = $this->resolveOfficerNameForPosition($positionId, $memberRepo);
-
             // Create the attendance record in the custom table first.
             // The UNIQUE constraint on (intergroup_meeting_id, officer_id) is the
             // authoritative guard against duplicates — if a concurrent request
             // slips past the check above, the INSERT will fail here instead of
             // creating a duplicate row.
             // The officer_id column stores the position ID to match Amber's convention.
+            $meetingLabel = $this->buildMeetingLabel($intergroupMeeting);
             $attendance = $attendanceFactory->createNew(
                 $meetingId,
+                $meetingLabel,
                 $positionId,
                 $positionName,
-                $resolvedOfficerName
+                $officerName
             );
 
             $attendanceSaved = $attendanceRepo->save($attendance);
@@ -2811,7 +2826,7 @@ class RestController
                 'data' => [
                     'intergroup_meeting_id' => $meetingId,
                     'officer_id' => $officerId,
-                    'officer_name' => $resolvedOfficerName,
+                    'officer_name' => $officerName,
                     'position_name' => $positionName,
                     'registered' => true,
                 ],
@@ -3261,80 +3276,6 @@ class RestController
     }
 
     /**
-     * Resolve the officer display name for a position from the member repository.
-     *
-     * Returns the anonymous name of the member with the latest rotation date.
-     * If multiple members share the same latest rotation date all their names
-     * are returned comma-separated. This mirrors the logic used by
-     * TsmlPositionViewFactory::findMemberWithLatestRotationDate but extends it
-     * to include ties.
-     *
-     * @param int              $positionId The position CPT post ID
-     * @param MemberRepository $memberRepo Member repository
-     * @return string Comma-separated anonymous name(s), or empty string if none found
-     */
-    private function resolveOfficerNameForPosition(int $positionId, MemberRepository $memberRepo): string
-    {
-        $allMembers = $memberRepo->findAll();
-
-        // Filter to members holding this position
-        $matchingMembers = array_filter($allMembers, function (Member $member) use ($positionId): bool {
-            return $member->getIntergroupPosition() === $positionId;
-        });
-
-        if (empty($matchingMembers)) {
-            return '';
-        }
-
-        $matchingMembers = array_values($matchingMembers);
-
-        if (count($matchingMembers) === 1) {
-            return $matchingMembers[0]->getAnonymousName();
-        }
-
-        // Parse rotation dates and find the latest
-        $latestDateStr = null;
-        $parsed = []; // memberId => normalised Y-m-d string
-
-        foreach ($matchingMembers as $member) {
-            $rotationDateStr = $member->getIntergroupPositionRotation();
-
-            if (empty($rotationDateStr)) {
-                continue;
-            }
-
-            $dt = \DateTime::createFromFormat('Y-m-d', $rotationDateStr)
-                ?: \DateTime::createFromFormat('d/m/Y', $rotationDateStr);
-
-            if (!$dt) {
-                continue;
-            }
-
-            $normalised = $dt->format('Y-m-d');
-            $parsed[$member->getId()] = $normalised;
-
-            if ($latestDateStr === null || $normalised > $latestDateStr) {
-                $latestDateStr = $normalised;
-            }
-        }
-
-        // No parseable rotation dates — fall back to the first member
-        if ($latestDateStr === null) {
-            return $matchingMembers[0]->getAnonymousName();
-        }
-
-        // Collect all members whose rotation date matches the latest
-        $names = [];
-        foreach ($matchingMembers as $member) {
-            if (isset($parsed[$member->getId()]) && $parsed[$member->getId()] === $latestDateStr) {
-                $names[] = $member->getAnonymousName();
-            }
-        }
-
-        return implode(', ', $names);
-    }
-
-    /**
      * Batch fetch members by IDs using repository
      *
      * @param MemberRepository $memberRepo
@@ -3536,6 +3477,113 @@ class RestController
 
         // Two or more consecutive asterisks indicate an obscured phone number
         return (bool) preg_match('/\*{2,}/', $value);
+    }
+
+    /**
+     * Build a human-readable label for an intergroup meeting
+     *
+     * Combines the meeting title and formatted date into a single string
+     * suitable for display and filtering in attendance records.
+     *
+     * Format: "Title — Month Day, Year" (or just the title or date when
+     * only one is available).
+     *
+     * @param IntergroupMeeting $meeting
+     * @return string
+     */
+    private function buildMeetingLabel(IntergroupMeeting $meeting): string
+    {
+        $title = $meeting->getTitle();
+        $date  = $meeting->getDate();
+
+        $formattedDate = '';
+        if (!empty($date)) {
+            $timestamp = strtotime($date);
+            if ($timestamp !== false) {
+                $formattedDate = gmdate('F j, Y', $timestamp);
+            } else {
+                $formattedDate = $date;
+            }
+        }
+
+        if (!empty($title) && !empty($formattedDate)) {
+            return $title . ' — ' . $formattedDate;
+        }
+
+        if (!empty($title)) {
+            return $title;
+        }
+
+        if (!empty($formattedDate)) {
+            return $formattedDate;
+        }
+
+        return 'Meeting (ID: ' . $meeting->getId() . ')';
+    }
+
+    /**
+     * Resolve the officer display name for a position from the member list.
+     *
+     * Returns the anonymous name of the member with the latest rotation date.
+     * If multiple members share the same latest rotation date all their names
+     * are returned comma-separated. This mirrors the logic used by
+     * IntergroupMeetingAdmin::resolveOfficerNameForPosition.
+     *
+     * @param int           $positionId The position CPT post ID
+     * @param array<Member> $allMembers All loaded members
+     * @return string Comma-separated anonymous name(s), or empty string if none found
+     */
+    private function resolveOfficerNameForPosition(int $positionId, array $allMembers): string
+    {
+        $matchingMembers = array_values(array_filter($allMembers, function (Member $member) use ($positionId): bool {
+            return $member->getIntergroupPosition() === $positionId;
+        }));
+
+        if (empty($matchingMembers)) {
+            return '';
+        }
+
+        if (count($matchingMembers) === 1) {
+            return $matchingMembers[0]->getAnonymousName();
+        }
+
+        $latestDateStr = null;
+        $parsed = [];
+
+        foreach ($matchingMembers as $member) {
+            $rotationDateStr = $member->getIntergroupPositionRotation();
+
+            if (empty($rotationDateStr)) {
+                continue;
+            }
+
+            $dt = \DateTime::createFromFormat('Y-m-d', $rotationDateStr)
+                ?: \DateTime::createFromFormat('d/m/Y', $rotationDateStr);
+
+            if (!$dt) {
+                continue;
+            }
+
+            $normalised = $dt->format('Y-m-d');
+            $parsed[$member->getId()] = $normalised;
+
+            if ($latestDateStr === null || $normalised > $latestDateStr) {
+                $latestDateStr = $normalised;
+            }
+        }
+
+        if ($latestDateStr === null) {
+            return $matchingMembers[0]->getAnonymousName();
+        }
+
+        $names = [];
+        foreach ($matchingMembers as $member) {
+            if (isset($parsed[$member->getId()]) && $parsed[$member->getId()] === $latestDateStr) {
+                $names[] = $member->getAnonymousName();
+            }
+        }
+
+        return implode(', ', $names);
     }
 
     /**
