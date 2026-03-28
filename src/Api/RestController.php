@@ -2695,15 +2695,14 @@ class RestController
             }
 
             // Resolve position name and officer name(s) server-side using
-            // the position view and member repository. If multiple members
-            // hold the same position with the same latest rotation date,
-            // all their names are included comma-separated.
+            // the position view. If multiple members hold the same position
+            // with the same latest rotation date, all their names are included.
             $positionViewFactory = $container->get(PositionViewFactory::class);
             $positionView = $positionViewFactory->createFrom($positionId);
 
             if ($positionView) {
                 $positionName = $positionView->getPosition()->getLongName();
-                $officerName = $this->resolveOfficerNameForPosition($positionId, $memberRepo->findAll());
+                $officerName = $positionView->getOfficerDisplayName();
             }
 
             // Check if officer's position is already registered (DB-level check via unique index).
@@ -3519,71 +3518,6 @@ class RestController
         }
 
         return 'Meeting (ID: ' . $meeting->getId() . ')';
-    }
-
-    /**
-     * Resolve the officer display name for a position from the member list.
-     *
-     * Returns the anonymous name of the member with the latest rotation date.
-     * If multiple members share the same latest rotation date all their names
-     * are returned comma-separated. This mirrors the logic used by
-     * IntergroupMeetingAdmin::resolveOfficerNameForPosition.
-     *
-     * @param int           $positionId The position CPT post ID
-     * @param array<Member> $allMembers All loaded members
-     * @return string Comma-separated anonymous name(s), or empty string if none found
-     */
-    private function resolveOfficerNameForPosition(int $positionId, array $allMembers): string
-    {
-        $matchingMembers = array_values(array_filter($allMembers, function (Member $member) use ($positionId): bool {
-            return $member->getIntergroupPosition() === $positionId;
-        }));
-
-        if (empty($matchingMembers)) {
-            return '';
-        }
-
-        if (count($matchingMembers) === 1) {
-            return $matchingMembers[0]->getAnonymousName();
-        }
-
-        $latestDateStr = null;
-        $parsed = [];
-
-        foreach ($matchingMembers as $member) {
-            $rotationDateStr = $member->getIntergroupPositionRotation();
-
-            if (empty($rotationDateStr)) {
-                continue;
-            }
-
-            $dt = \DateTime::createFromFormat('Y-m-d', $rotationDateStr)
-                ?: \DateTime::createFromFormat('d/m/Y', $rotationDateStr);
-
-            if (!$dt) {
-                continue;
-            }
-
-            $normalised = $dt->format('Y-m-d');
-            $parsed[$member->getId()] = $normalised;
-
-            if ($latestDateStr === null || $normalised > $latestDateStr) {
-                $latestDateStr = $normalised;
-            }
-        }
-
-        if ($latestDateStr === null) {
-            return $matchingMembers[0]->getAnonymousName();
-        }
-
-        $names = [];
-        foreach ($matchingMembers as $member) {
-            if (isset($parsed[$member->getId()]) && $parsed[$member->getId()] === $latestDateStr) {
-                $names[] = $member->getAnonymousName();
-            }
-        }
-
-        return implode(', ', $names);
     }
 
     /**
