@@ -17,6 +17,7 @@ use Unity\Plugin;
 use Unity\Contacts\Interfaces\Contact;
 use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
+use Unity\Groups\Interfaces\GroupViewFactory;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeeting;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepository;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingGroupAttendanceRepository;
@@ -2329,6 +2330,24 @@ class RestController
             }
 
             $meetingGroup = $group->getTitle();
+
+            // Resolve all GSR names for this group using the group view.
+            // The client-supplied gsr_name is overridden so the attendance
+            // record always contains the complete comma-separated list.
+            $groupViewFactory = $container->get(GroupViewFactory::class);
+            $groupView = $groupViewFactory->createFrom($groupId);
+
+            if ($groupView) {
+                $gsrNames = [];
+                foreach ($groupView->getMembers() as $groupMember) {
+                    if ($groupMember->isGSR()) {
+                        $gsrNames[] = $groupMember->getAnonymousName();
+                    }
+                }
+                if (!empty($gsrNames)) {
+                    $gsrName = implode(', ', $gsrNames);
+                }
+            }
 
             // Build a denormalised label for the attendance record so the
             // dashboard can filter without joining to the meetings table.
