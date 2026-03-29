@@ -560,6 +560,18 @@ class RestController
                 },
                 'sanitize_callback' => 'absint',
             ],
+            'intergroup_position_rotation' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    if ($param === '' || $param === null) {
+                        return true;
+                    }
+                    // Validate date format Y-m-d if provided
+                    $date = \DateTime::createFromFormat('Y-m-d', $param);
+                    return $date && $date->format('Y-m-d') === $param;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
         ];
     }
 
@@ -1885,6 +1897,9 @@ class RestController
             $intergroupPositionId = $request->has_param('intergroup_position_id')
                 ? (int) $request->get_param('intergroup_position_id')
                 : 0;
+            $intergroupPositionRotation = $request->has_param('intergroup_position_rotation')
+                ? $request->get_param('intergroup_position_rotation')
+                : '';
 
             // Validate referenced entities exist
             if ($homeGroupId > 0) {
@@ -1970,7 +1985,7 @@ class RestController
                 false,   // show_member_profile
                 '',      // anonymous_profile
                 $intergroupPositionId,
-                '',      // intergroup_position_rotation
+                $intergroupPositionRotation,
                 $homeGroupId,
                 $isGsr,
                 null,    // meeting_po
