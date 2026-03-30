@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Integrity
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
- * Version: 1.10.7
+ * Version: 1.10.8
  * Requires at least: 6.0
  * Requires Plugins: sentinel, scrutiny
  * Requires PHP: 8.1
