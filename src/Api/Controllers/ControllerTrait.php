@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Api\Controllers\Trait;
+namespace Integrity\Api\Controllers;
 
 // Prevent direct access
 if (!defined('ABSPATH')) {

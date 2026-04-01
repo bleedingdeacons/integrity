@@ -9,7 +9,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Api\Controllers\Trait\ControllerTrait;
 use Integrity\Auth\AuditLogger;
 use Unity\Plugin;
 use Unity\Positions\Interfaces\Position;

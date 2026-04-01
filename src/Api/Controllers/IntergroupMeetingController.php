@@ -28,7 +28,7 @@ use WP_REST_Response;
  */
 class IntergroupMeetingController
 {
-    use RestControllerTrait;
+    use ControllerTrait;
 
     public function __construct(AuditLogger $auditLogger)
     {

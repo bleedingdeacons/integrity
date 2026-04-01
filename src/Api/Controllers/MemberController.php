@@ -9,7 +9,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Api\Controllers\Trait\ControllerTrait;
 use Integrity\Auth\AuditLogger;
 use Integrity\Utils\Mask;
 use Unity\Groups\Interfaces\Group;
