@@ -17,24 +17,194 @@ class RateLimiterTest extends TestCase
     /**
      * @test
      */
+    public function checkAndIncrement_returns_allowed_when_under_limit(): void
+    {
+        global $wpdb;
+        $wpdb = Mockery::mock('wpdb');
+        $wpdb->prefix = 'wp_';
+
+        $wpdb->shouldReceive('prepare')
+            ->twice()
+            ->andReturn('prepared_query');
+
+        $wpdb->shouldReceive('query')
+            ->once()
+            ->with('prepared_query')
+            ->andReturn(1);
+
+        $wpdb->shouldReceive('get_var')
+            ->once()
+            ->andReturn(51); // count after increment
+
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkAndIncrement(1, 1000);
+
+        $this->assertTrue($result['allowed']);
+        $this->assertEquals(949, $result['remaining']);
+        $this->assertArrayHasKey('reset', $result);
+    }
+
+    /**
+     * @test
+     */
+    public function checkAndIncrement_returns_not_allowed_when_over_limit(): void
+    {
+        global $wpdb;
+        $wpdb = Mockery::mock('wpdb');
+        $wpdb->prefix = 'wp_';
+
+        $wpdb->shouldReceive('prepare')
+            ->twice()
+            ->andReturn('prepared_query');
+
+        $wpdb->shouldReceive('query')
+            ->once()
+            ->andReturn(1);
+
+        $wpdb->shouldReceive('get_var')
+            ->once()
+            ->andReturn(1001); // count after increment exceeds limit
+
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkAndIncrement(1, 1000);
+
+        $this->assertFalse($result['allowed']);
+        $this->assertEquals(0, $result['remaining']);
+    }
+
+    /**
+     * @test
+     */
+    public function checkAndIncrement_returns_allowed_for_first_request_in_window(): void
+    {
+        global $wpdb;
+        $wpdb = Mockery::mock('wpdb');
+        $wpdb->prefix = 'wp_';
+
+        $wpdb->shouldReceive('prepare')
+            ->twice()
+            ->andReturn('prepared_query');
+
+        $wpdb->shouldReceive('query')
+            ->once()
+            ->andReturn(1);
+
+        $wpdb->shouldReceive('get_var')
+            ->once()
+            ->andReturn(1); // first request
+
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkAndIncrement(1, 1000);
+
+        $this->assertTrue($result['allowed']);
+        $this->assertEquals(999, $result['remaining']);
+    }
+
+    /**
+     * @test
+     */
+    public function checkAndIncrement_returns_not_allowed_when_exceeding_limit(): void
+    {
+        global $wpdb;
+        $wpdb = Mockery::mock('wpdb');
+        $wpdb->prefix = 'wp_';
+
+        $wpdb->shouldReceive('prepare')
+            ->twice()
+            ->andReturn('prepared_query');
+
+        $wpdb->shouldReceive('query')
+            ->once()
+            ->andReturn(1);
+
+        $wpdb->shouldReceive('get_var')
+            ->once()
+            ->andReturn(1001); // 1001st request with limit of 1000
+
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkAndIncrement(1, 1000);
+
+        $this->assertFalse($result['allowed']);
+        $this->assertEquals(0, $result['remaining']);
+    }
+
+    /**
+     * @test
+     */
+    public function checkAndIncrement_allows_request_at_exact_limit_boundary(): void
+    {
+        global $wpdb;
+        $wpdb = Mockery::mock('wpdb');
+        $wpdb->prefix = 'wp_';
+
+        $wpdb->shouldReceive('prepare')
+            ->twice()
+            ->andReturn('prepared_query');
+
+        $wpdb->shouldReceive('query')
+            ->once()
+            ->andReturn(1);
+
+        $wpdb->shouldReceive('get_var')
+            ->once()
+            ->andReturn(1000); // 1000th request with limit of 1000
+
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkAndIncrement(1, 1000);
+
+        $this->assertTrue($result['allowed']);
+        $this->assertEquals(0, $result['remaining']);
+    }
+
+    /**
+     * @test
+     */
+    public function checkAndIncrement_with_zero_limit_always_denied(): void
+    {
+        global $wpdb;
+        $wpdb = Mockery::mock('wpdb');
+        $wpdb->prefix = 'wp_';
+
+        $wpdb->shouldReceive('prepare')
+            ->twice()
+            ->andReturn('prepared_query');
+
+        $wpdb->shouldReceive('query')
+            ->once()
+            ->andReturn(1);
+
+        $wpdb->shouldReceive('get_var')
+            ->once()
+            ->andReturn(1); // even 1 exceeds limit of 0
+
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkAndIncrement(1, 0);
+
+        $this->assertFalse($result['allowed']);
+    }
+
+    /**
+     * @test
+     */
     public function checkLimit_returns_allowed_when_under_limit(): void
     {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('prepare')
             ->once()
             ->andReturn('prepared_query');
-        
+
         $wpdb->shouldReceive('get_row')
             ->once()
             ->andReturn(['request_count' => 50]);
 
-        $result = RateLimiter::checkLimit(1, 1000);
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkLimit(1, 1000);
 
         $this->assertTrue($result['allowed']);
-        $this->assertEquals(949, $result['remaining']);
+        $this->assertEquals(950, $result['remaining']);
         $this->assertArrayHasKey('reset', $result);
     }
 
@@ -46,39 +216,17 @@ class RateLimiterTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('prepare')
             ->once()
             ->andReturn('prepared_query');
-        
+
         $wpdb->shouldReceive('get_row')
             ->once()
             ->andReturn(['request_count' => 1000]);
 
-        $result = RateLimiter::checkLimit(1, 1000);
-
-        $this->assertFalse($result['allowed']);
-        $this->assertEquals(0, $result['remaining']);
-    }
-
-    /**
-     * @test
-     */
-    public function checkLimit_returns_not_allowed_when_over_limit(): void
-    {
-        global $wpdb;
-        $wpdb = Mockery::mock('wpdb');
-        $wpdb->prefix = 'wp_';
-        
-        $wpdb->shouldReceive('prepare')
-            ->once()
-            ->andReturn('prepared_query');
-        
-        $wpdb->shouldReceive('get_row')
-            ->once()
-            ->andReturn(['request_count' => 1500]);
-
-        $result = RateLimiter::checkLimit(1, 1000);
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkLimit(1, 1000);
 
         $this->assertFalse($result['allowed']);
         $this->assertEquals(0, $result['remaining']);
@@ -92,19 +240,20 @@ class RateLimiterTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('prepare')
             ->once()
             ->andReturn('prepared_query');
-        
+
         $wpdb->shouldReceive('get_row')
             ->once()
-            ->andReturn(null); // No existing record
+            ->andReturn(null);
 
-        $result = RateLimiter::checkLimit(1, 1000);
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkLimit(1, 1000);
 
         $this->assertTrue($result['allowed']);
-        $this->assertEquals(999, $result['remaining']);
+        $this->assertEquals(1000, $result['remaining']);
     }
 
     /**
@@ -115,16 +264,17 @@ class RateLimiterTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('prepare')
             ->once()
             ->andReturn('prepared_query');
-        
+
         $wpdb->shouldReceive('get_row')
             ->once()
             ->andReturn(null);
 
-        $result = RateLimiter::checkLimit(1, 1000);
+        $rateLimiter = new RateLimiter();
+        $result = $rateLimiter->checkLimit(1, 1000);
 
         $this->assertGreaterThan(time(), $result['reset']);
     }
@@ -132,39 +282,16 @@ class RateLimiterTest extends TestCase
     /**
      * @test
      */
-    public function incrementCount_executes_query(): void
-    {
-        global $wpdb;
-        $wpdb = Mockery::mock('wpdb');
-        $wpdb->prefix = 'wp_';
-        
-        $wpdb->shouldReceive('prepare')
-            ->once()
-            ->andReturn('prepared_query');
-        
-        $wpdb->shouldReceive('query')
-            ->once()
-            ->with('prepared_query')
-            ->andReturn(1);
-
-        // Should not throw
-        RateLimiter::incrementCount(1);
-        
-        $this->assertTrue(true); // Assert that we got here
-    }
-
-    /**
-     * @test
-     */
     public function getHeaders_returns_correct_header_format(): void
     {
-        $headers = RateLimiter::getHeaders(1000, 500, 1704067200);
+        $rateLimiter = new RateLimiter();
+        $headers = $rateLimiter->getHeaders(1000, 500, 1704067200);
 
         $this->assertIsArray($headers);
         $this->assertArrayHasKey('X-RateLimit-Limit', $headers);
         $this->assertArrayHasKey('X-RateLimit-Remaining', $headers);
         $this->assertArrayHasKey('X-RateLimit-Reset', $headers);
-        
+
         $this->assertEquals(1000, $headers['X-RateLimit-Limit']);
         $this->assertEquals(500, $headers['X-RateLimit-Remaining']);
         $this->assertEquals(1704067200, $headers['X-RateLimit-Reset']);
@@ -175,67 +302,9 @@ class RateLimiterTest extends TestCase
      */
     public function getHeaders_remaining_never_negative(): void
     {
-        $headers = RateLimiter::getHeaders(1000, -50, 1704067200);
+        $rateLimiter = new RateLimiter();
+        $headers = $rateLimiter->getHeaders(1000, -50, 1704067200);
 
         $this->assertEquals(0, $headers['X-RateLimit-Remaining']);
-    }
-
-    /**
-     * @test
-     */
-    public function checkLimit_with_zero_limit_always_denied(): void
-    {
-        global $wpdb;
-        $wpdb = Mockery::mock('wpdb');
-        $wpdb->prefix = 'wp_';
-        
-        $wpdb->shouldReceive('prepare')
-            ->once()
-            ->andReturn('prepared_query');
-        
-        $wpdb->shouldReceive('get_row')
-            ->once()
-            ->andReturn(null);
-
-        $result = RateLimiter::checkLimit(1, 0);
-
-        $this->assertFalse($result['allowed']);
-    }
-
-    /**
-     * @test
-     */
-    public function checkLimit_with_different_api_keys_are_independent(): void
-    {
-        global $wpdb;
-        $wpdb = Mockery::mock('wpdb');
-        $wpdb->prefix = 'wp_';
-        
-        // First key - high usage
-        $wpdb->shouldReceive('prepare')
-            ->once()
-            ->andReturn('prepared_query_1');
-        
-        $wpdb->shouldReceive('get_row')
-            ->once()
-            ->andReturn(['request_count' => 900]);
-
-        $result1 = RateLimiter::checkLimit(1, 1000);
-
-        // Second key - low usage
-        $wpdb->shouldReceive('prepare')
-            ->once()
-            ->andReturn('prepared_query_2');
-        
-        $wpdb->shouldReceive('get_row')
-            ->once()
-            ->andReturn(['request_count' => 10]);
-
-        $result2 = RateLimiter::checkLimit(2, 1000);
-
-        $this->assertTrue($result1['allowed']);
-        $this->assertTrue($result2['allowed']);
-        $this->assertEquals(99, $result1['remaining']);
-        $this->assertEquals(989, $result2['remaining']);
     }
 }

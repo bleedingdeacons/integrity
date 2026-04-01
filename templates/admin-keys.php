@@ -164,7 +164,7 @@ if (!defined('ABSPATH')) {
                 </thead>
                 <tbody>
                 <?php foreach ($keys as $key): ?>
-                    <tr class="<?php echo $key['is_active'] ? '' : 'integrity-revoked'; ?>">
+                    <tr class="<?php echo esc_attr($key['is_active'] ? '' : 'integrity-revoked'); ?>">
                         <td>
                             <strong><?php echo esc_html($key['name']); ?></strong>
                             <?php if ($key['ip_whitelist']): ?>
