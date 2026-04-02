@@ -110,11 +110,9 @@ class GroupController
                 });
             }
 
-            // Get the true total across all pages (lightweight ID-only query)
+            // Get the true total across all pages
             $countArgs = array_diff_key($args, ['posts_per_page' => 0, 'paged' => 0]);
-            $countArgs['posts_per_page'] = -1;
-            $countArgs['fields'] = 'ids';
-            $total = count($groupRepo->findAll($countArgs));
+            $total = $groupRepo->count($countArgs);
 
             // Parse expand parameter
             $expandParam = $request->get_param('expand');
