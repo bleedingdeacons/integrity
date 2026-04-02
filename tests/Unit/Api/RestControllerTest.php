@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api;
 
+use Integrity\Api\Controllers\GroupController;
+use Integrity\Api\Controllers\IntergroupMeetingController;
+use Integrity\Api\Controllers\MeetingController;
+use Integrity\Api\Controllers\MemberController;
+use Integrity\Api\Controllers\PositionController;
 use Integrity\Api\RestController;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\AuditLogger;
@@ -20,6 +25,11 @@ class RestControllerTest extends TestCase
     private ApiKeyManager|Mockery\MockInterface $apiKeyManager;
     private AuditLogger|Mockery\MockInterface $auditLogger;
     private RateLimiter|Mockery\MockInterface $rateLimiter;
+    private GroupController|Mockery\MockInterface $groupController;
+    private MeetingController|Mockery\MockInterface $meetingController;
+    private PositionController|Mockery\MockInterface $positionController;
+    private MemberController|Mockery\MockInterface $memberController;
+    private IntergroupMeetingController|Mockery\MockInterface $intergroupMeetingController;
     private RestController $controller;
 
     protected function setUp(): void
@@ -29,11 +39,21 @@ class RestControllerTest extends TestCase
         $this->apiKeyManager = Mockery::mock(ApiKeyManager::class);
         $this->auditLogger = Mockery::mock(AuditLogger::class);
         $this->rateLimiter = Mockery::mock(RateLimiter::class);
+        $this->groupController = Mockery::mock(GroupController::class);
+        $this->meetingController = Mockery::mock(MeetingController::class);
+        $this->positionController = Mockery::mock(PositionController::class);
+        $this->memberController = Mockery::mock(MemberController::class);
+        $this->intergroupMeetingController = Mockery::mock(IntergroupMeetingController::class);
 
         $this->controller = new RestController(
             $this->apiKeyManager,
             $this->auditLogger,
-            $this->rateLimiter
+            $this->rateLimiter,
+            $this->groupController,
+            $this->meetingController,
+            $this->positionController,
+            $this->memberController,
+            $this->intergroupMeetingController
         );
     }
 
@@ -48,6 +68,19 @@ class RestControllerTest extends TestCase
         // Intergroup Meetings (6) + Health (1) = 17
         WP_Mock::userFunction('register_rest_route')
             ->times(17);
+
+        // Controller mocks must return args arrays when register() wires routes
+        $this->groupController->shouldReceive('getGroupsArgs')->once()->andReturn([]);
+        $this->meetingController->shouldReceive('getMeetingsArgs')->once()->andReturn([]);
+        $this->positionController->shouldReceive('getPositionsArgs')->once()->andReturn([]);
+        $this->memberController->shouldReceive('getMembersArgs')->once()->andReturn([]);
+        $this->memberController->shouldReceive('getUpdateMemberArgs')->once()->andReturn([]);
+        $this->memberController->shouldReceive('getCreateMemberArgs')->once()->andReturn([]);
+        $this->intergroupMeetingController->shouldReceive('getIntergroupMeetingsArgs')->once()->andReturn([]);
+        $this->intergroupMeetingController->shouldReceive('getRegisterAttendeeArgs')->once()->andReturn([]);
+        $this->intergroupMeetingController->shouldReceive('getUnregisterAttendeeArgs')->once()->andReturn([]);
+        $this->intergroupMeetingController->shouldReceive('getRegisterOfficerArgs')->once()->andReturn([]);
+        $this->intergroupMeetingController->shouldReceive('getUnregisterOfficerArgs')->once()->andReturn([]);
 
         $this->controller->register();
 
