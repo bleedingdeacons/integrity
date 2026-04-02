@@ -46,8 +46,9 @@ class RateLimiter
         // Atomic upsert: inserts with count=1 or increments the existing
         // count. LAST_INSERT_ID(expr) stores the new count so we can
         // retrieve it without a second round-trip.
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         $wpdb->query($wpdb->prepare(
-            "INSERT INTO $tableName (api_key_id, window_start, request_count)
+            "INSERT INTO `" . esc_sql($tableName) . "` (api_key_id, window_start, request_count)
              VALUES (%d, %s, 1)
              ON DUPLICATE KEY UPDATE request_count = LAST_INSERT_ID(request_count + 1)",
             $apiKeyId,
@@ -58,8 +59,9 @@ class RateLimiter
         // id (or 0 if there is no auto-increment column). Detect this by
         // also reading the actual count. This single SELECT is safe
         // because the counter has already been incremented atomically.
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         $newCount = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT request_count FROM $tableName WHERE api_key_id = %d AND window_start = %s",
+            "SELECT request_count FROM `" . esc_sql($tableName) . "` WHERE api_key_id = %d AND window_start = %s",
             $apiKeyId,
             $windowStart
         ));
@@ -98,8 +100,9 @@ class RateLimiter
         $tableName = $wpdb->prefix . 'integrity_rate_limits';
         $windowStart = $this->getCurrentWindow();
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         $row = $wpdb->get_row($wpdb->prepare(
-            "SELECT request_count FROM $tableName WHERE api_key_id = %d AND window_start = %s",
+            "SELECT request_count FROM `" . esc_sql($tableName) . "` WHERE api_key_id = %d AND window_start = %s",
             $apiKeyId,
             $windowStart
         ), ARRAY_A);

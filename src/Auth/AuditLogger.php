@@ -189,10 +189,13 @@ class AuditLogger
 
         $whereClause = implode(' AND ', $where);
 
-        $countQuery = "SELECT COUNT(*) FROM $tableName WHERE $whereClause";
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
+        $countQuery = "SELECT COUNT(*) FROM `" . esc_sql($tableName) . "` WHERE $whereClause";
         if (!empty($whereParams)) {
+            // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
             $countQuery = $wpdb->prepare($countQuery, $whereParams);
         }
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         $total = (int) $wpdb->get_var($countQuery);
 
         $orderBy = in_array($args['order_by'], ['created_at', 'response_code', 'response_time'])
@@ -201,9 +204,11 @@ class AuditLogger
         $order = $args['order'] === 'ASC' ? 'ASC' : 'DESC';
         $offset = ($args['page'] - 1) * $args['per_page'];
 
-        $query = "SELECT * FROM $tableName WHERE $whereClause ORDER BY $orderBy $order LIMIT %d OFFSET %d";
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; order_by/order are allow-listed above
+        $query = "SELECT * FROM `" . esc_sql($tableName) . "` WHERE $whereClause ORDER BY $orderBy $order LIMIT %d OFFSET %d";
         $queryParams = array_merge($whereParams, [$args['per_page'], $offset]);
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         $logs = $wpdb->get_results($wpdb->prepare($query, $queryParams), ARRAY_A);
 
         foreach ($logs as &$log) {
@@ -231,34 +236,42 @@ class AuditLogger
 
         $dateFrom = gmdate('Y-m-d H:i:s', strtotime("-{$days} days"));
 
+        $escapedTable = "`" . esc_sql($tableName) . "`";
+
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         $totalRequests = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $tableName WHERE created_at >= %s",
+            "SELECT COUNT(*) FROM {$escapedTable} WHERE created_at >= %s",
             $dateFrom
         ));
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $successfulRequests = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $tableName WHERE created_at >= %s AND response_code >= 200 AND response_code < 300",
+            "SELECT COUNT(*) FROM {$escapedTable} WHERE created_at >= %s AND response_code >= 200 AND response_code < 300",
             $dateFrom
         ));
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $failedAuth = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $tableName WHERE created_at >= %s AND response_code = 401",
+            "SELECT COUNT(*) FROM {$escapedTable} WHERE created_at >= %s AND response_code = 401",
             $dateFrom
         ));
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $rateLimited = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $tableName WHERE created_at >= %s AND response_code = 429",
+            "SELECT COUNT(*) FROM {$escapedTable} WHERE created_at >= %s AND response_code = 429",
             $dateFrom
         ));
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $avgResponseTime = (float) $wpdb->get_var($wpdb->prepare(
-            "SELECT AVG(response_time) FROM $tableName WHERE created_at >= %s",
+            "SELECT AVG(response_time) FROM {$escapedTable} WHERE created_at >= %s",
             $dateFrom
         ));
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $topEndpoints = $wpdb->get_results($wpdb->prepare(
             "SELECT endpoint, COUNT(*) as count
-             FROM $tableName
+             FROM {$escapedTable}
              WHERE created_at >= %s
              GROUP BY endpoint
              ORDER BY count DESC
@@ -266,9 +279,10 @@ class AuditLogger
             $dateFrom
         ), ARRAY_A);
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $topIps = $wpdb->get_results($wpdb->prepare(
             "SELECT ip_address, COUNT(*) as count
-             FROM $tableName
+             FROM {$escapedTable}
              WHERE created_at >= %s
              GROUP BY ip_address
              ORDER BY count DESC

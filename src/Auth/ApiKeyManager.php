@@ -130,8 +130,9 @@ class ApiKeyManager
         $prefix = substr($key, 0, self::PREFIX_LENGTH);
         $tableName = $wpdb->prefix . 'integrity_api_keys';
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM $tableName WHERE api_key_prefix = %s AND is_active = 1",
+            "SELECT * FROM `" . esc_sql($tableName) . "` WHERE api_key_prefix = %s AND is_active = 1",
             $prefix
         ), ARRAY_A);
 
@@ -296,10 +297,11 @@ class ApiKeyManager
         global $wpdb;
         $tableName = $wpdb->prefix . 'integrity_api_keys';
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         $results = $wpdb->get_results(
             "SELECT id, name, api_key_prefix, permissions, rate_limit, last_used,
                     request_count, created_at, expires_at, is_active, created_by, ip_whitelist
-             FROM $tableName
+             FROM `" . esc_sql($tableName) . "`
              ORDER BY created_at DESC",
             ARRAY_A
         );
@@ -323,10 +325,11 @@ class ApiKeyManager
         global $wpdb;
         $tableName = $wpdb->prefix . 'integrity_api_keys';
 
+        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->prefix; cannot be parameterised with prepare()
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT id, name, api_key_prefix, permissions, rate_limit, last_used,
                     request_count, created_at, expires_at, is_active, created_by, ip_whitelist
-             FROM $tableName
+             FROM `" . esc_sql($tableName) . "`
              WHERE id = %d",
             $keyId
         ), ARRAY_A);
