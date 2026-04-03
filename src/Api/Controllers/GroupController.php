@@ -35,42 +35,42 @@ class GroupController
     public function getGroupsArgs(): array
     {
         return [
-            'per_page' => [
-                'default' => 100,
-                'validate_callback' => function ($param) {
-                    return is_numeric($param) && $param > 0 && $param <= 500;
-                },
-                'sanitize_callback' => 'absint',
-            ],
-            'page' => [
-                'default' => 1,
-                'validate_callback' => function ($param) {
-                    return is_numeric($param) && $param > 0;
-                },
-                'sanitize_callback' => 'absint',
-            ],
-            'search' => [
-                'default' => '',
-                'sanitize_callback' => 'sanitize_text_field',
-            ],
-            'district_id' => [
-                'default' => null,
-                'validate_callback' => function ($param) {
-                    return $param === null || (is_numeric($param) && $param > 0);
-                },
-                'sanitize_callback' => function ($param) {
-                    return $param === null ? null : absint($param);
-                },
-            ],
-            'expand' => [
-                'default' => '',
-                'validate_callback' => function ($param) {
-                    $allowed = ['meetings'];
-                    $requested = array_filter(array_map('trim', explode(',', $param)));
-                    return empty(array_diff($requested, $allowed));
-                },
-                'sanitize_callback' => 'sanitize_text_field',
-            ],
+                'per_page' => [
+                        'default' => 100,
+                        'validate_callback' => function ($param) {
+                            return is_numeric($param) && $param > 0 && $param <= 500;
+                        },
+                        'sanitize_callback' => 'absint',
+                ],
+                'page' => [
+                        'default' => 1,
+                        'validate_callback' => function ($param) {
+                            return is_numeric($param) && $param > 0;
+                        },
+                        'sanitize_callback' => 'absint',
+                ],
+                'search' => [
+                        'default' => '',
+                        'sanitize_callback' => 'sanitize_text_field',
+                ],
+                'district_id' => [
+                        'default' => null,
+                        'validate_callback' => function ($param) {
+                            return $param === null || (is_numeric($param) && $param > 0);
+                        },
+                        'sanitize_callback' => function ($param) {
+                            return $param === null ? null : absint($param);
+                        },
+                ],
+                'expand' => [
+                        'default' => '',
+                        'validate_callback' => function ($param) {
+                            $allowed = ['meetings'];
+                            $requested = array_filter(array_map('trim', explode(',', $param)));
+                            return empty(array_diff($requested, $allowed));
+                        },
+                        'sanitize_callback' => 'sanitize_text_field',
+                ],
         ];
     }
 
@@ -90,8 +90,8 @@ class GroupController
 
             // Build query args
             $args = [
-                'posts_per_page' => $perPage,
-                'paged' => $page,
+                    'posts_per_page' => $perPage,
+                    'paged' => $page,
             ];
 
             $search = $request->get_param('search');
@@ -99,18 +99,24 @@ class GroupController
                 $args['s'] = $search;
             }
 
+            // Filter by district at the query level so pagination
+            // and total counts are consistent.
+            $districtId = $request->get_param('district_id');
+            if ($districtId !== null) {
+                $args['meta_query'] = [
+                        [
+                                'key'     => 'district_id',
+                                'value'   => $districtId,
+                                'compare' => '=',
+                                'type'    => 'NUMERIC',
+                        ],
+                ];
+            }
+
             // Get groups for the current page
             $groups = $groupRepo->findAll($args);
 
-            // Filter by district if specified
-            $districtId = $request->get_param('district_id');
-            if ($districtId !== null) {
-                $groups = array_filter($groups, function ($group) use ($districtId) {
-                    return $group->getDistrictId() === $districtId;
-                });
-            }
-
-            // Get the true total across all pages
+            // Get the true total across all pages (same filters, no pagination)
             $countArgs = array_diff_key($args, ['posts_per_page' => 0, 'paged' => 0]);
             $total = $groupRepo->count($countArgs);
 
@@ -125,11 +131,11 @@ class GroupController
 
             // Log successful request
             $this->logRequest(
-                $keyData['api_key_id'],
-                $request,
-                ['per_page' => $perPage, 'page' => $page],
-                200,
-                $startTime
+                    $keyData['api_key_id'],
+                    $request,
+                    ['per_page' => $perPage, 'page' => $page],
+                    200,
+                    $startTime
             );
 
             return $this->paginatedResponse(array_values($data), $total, $page, $perPage);
@@ -198,25 +204,25 @@ class GroupController
         }
 
         return [
-            'id' => $group->getId(),
-            'title' => $group->getTitle(),
-            'email' => $group->getEmail(),
-            'phone' => $group->getPhone(),
-            'website' => $group->getWebsite(),
-            'link' => $group->getLink(),
-            'notes' => $group->getGroupNotes(),
-            'group_email' => $group->getEmail(),
-            'district_id' => $group->getDistrictId(),
-            'last_contact' => $group->getLastContact(),
-            $expandMeetings ? 'meetings' : 'meeting_ids' => $meetingData,
-            'contacts' => !empty($contacts) ? array_map([$this, 'transformContact'], $contacts) : [],
-            'contribution_options' => [
-                'venmo' => $group->getVenmo(),
-                'paypal' => $group->getPaypal(),
-                'square' => $group->getSquare(),
-                'has_options' => $group->hasContributionOptions(),
-            ],
-            'updated' => $this->formatUpdatedTimestamp($group->getUpdated()),
+                'id' => $group->getId(),
+                'title' => $group->getTitle(),
+                'email' => $group->getEmail(),
+                'phone' => $group->getPhone(),
+                'website' => $group->getWebsite(),
+                'link' => $group->getLink(),
+                'notes' => $group->getGroupNotes(),
+                'group_email' => $group->getEmail(),
+                'district_id' => $group->getDistrictId(),
+                'last_contact' => $group->getLastContact(),
+                $expandMeetings ? 'meetings' : 'meeting_ids' => $meetingData,
+                'contacts' => !empty($contacts) ? array_map([$this, 'transformContact'], $contacts) : [],
+                'contribution_options' => [
+                        'venmo' => $group->getVenmo(),
+                        'paypal' => $group->getPaypal(),
+                        'square' => $group->getSquare(),
+                        'has_options' => $group->hasContributionOptions(),
+                ],
+                'updated' => $this->formatUpdatedTimestamp($group->getUpdated()),
         ];
     }
 
@@ -232,23 +238,23 @@ class GroupController
         $location = $meeting->getLocation();
 
         return [
-            'id' => $meeting->getId(),
-            'name' => $meeting->getName(),
-            'slug' => $meeting->getSlug(),
-            'location' => $location !== null ? $this->transformLocation($location) : null,
-            'url' => $meeting->getUrl(),
-            'day' => $meeting->getDay(),
-            'day_of_week' => $meeting->getDayOfWeek(),
-            'time' => $meeting->getTime(),
-            'end_time' => $meeting->getEndTime(),
-            'types' => $meeting->getTypes(),
-            'state' => $meeting->getState(),
-            'is_online' => $meeting->isOnline(),
-            'online_link' => $meeting->getOnlineLink(),
-            'online_notes' => $meeting->getOnlineNotes(),
-            'contacts' => !empty($contacts) ? array_map([$this, 'transformContact'], $contacts) : [],
-            'meta' => $meeting->getMeta(),
-            'updated' => $this->formatUpdatedTimestamp($meeting->getUpdated()),
+                'id' => $meeting->getId(),
+                'name' => $meeting->getName(),
+                'slug' => $meeting->getSlug(),
+                'location' => $location !== null ? $this->transformLocation($location) : null,
+                'url' => $meeting->getUrl(),
+                'day' => $meeting->getDay(),
+                'day_of_week' => $meeting->getDayOfWeek(),
+                'time' => $meeting->getTime(),
+                'end_time' => $meeting->getEndTime(),
+                'types' => $meeting->getTypes(),
+                'state' => $meeting->getState(),
+                'is_online' => $meeting->isOnline(),
+                'online_link' => $meeting->getOnlineLink(),
+                'online_notes' => $meeting->getOnlineNotes(),
+                'contacts' => !empty($contacts) ? array_map([$this, 'transformContact'], $contacts) : [],
+                'meta' => $meeting->getMeta(),
+                'updated' => $this->formatUpdatedTimestamp($meeting->getUpdated()),
         ];
     }
 
@@ -266,8 +272,8 @@ class GroupController
         }
 
         $groups = $groupRepo->findAll([
-            'post__in' => $groupIds,
-            'posts_per_page' => -1,
+                'post__in' => $groupIds,
+                'posts_per_page' => -1,
         ]);
 
         $groupMap = [];
