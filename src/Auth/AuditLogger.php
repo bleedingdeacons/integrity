@@ -13,9 +13,49 @@ if (!defined('ABSPATH')) {
  * Audit Logger
  *
  * Logs API requests for security auditing and monitoring.
+ *
+ * ── IP address resolution ──
+ *
+ * By default only $_SERVER['REMOTE_ADDR'] is trusted, because proxy
+ * headers (X-Forwarded-For, CF-Connecting-IP, X-Real-IP) are trivially
+ * spoofable by any client. Since this IP is used for both audit logging
+ * AND IP whitelist enforcement (via ApiKeyManager::validateKey), blindly
+ * trusting proxy headers would let an attacker bypass IP restrictions by
+ * injecting a whitelisted address into the X-Forwarded-For header.
+ *
+ * When running behind a reverse proxy or CDN (nginx, Cloudflare, AWS ALB),
+ * configure trusted proxies in Settings → Integrity → Trusted Proxies so
+ * that proxy headers are only read when the direct connection comes from
+ * an expected intermediary.
+ *
+ * Option: integrity_trusted_proxies
+ *   - Empty (default): only REMOTE_ADDR is used — safest setting
+ *   - Array of IPs/CIDR ranges: proxy headers are read only when
+ *     REMOTE_ADDR matches one of the trusted proxy addresses
+ *
+ * Option: integrity_trusted_proxy_header
+ *   - Which header to read when behind a trusted proxy
+ *   - Default: 'HTTP_X_FORWARDED_FOR'
+ *   - For Cloudflare: 'HTTP_CF_CONNECTING_IP'
+ *   - For nginx with realip: 'HTTP_X_REAL_IP'
  */
 class AuditLogger
 {
+    /**
+     * Cached list of trusted proxy IPs/CIDR ranges.
+     * Loaded once per request from the integrity_trusted_proxies option.
+     *
+     * @var string[]|null
+     */
+    private ?array $trustedProxies = null;
+
+    /**
+     * Cached proxy header name.
+     *
+     * @var string|null
+     */
+    private ?string $trustedProxyHeader = null;
+
     /**
      * Log an API request
      *
@@ -101,31 +141,152 @@ class AuditLogger
     }
 
     /**
-     * Get the client's IP address
+     * Get the client's real IP address.
+     *
+     * Only trusts proxy headers when REMOTE_ADDR matches a configured
+     * trusted proxy. Without trusted proxies configured, returns
+     * REMOTE_ADDR directly — the only unforgeable source.
      *
      * @return string The client IP address
      */
     public function getClientIp(): string
     {
-        $headers = [
-            'HTTP_CF_CONNECTING_IP',
-            'HTTP_X_FORWARDED_FOR',
-            'HTTP_X_REAL_IP',
-            'REMOTE_ADDR',
-        ];
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        foreach ($headers as $header) {
+        if (!filter_var($remoteAddr, FILTER_VALIDATE_IP)) {
+            return '0.0.0.0';
+        }
+
+        // Only consult proxy headers if the direct connection is from
+        // a known trusted proxy (CDN, load balancer, reverse proxy).
+        $trustedProxies = $this->getTrustedProxies();
+
+        if (!empty($trustedProxies) && $this->isProxyTrusted($remoteAddr, $trustedProxies)) {
+            $header = $this->getTrustedProxyHeader();
+
             if (!empty($_SERVER[$header])) {
+                // X-Forwarded-For contains: client, proxy1, proxy2, …
+                // The rightmost non-trusted IP is the real client.
+                // For simplicity with a single proxy layer, take the
+                // leftmost (first) IP, which is the original client.
                 $ips = explode(',', $_SERVER[$header]);
-                $ip = trim($ips[0]);
+                $clientIp = trim($ips[0]);
 
-                if (filter_var($ip, FILTER_VALIDATE_IP)) {
-                    return $ip;
+                if (filter_var($clientIp, FILTER_VALIDATE_IP)) {
+                    return $clientIp;
                 }
             }
         }
 
-        return '0.0.0.0';
+        return $remoteAddr;
+    }
+
+    /**
+     * Get the list of trusted proxy IPs/CIDR ranges.
+     *
+     * @return string[]
+     */
+    private function getTrustedProxies(): array
+    {
+        if ($this->trustedProxies === null) {
+            $proxies = get_option('integrity_trusted_proxies', []);
+            $this->trustedProxies = is_array($proxies) ? array_filter(array_map('trim', $proxies)) : [];
+        }
+
+        return $this->trustedProxies;
+    }
+
+    /**
+     * Get the configured proxy header to read the client IP from.
+     *
+     * @return string The $_SERVER key to read
+     */
+    private function getTrustedProxyHeader(): string
+    {
+        if ($this->trustedProxyHeader === null) {
+            $header = get_option('integrity_trusted_proxy_header', 'HTTP_X_FORWARDED_FOR');
+            $this->trustedProxyHeader = is_string($header) && $header !== '' ? $header : 'HTTP_X_FORWARDED_FOR';
+        }
+
+        return $this->trustedProxyHeader;
+    }
+
+    /**
+     * Check whether REMOTE_ADDR matches one of the trusted proxies.
+     *
+     * @param string   $ip      The REMOTE_ADDR value
+     * @param string[] $proxies Trusted proxy IPs or CIDR ranges
+     * @return bool
+     */
+    private function isProxyTrusted(string $ip, array $proxies): bool
+    {
+        foreach ($proxies as $proxy) {
+            if (strpos($proxy, '/') !== false) {
+                if ($this->ipInCidr($ip, $proxy)) {
+                    return true;
+                }
+            } elseif ($ip === $proxy) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if an IP is within a CIDR range.
+     *
+     * @param string $ip   The IP address
+     * @param string $cidr The CIDR range (e.g. "10.0.0.0/8")
+     * @return bool
+     */
+    private function ipInCidr(string $ip, string $cidr): bool
+    {
+        [$subnet, $mask] = explode('/', $cidr, 2);
+
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
+            && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
+        ) {
+            $ipLong = ip2long($ip);
+            $subnetLong = ip2long($subnet);
+            $maskLong = -1 << (32 - (int) $mask);
+
+            return ($ipLong & $maskLong) === ($subnetLong & $maskLong);
+        }
+
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
+            && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
+        ) {
+            $ipBin = inet_pton($ip);
+            $subnetBin = inet_pton($subnet);
+
+            if ($ipBin === false || $subnetBin === false) {
+                return false;
+            }
+
+            $maskBits = (int) $mask;
+            $ipHex = bin2hex($ipBin);
+            $subnetHex = bin2hex($subnetBin);
+
+            $fullNibbles = intdiv($maskBits, 4);
+            $remainderBits = $maskBits % 4;
+
+            if (substr($ipHex, 0, $fullNibbles) !== substr($subnetHex, 0, $fullNibbles)) {
+                return false;
+            }
+
+            if ($remainderBits > 0) {
+                $ipNibble = intval($ipHex[$fullNibbles], 16);
+                $subnetNibble = intval($subnetHex[$fullNibbles], 16);
+                $nibbleMask = (0xF << (4 - $remainderBits)) & 0xF;
+
+                return ($ipNibble & $nibbleMask) === ($subnetNibble & $nibbleMask);
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     /**
