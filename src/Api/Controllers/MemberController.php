@@ -557,9 +557,14 @@ class MemberController
             ], true);
 
             if (is_wp_error($postId)) {
+                \Integrity\Plugin::logError('Integrity: wp_insert_post failed for member create', [
+                    'error'          => $postId->get_error_message(),
+                    'anonymous_name' => $anonymousName,
+                ]);
+
                 $this->logRequest($keyData['api_key_id'], $request, ['anonymous_name' => $anonymousName], 500, $startTime);
 
-                return $this->errorResponse('create_failed', 'Failed to create member post: ' . $postId->get_error_message(), 500);
+                return $this->errorResponse('create_failed', 'Failed to create member', 500);
             }
 
             // Build the member object with all fields via the factory
