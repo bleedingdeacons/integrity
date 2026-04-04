@@ -32,17 +32,17 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore client/sharp/TheBleedingDeacons.Unity.Sharp.sln
+        run: dotnet restore client/sharp/TheBleedingDeacons.Unity.Client.sln
 
       - name: Build projects
-        run: dotnet build client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-restore
+        run: dotnet build client/sharp/TheBleedingDeacons.Unity.Client.sln --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-build
+        run: dotnet test client/sharp/TheBleedingDeacons.Unity.Client.sln --configuration Release --no-build
         continue-on-error: true
 
       - name: Create NuGet packages with build number
-        run: dotnet pack client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-build --output ./nupkg -p:VersionSuffix=build.${{ github.run_number }}
+        run: dotnet pack client/sharp/TheBleedingDeacons.Unity.Client.sln --configuration Release --no-build --output ./nupkg -p:VersionSuffix=build.${{ github.run_number }}
 
       - name: Add GitHub NuGet source
         run: |
