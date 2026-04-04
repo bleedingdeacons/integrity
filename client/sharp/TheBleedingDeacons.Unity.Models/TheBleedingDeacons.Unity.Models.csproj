@@ -4,7 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Copyright>Today is the yesterday of tomorrow.</Copyright>
+    <Copyright>Don't take yourself too damn seriously</Copyright>
     <AssemblyVersion>1.7.0</AssemblyVersion>
     <FileVersion>1.7.0</FileVersion>
   </PropertyGroup>

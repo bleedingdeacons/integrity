@@ -6,6 +6,7 @@
     <LangVersion>13</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <Copyright>Don't take yourself too damn seriously</Copyright>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
