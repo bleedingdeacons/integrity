@@ -32,8 +32,42 @@ if (!defined('ABSPATH')) {
         <div class="notice notice-success">
             <p><strong><?php echo esc_html__('API key created successfully!', 'integrity'); ?></strong></p>
             <p><?php echo esc_html__('Copy your API key now. It will not be shown again:', 'integrity'); ?></p>
-            <code class="integrity-new-key"><?php echo esc_html($newKey); ?></code>
+            <code class="integrity-new-key" id="integrity-new-key-value" title="<?php echo esc_attr__('Click to copy', 'integrity'); ?>"><?php echo esc_html($newKey); ?></code>
             <p><small><?php echo esc_html__('Store this key securely. It cannot be recovered.', 'integrity'); ?></small></p>
+            <script>
+                document.getElementById('integrity-new-key-value').addEventListener('click', function () {
+                    var key = this.textContent;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(key).then(function () {
+                            var el = document.getElementById('integrity-new-key-value');
+                            var original = el.textContent;
+                            el.textContent = '<?php echo esc_js(__('Copied to clipboard!', 'integrity')); ?>';
+                            el.classList.add('integrity-key-copied');
+                            setTimeout(function () {
+                                el.textContent = original;
+                                el.classList.remove('integrity-key-copied');
+                            }, 1500);
+                        });
+                    } else {
+                        var textarea = document.createElement('textarea');
+                        textarea.value = key;
+                        textarea.style.position = 'fixed';
+                        textarea.style.opacity = '0';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textarea);
+                        var el = document.getElementById('integrity-new-key-value');
+                        var original = el.textContent;
+                        el.textContent = '<?php echo esc_js(__('Copied to clipboard!', 'integrity')); ?>';
+                        el.classList.add('integrity-key-copied');
+                        setTimeout(function () {
+                            el.textContent = original;
+                            el.classList.remove('integrity-key-copied');
+                        }, 1500);
+                    }
+                });
+            </script>
         </div>
     <?php endif; ?>
 
