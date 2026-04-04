@@ -1,0 +1,56 @@
+name: Build and Publish Integrity NuGet Packages
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'client/sharp/**'
+      - '.github/workflows/build-and-publish-nuget.yml'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'client/sharp/**'
+  workflow_dispatch:
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore client/sharp/TheBleedingDeacons.Unity.Sharp.sln
+
+      - name: Build projects
+        run: dotnet build client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-build
+        continue-on-error: true
+
+      - name: Create NuGet packages
+        run: dotnet pack client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-build --output ./nupkg
+
+      - name: Add GitHub NuGet source
+        run: |
+          dotnet nuget add source --username ${{ github.actor }} \
+            --password ${{ secrets.GITHUB_TOKEN }} \
+            --store-password-in-clear-text \
+            --name github \
+            "https://nuget.pkg.github.com/bleedingdeacons/index.json"
+
+      - name: Publish to GitHub Packages
+        run: dotnet nuget push ./nupkg/*.nupkg --source github --skip-duplicate
