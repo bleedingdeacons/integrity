@@ -41,8 +41,8 @@ jobs:
         run: dotnet test client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-build
         continue-on-error: true
 
-      - name: Create NuGet packages
-        run: dotnet pack client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-build --output ./nupkg
+      - name: Create NuGet packages with build number
+        run: dotnet pack client/sharp/TheBleedingDeacons.Unity.Sharp.sln --configuration Release --no-build --output ./nupkg -p:VersionSuffix=build.${{ github.run_number }}
 
       - name: Add GitHub NuGet source
         run: |
