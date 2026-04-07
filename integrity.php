@@ -7,7 +7,7 @@ declare(strict_types=1);
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
  * Version: 1.12.5
  * Requires at least: 6.0
- * Requires Plugins: sentinel, scrutiny
+ * Requires Plugins: scrutiny
  * Requires PHP: 8.1
  * GitHub Plugin URI: https://github.com/thebleedingdeacons/integrity
  * GitHub Branch: main
