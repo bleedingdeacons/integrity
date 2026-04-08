@@ -16,6 +16,7 @@ public sealed class UnityRestSharp : IDisposable
 	private readonly string _baseUrl;
 	private readonly JsonSerializerOptions _jsonOptions;
 	private bool _disposed;
+	private readonly bool _httpClientSupplied;
 
 	/// <summary>
 	/// Creates a new Integrity API client.
@@ -27,6 +28,8 @@ public sealed class UnityRestSharp : IDisposable
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
 		ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
+
+		if (httpClient != null) _httpClientSupplied = true;
 
 		_baseUrl = baseUrl.TrimEnd('/');
 		_httpClient = httpClient ?? new HttpClient();
@@ -675,7 +678,7 @@ public sealed class UnityRestSharp : IDisposable
 	{
 		if (!_disposed)
 		{
-			_httpClient.Dispose();
+			if (_httpClientSupplied) _httpClient.Dispose();
 			_disposed = true;
 		}
 	}
