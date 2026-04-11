@@ -323,7 +323,7 @@ class IntergroupMeetingController
             $container = Plugin::getContainer();
             $intergroupMeetingRepo = $container->get(IntergroupMeetingRepository::class);
 
-            $intergroupMeeting = $intergroupMeetingRepo->find($id);
+            $intergroupMeeting = $intergroupMeetingRepo->findById($id);
 
             if (!$intergroupMeeting) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 404, $startTime);
@@ -382,7 +382,7 @@ class IntergroupMeetingController
             );
 
             // Validate intergroup meeting exists
-            $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
+            $intergroupMeeting = $intergroupMeetingRepo->findById($meetingId);
 
             if (!$intergroupMeeting) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'group_id' => $groupId], 404, $startTime);
@@ -506,7 +506,7 @@ class IntergroupMeetingController
             $attendanceRepo = $container->get(IntergroupMeetingGroupAttendanceRepository::class);
 
             // Validate intergroup meeting exists
-            $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
+            $intergroupMeeting = $intergroupMeetingRepo->findById($meetingId);
 
             if (!$intergroupMeeting) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'group_id' => $groupId], 404, $startTime);
@@ -574,7 +574,7 @@ class IntergroupMeetingController
             );
 
             // Validate intergroup meeting exists
-            $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
+            $intergroupMeeting = $intergroupMeetingRepo->findById($meetingId);
 
             if (!$intergroupMeeting) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'officer_id' => $officerId], 404, $startTime);
@@ -583,7 +583,7 @@ class IntergroupMeetingController
             }
 
             // Validate officer (member) exists
-            $member = $memberRepo->find($officerId);
+            $member = $memberRepo->findById($officerId);
 
             if (!$member) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'officer_id' => $officerId], 404, $startTime);
@@ -691,7 +691,7 @@ class IntergroupMeetingController
             $memberRepo = $container->get(MemberRepository::class);
 
             // Validate intergroup meeting exists
-            $intergroupMeeting = $intergroupMeetingRepo->find($meetingId);
+            $intergroupMeeting = $intergroupMeetingRepo->findById($meetingId);
 
             if (!$intergroupMeeting) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'officer_id' => $officerId], 404, $startTime);
@@ -700,7 +700,7 @@ class IntergroupMeetingController
             }
 
             // Resolve the member's intergroup position ID
-            $member = $memberRepo->find($officerId);
+            $member = $memberRepo->findById($officerId);
 
             if (!$member) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'officer_id' => $officerId], 404, $startTime);

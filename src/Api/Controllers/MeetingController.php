@@ -199,7 +199,7 @@ class MeetingController
             $container = Plugin::getContainer();
             $meetingRepo = $container->get(MeetingRepository::class);
 
-            $meeting = $meetingRepo->find($id);
+            $meeting = $meetingRepo->findById($id);
 
             if (!$meeting) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 404, $startTime);

@@ -340,7 +340,7 @@ class MemberController
             $container = Plugin::getContainer();
             $memberRepo = $container->get(MemberRepository::class);
 
-            $member = $memberRepo->find($id);
+            $member = $memberRepo->findById($id);
 
             if (!$member) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 404, $startTime);
@@ -385,7 +385,7 @@ class MemberController
             $memberFactory = $container->get(MemberFactory::class);
 
             // Fetch existing member
-            $existingMember = $memberRepo->find($id);
+            $existingMember = $memberRepo->findById($id);
 
             if (!$existingMember) {
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 404, $startTime);
@@ -480,7 +480,7 @@ class MemberController
             }
 
             // Re-fetch the saved member to return the latest state
-            $savedMember = $memberRepo->find($id);
+            $savedMember = $memberRepo->findById($id);
 
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 200, $startTime);
 
@@ -596,7 +596,7 @@ class MemberController
             }
 
             // Re-fetch the saved member to return the latest state
-            $savedMember = $memberRepo->find($postId);
+            $savedMember = $memberRepo->findById($postId);
 
             $this->logRequest(
                 $keyData['api_key_id'],
