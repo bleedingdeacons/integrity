@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 using TheBleedingDeacons.Unity.Models;
 
 namespace TheBleedingDeacons.Unity.Client;
@@ -17,6 +18,7 @@ public sealed class UnityRestSharp : IDisposable
 	private readonly JsonSerializerOptions _jsonOptions;
 	private bool _disposed;
 	private readonly bool _httpClientSupplied;
+	private readonly ILogger<UnityRestSharp> _logger;
 
 	/// <summary>
 	/// Creates a new Integrity API client.
@@ -24,10 +26,13 @@ public sealed class UnityRestSharp : IDisposable
 	/// <param name="baseUrl">The WordPress site URL (e.g., "https://example.com")</param>
 	/// <param name="apiKey">Your Integrity API key</param>
 	/// <param name="httpClient">Optional HttpClient instance for dependency injection</param>
-	public UnityRestSharp(string baseUrl, string apiKey, HttpClient? httpClient = null)
+	/// <param name="logger">Optional ILogger instance for structured logging</param>
+	public UnityRestSharp(string baseUrl, string apiKey, HttpClient? httpClient = null, ILogger<UnityRestSharp>? logger = null)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(baseUrl);
 		ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
+
+		_logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<UnityRestSharp>.Instance;
 
 		if (httpClient != null) _httpClientSupplied = true;
 
@@ -50,6 +55,8 @@ public sealed class UnityRestSharp : IDisposable
 			PropertyNameCaseInsensitive = true,
 			DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
 		};
+
+		_logger.LogDebug("Integrity API client initialized for {BaseUrl}", _baseUrl);
 	}
 
 	#region Groups
@@ -444,10 +451,14 @@ public sealed class UnityRestSharp : IDisposable
 
 		try
 		{
-			return await _httpClient.GetFromJsonAsync<HealthResponse>(url, _jsonOptions, cancellationToken);
+			_logger.LogDebug("Health check GET {Url}", url);
+			var result = await _httpClient.GetFromJsonAsync<HealthResponse>(url, _jsonOptions, cancellationToken);
+			_logger.LogDebug("Health check completed: {Status}", result?.Status ?? "null");
+			return result;
 		}
-		catch
+		catch (Exception ex)
 		{
+			_logger.LogWarning(ex, "Health check failed for {Url}", url);
 			return null;
 		}
 	}
@@ -460,6 +471,8 @@ public sealed class UnityRestSharp : IDisposable
 	{
 		int statusCode = 0;
 		string? contentSnippet = null;
+
+		_logger.LogDebug("GET {Url}", url);
 
 		try
 		{
@@ -483,10 +496,8 @@ public sealed class UnityRestSharp : IDisposable
 				{
 					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
 					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-					System.Diagnostics.Debug.WriteLine($"[UnityRestSharp] 403 GET {url}");
-					System.Diagnostics.Debug.WriteLine($"[UnityRestSharp] Response headers:\n{headers}");
-					System.Diagnostics.Debug.WriteLine($"[UnityRestSharp] Content headers:\n{contentHeaders}");
-					System.Diagnostics.Debug.WriteLine($"[UnityRestSharp] Body:\n{content}");
+					_logger.LogWarning("403 Forbidden on GET {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
+						url, headers, contentHeaders, content);
 				}
 
 				// If the response doesn't look like JSON, return the body snippet directly
@@ -522,6 +533,8 @@ public sealed class UnityRestSharp : IDisposable
 
 			var apiResponse = JsonSerializer.Deserialize<ApiDataResponse<T>>(content, _jsonOptions);
 
+			_logger.LogDebug("GET {Url} completed with HTTP {StatusCode}", url, statusCode);
+
 			return new ApiResponse<T>
 			{
 				Success = apiResponse?.Success ?? false,
@@ -533,6 +546,7 @@ public sealed class UnityRestSharp : IDisposable
 		}
 		catch (HttpRequestException ex)
 		{
+			_logger.LogError(ex, "Network error on GET {Url}", url);
 			return new ApiResponse<T>
 			{
 				Success = false,
@@ -542,6 +556,7 @@ public sealed class UnityRestSharp : IDisposable
 		}
 		catch (JsonException ex)
 		{
+			_logger.LogError(ex, "JSON parse error on GET {Url}, HTTP {StatusCode}", url, statusCode);
 			return new ApiResponse<T>
 			{
 				Success = false,
@@ -559,6 +574,8 @@ public sealed class UnityRestSharp : IDisposable
 	{
 		int statusCode = 0;
 		string? contentSnippet = null;
+
+		_logger.LogDebug("POST {Url}", url);
 
 		try
 		{
@@ -582,6 +599,8 @@ public sealed class UnityRestSharp : IDisposable
 
 			if (!response.IsSuccessStatusCode)
 			{
+				_logger.LogWarning("HTTP {StatusCode} on POST {Url}: {ReasonPhrase}", statusCode, url, response.ReasonPhrase);
+
 				// If the response doesn't look like JSON, return the body snippet directly
 				var trimmed = content.TrimStart();
 				if (trimmed.Length > 0 && trimmed[0] != '{' && trimmed[0] != '[')
@@ -615,6 +634,8 @@ public sealed class UnityRestSharp : IDisposable
 
 			var apiResponse = JsonSerializer.Deserialize<ApiDataResponse<T>>(content, _jsonOptions);
 
+			_logger.LogDebug("POST {Url} completed with HTTP {StatusCode}", url, statusCode);
+
 			return new ApiResponse<T>
 			{
 				Success = apiResponse?.Success ?? false,
@@ -626,6 +647,7 @@ public sealed class UnityRestSharp : IDisposable
 		}
 		catch (HttpRequestException ex)
 		{
+			_logger.LogError(ex, "Network error on POST {Url}", url);
 			return new ApiResponse<T>
 			{
 				Success = false,
@@ -635,6 +657,7 @@ public sealed class UnityRestSharp : IDisposable
 		}
 		catch (JsonException ex)
 		{
+			_logger.LogError(ex, "JSON parse error on POST {Url}, HTTP {StatusCode}", url, statusCode);
 			return new ApiResponse<T>
 			{
 				Success = false,
