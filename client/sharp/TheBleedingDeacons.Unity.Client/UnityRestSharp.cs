@@ -20,6 +20,13 @@ public sealed class UnityRestSharp : IDisposable
 	private readonly bool _httpClientSupplied;
 	private readonly ILogger<UnityRestSharp> _logger;
 
+	// Retry configuration for transient failures (network errors, 5xx, 429, 408,
+	// and WAF-style HTML 403s served by the host's web server rather than the API).
+	private const int MaxRetryAttempts = 5;
+	private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromMilliseconds(500);
+	private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(8);
+	private static readonly Random RetryJitter = new();
+
 	/// <summary>
 	/// Creates a new Integrity API client.
 	/// </summary>
@@ -44,8 +51,7 @@ public sealed class UnityRestSharp : IDisposable
 			new AuthenticationHeaderValue("Bearer", apiKey);
 
 		// Set default headers
-		_httpClient.DefaultRequestHeaders.Accept.Add(
-			new MediaTypeWithQualityHeaderValue("application/json"));
+		_httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
 		_httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("IntegrityClient/1.0");
 
 		// Configure JSON options
@@ -452,7 +458,16 @@ public sealed class UnityRestSharp : IDisposable
 		try
 		{
 			_logger.LogDebug("Health check GET {Url}", url);
-			var result = await _httpClient.GetFromJsonAsync<HealthResponse>(url, _jsonOptions, cancellationToken);
+			using var response = await SendWithRetryAsync(
+				() => new HttpRequestMessage(HttpMethod.Get, url),
+				"GET", url, cancellationToken);
+			if (!response.IsSuccessStatusCode)
+			{
+				_logger.LogWarning("Health check returned HTTP {StatusCode} for {Url}", (int)response.StatusCode, url);
+				return null;
+			}
+			var body = await response.Content.ReadAsStringAsync(cancellationToken);
+			var result = JsonSerializer.Deserialize<HealthResponse>(body, _jsonOptions);
 			_logger.LogDebug("Health check completed: {Status}", result?.Status ?? "null");
 			return result;
 		}
@@ -476,7 +491,9 @@ public sealed class UnityRestSharp : IDisposable
 
 		try
 		{
-			using var response = await _httpClient.GetAsync(url, cancellationToken);
+			using var response = await SendWithRetryAsync(
+				() => new HttpRequestMessage(HttpMethod.Get, url),
+				"GET", url, cancellationToken);
 			statusCode = (int)response.StatusCode;
 			var content = await response.Content.ReadAsStringAsync(cancellationToken);
 			contentSnippet = content.Length > 500 ? content[..500] : content;
@@ -579,12 +596,14 @@ public sealed class UnityRestSharp : IDisposable
 
 		try
 		{
-			var jsonContent = new StringContent(
-				JsonSerializer.Serialize(payload, _jsonOptions),
-				System.Text.Encoding.UTF8,
-				"application/json");
+			var serializedPayload = JsonSerializer.Serialize(payload, _jsonOptions);
 
-			using var response = await _httpClient.PostAsync(url, jsonContent, cancellationToken);
+			using var response = await SendWithRetryAsync(
+				() => new HttpRequestMessage(HttpMethod.Post, url)
+				{
+					Content = new StringContent(serializedPayload, System.Text.Encoding.UTF8, "application/json")
+				},
+				"POST", url, cancellationToken);
 			statusCode = (int)response.StatusCode;
 			var content = await response.Content.ReadAsStringAsync(cancellationToken);
 			contentSnippet = content.Length > 500 ? content[..500] : content;
@@ -669,6 +688,157 @@ public sealed class UnityRestSharp : IDisposable
 				StatusCode = statusCode
 			};
 		}
+	}
+
+	/// <summary>
+	/// Sends an HTTP request with retries for transient failures including:
+	/// network exceptions, timeouts, HTTP 5xx, 408, 429, and HTML 403 responses
+	/// from an upstream WAF / web server (as opposed to legitimate API JSON 403s).
+	/// Uses exponential backoff with jitter, honouring Retry-After when present.
+	/// The factory is invoked once per attempt because HttpRequestMessage cannot be reused.
+	/// </summary>
+	private async Task<HttpResponseMessage> SendWithRetryAsync(
+		Func<HttpRequestMessage> requestFactory,
+		string method,
+		string url,
+		CancellationToken cancellationToken)
+	{
+		Exception? lastException = null;
+
+		for (int attempt = 1; attempt <= MaxRetryAttempts; attempt++)
+		{
+			HttpResponseMessage? response = null;
+			bool shouldRetry = false;
+			TimeSpan? retryAfter = null;
+			string retryReason = string.Empty;
+
+			_logger.LogDebug(
+				"{Method} {Url} attempt {Attempt}/{Max} starting",
+				method, url, attempt, MaxRetryAttempts);
+
+			try
+			{
+				var request = requestFactory();
+				response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+				int status = (int)response.StatusCode;
+				_logger.LogDebug(
+					"{Method} {Url} attempt {Attempt}/{Max} received HTTP {StatusCode}",
+					method, url, attempt, MaxRetryAttempts, status);
+
+				// 5xx, 408, 429 are always transient.
+				if (status >= 500 || status == 408 || status == 429)
+				{
+					shouldRetry = true;
+					retryReason = $"HTTP {status}";
+					retryAfter = GetRetryAfter(response);
+				}
+				// 403 from a WAF / upstream web server typically returns HTML, not JSON.
+				// A real API 403 (auth/permission) returns JSON and should NOT be retried.
+				else if (status == 403 && IsLikelyWafHtml(response))
+				{
+					shouldRetry = true;
+					retryReason = "HTTP 403 (HTML body — likely WAF)";
+					retryAfter = GetRetryAfter(response);
+				}
+
+				if (!shouldRetry)
+				{
+					if (attempt > 1)
+					{
+						_logger.LogInformation(
+							"{Method} {Url} succeeded on attempt {Attempt}/{Max} (HTTP {StatusCode}) after {PriorFailures} prior failure(s)",
+							method, url, attempt, MaxRetryAttempts, status, attempt - 1);
+					}
+					return response;
+				}
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+				response?.Dispose();
+				throw;
+			}
+			catch (HttpRequestException ex)
+			{
+				lastException = ex;
+				shouldRetry = true;
+				retryReason = $"network error: {ex.Message}";
+			}
+			catch (TaskCanceledException ex)
+			{
+				// Caller cancellation handled above; this is a request timeout.
+				lastException = ex;
+				shouldRetry = true;
+				retryReason = "request timeout";
+			}
+
+			// Out of attempts — return the last response (so caller can surface it) or rethrow.
+			if (attempt == MaxRetryAttempts)
+			{
+				if (response != null)
+				{
+					_logger.LogWarning(
+						"{Method} {Url} giving up after {Attempts} attempts ({Reason})",
+						method, url, attempt, retryReason);
+					return response;
+				}
+				_logger.LogError(lastException,
+					"{Method} {Url} failed after {Attempts} attempts ({Reason})",
+					method, url, attempt, retryReason);
+				throw lastException ?? new HttpRequestException($"{method} {url} failed after {attempt} attempts");
+			}
+
+			response?.Dispose();
+
+			var delay = retryAfter ?? ComputeBackoff(attempt);
+			_logger.LogWarning(
+				"{Method} {Url} attempt {Attempt}/{Max} failed ({Reason}); retrying in {DelayMs}ms",
+				method, url, attempt, MaxRetryAttempts, retryReason, (int)delay.TotalMilliseconds);
+
+			try
+			{
+				await Task.Delay(delay, cancellationToken);
+			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+		}
+
+		// Unreachable — loop either returns or throws.
+		throw lastException ?? new HttpRequestException($"{method} {url} failed");
+	}
+
+	private static bool IsLikelyWafHtml(HttpResponseMessage response)
+	{
+		var contentType = response.Content.Headers.ContentType?.MediaType;
+		if (string.IsNullOrEmpty(contentType)) return true; // missing CT — treat as suspicious
+		if (contentType.Contains("html", StringComparison.OrdinalIgnoreCase)) return true;
+		if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase)) return false;
+		return true;
+	}
+
+	private static TimeSpan? GetRetryAfter(HttpResponseMessage response)
+	{
+		var ra = response.Headers.RetryAfter;
+		if (ra == null) return null;
+		if (ra.Delta.HasValue) return ra.Delta.Value;
+		if (ra.Date.HasValue)
+		{
+			var delta = ra.Date.Value - DateTimeOffset.UtcNow;
+			if (delta > TimeSpan.Zero) return delta;
+		}
+		return null;
+	}
+
+	private static TimeSpan ComputeBackoff(int attempt)
+	{
+		// Exponential backoff: 0.5s, 1s, 2s, 4s, 8s — capped — plus 0–250ms jitter.
+		var exp = InitialRetryDelay.TotalMilliseconds * Math.Pow(2, attempt - 1);
+		var capped = Math.Min(exp, MaxRetryDelay.TotalMilliseconds);
+		int jitter;
+		lock (RetryJitter) { jitter = RetryJitter.Next(0, 250); }
+		return TimeSpan.FromMilliseconds(capped + jitter);
 	}
 
 	private static int GetHeaderInt(HttpResponseMessage response, string headerName)
