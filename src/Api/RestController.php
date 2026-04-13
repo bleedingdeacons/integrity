@@ -17,6 +17,7 @@ use Integrity\Api\Controllers\PositionController;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\RateLimiter;
 use Integrity\Auth\AuditLogger;
+use Integrity\Logger\HasLogger;
 use WP_REST_Request;
 use WP_REST_Response;
 use WP_Error;
@@ -38,6 +39,8 @@ use WP_Error;
  */
 class RestController
 {
+    use HasLogger;
+
     private const NAMESPACE = 'integrity/v1';
 
     private ApiKeyManager $apiKeyManager;
@@ -295,8 +298,25 @@ class RestController
     {
         $startTime = microtime(true);
 
+        // Base context attached to every auth log line for this request.
+        $route     = $request->get_route();
+        $method    = $request->get_method();
+        $clientIp  = $this->auditLogger->getClientIp();
+        $userAgent = $request->get_header('User-Agent');
+
+        $baseContext = [
+            'route'      => $route,
+            'method'     => $method,
+            'client_ip'  => $clientIp,
+            'user_agent' => $userAgent,
+            'headers'    => $this->collectRequestHeaders($request),
+        ];
+
+        self::logDebug('Auth check started', $baseContext);
+
         // Require HTTPS in production
         if (get_option('integrity_require_https', true) && !is_ssl() && !(defined('WP_DEBUG') && WP_DEBUG)) {
+            self::logWarning('Auth rejected: HTTPS required but request was not secure', $baseContext);
             $this->logFailedRequest($request, 403, $startTime);
             return new WP_Error(
                 'https_required',
@@ -309,6 +329,10 @@ class RestController
         $apiKey = $this->extractApiKey($request);
 
         if (!$apiKey) {
+            self::logWarning('Auth rejected: no API key in Authorization or X-API-Key header', $baseContext + [
+                    'has_authorization_header' => $request->get_header('Authorization') !== null,
+                    'has_x_api_key_header'     => $request->get_header('X-API-Key') !== null,
+                ]);
             $this->logFailedRequest($request, 401, $startTime);
             return new WP_Error(
                 'missing_api_key',
@@ -317,11 +341,17 @@ class RestController
             );
         }
 
+        // Fingerprint the key for logging — never log the raw secret.
+        $keyFingerprint = substr(hash('sha256', $apiKey), 0, 8);
+        $baseContext['key_fingerprint'] = $keyFingerprint;
+
+        self::logDebug('API key extracted, validating', $baseContext);
+
         // Validate API key
-        $clientIp = $this->auditLogger->getClientIp();
         $keyData = $this->apiKeyManager->validateKey($apiKey, $clientIp);
 
         if (!$keyData) {
+            self::logWarning('Auth rejected: API key invalid, expired, or IP not allowlisted', $baseContext);
             $this->logFailedRequest($request, 401, $startTime);
             return new WP_Error(
                 'invalid_api_key',
@@ -331,11 +361,22 @@ class RestController
         }
 
         // Check rate limits (cast to int as database returns strings)
-        $apiKeyId = (int) $keyData['id'];
+        $apiKeyId  = (int) $keyData['id'];
         $rateLimit = (int) $keyData['rate_limit'];
+
+        $baseContext['api_key_id'] = $apiKeyId;
+        self::logDebug('API key validated, checking rate limit', $baseContext + [
+                'rate_limit' => $rateLimit,
+            ]);
+
         $rateLimitResult = $this->rateLimiter->checkAndIncrement($apiKeyId, $rateLimit);
 
         if (!$rateLimitResult['allowed']) {
+            self::logNotice('Auth rejected: rate limit exceeded', $baseContext + [
+                    'rate_limit' => $rateLimit,
+                    'remaining'  => $rateLimitResult['remaining'] ?? 0,
+                    'reset'      => $rateLimitResult['reset'] ?? null,
+                ]);
             $this->logFailedRequest($request, 429, $startTime, $apiKeyId);
 
             $response = new WP_Error(
@@ -351,10 +392,13 @@ class RestController
         }
 
         // Check endpoint-specific permissions
-        $endpoint = $request->get_route();
-        $requiredPermission = $this->getRequiredPermission($endpoint);
+        $requiredPermission = $this->getRequiredPermission($route);
 
         if ($requiredPermission && !in_array($requiredPermission, $keyData['permissions'], true) && !in_array('*', $keyData['permissions'], true)) {
+            self::logWarning('Auth rejected: insufficient permissions for endpoint', $baseContext + [
+                    'required_permission' => $requiredPermission,
+                    'granted_permissions' => $keyData['permissions'],
+                ]);
             $this->logFailedRequest($request, 403, $startTime, $apiKeyId);
             return new WP_Error(
                 'insufficient_permissions',
@@ -371,6 +415,12 @@ class RestController
 
         // Add rate limit headers to successful responses
         $this->attachRateLimitFilter($rateLimit, $rateLimitResult);
+
+        self::logInfo('Auth succeeded', $baseContext + [
+                'required_permission' => $requiredPermission,
+                'rate_limit_remaining' => $rateLimitResult['remaining'] ?? null,
+                'duration_ms'          => (int) round((microtime(true) - $startTime) * 1000),
+            ]);
 
         return true;
     }
@@ -405,6 +455,40 @@ class RestController
         };
 
         add_filter('rest_post_dispatch', $this->rateLimitFilter);
+    }
+
+    /**
+     * Collect all request headers for logging, redacting credentials.
+     *
+     * Headers that carry authentication material or session state are
+     * replaced with "[REDACTED]" so log sinks never receive live secrets.
+     * Multi-value headers are joined with ", ".
+     *
+     * @return array<string, string>
+     */
+    private function collectRequestHeaders(WP_REST_Request $request): array
+    {
+        // Lower-cased for case-insensitive matching against WP_REST_Request keys.
+        static $sensitive = [
+            'authorization'       => true,
+            'x_api_key'           => true,
+            'x-api-key'           => true,
+            'cookie'              => true,
+            'proxy_authorization' => true,
+            'proxy-authorization' => true,
+        ];
+
+        $out = [];
+        foreach ($request->get_headers() as $name => $values) {
+            $joined = is_array($values) ? implode(', ', $values) : (string) $values;
+            $key = strtolower((string) $name);
+            if (isset($sensitive[$key])) {
+                $out[$name] = '[REDACTED len=' . strlen($joined) . ']';
+                continue;
+            }
+            $out[$name] = $joined;
+        }
+        return $out;
     }
 
     /**

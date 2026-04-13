@@ -15,6 +15,7 @@ public sealed class UnityRestSharp : IDisposable
 {
 	private readonly HttpClient _httpClient;
 	private readonly string _baseUrl;
+	private readonly string _apiKey;
 	private readonly JsonSerializerOptions _jsonOptions;
 	private bool _disposed;
 	private readonly bool _httpClientSupplied;
@@ -44,17 +45,27 @@ public sealed class UnityRestSharp : IDisposable
 		if (httpClient != null) _httpClientSupplied = true;
 
 		_baseUrl = baseUrl.TrimEnd('/');
+		_apiKey = apiKey;
 		_httpClient = httpClient ?? new HttpClient();
 
-		// Set authorization header
-		_httpClient.DefaultRequestHeaders.Authorization =
-			new AuthenticationHeaderValue("Bearer", apiKey);
+		// Note: Authorization and X-API-Key are stamped onto every outgoing
+		// HttpRequestMessage via ApplyAuthHeaders() rather than set as defaults
+		// on the HttpClient. This guarantees every request carries both headers
+		// even when a caller supplies a shared HttpClient that already has
+		// (possibly conflicting) default headers of its own.
+
+		// Set explicit Host header from baseUrl (some WAFs require it rather than relying on auto-derived host)
+		if (Uri.TryCreate(_baseUrl, UriKind.Absolute, out var baseUri))
+		{
+			_httpClient.DefaultRequestHeaders.Host = baseUri.IsDefaultPort
+				? baseUri.Host
+				: $"{baseUri.Host}:{baseUri.Port}";
+		}
 
 		// Set default headers
 		_httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-		//_httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("IntegrityClient/1.0");
-		_httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-);
+		_httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("IntegrityClient/1.0");
+		//_httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 
 
 		// Configure JSON options
@@ -462,11 +473,20 @@ public sealed class UnityRestSharp : IDisposable
 		{
 			_logger.LogDebug("Health check GET {Url}", url);
 			using var response = await SendWithRetryAsync(
-				() => new HttpRequestMessage(HttpMethod.Get, url),
+				() => ApplyAuthHeaders(new HttpRequestMessage(HttpMethod.Get, url)),
 				"GET", url, cancellationToken);
 			if (!response.IsSuccessStatusCode)
 			{
-				_logger.LogWarning("Health check returned HTTP {StatusCode} for {Url}", (int)response.StatusCode, url);
+				var statusCode = (int)response.StatusCode;
+				_logger.LogWarning("Health check returned HTTP {StatusCode} for {Url}", statusCode, url);
+				if (statusCode == 403)
+				{
+					var errBody = await response.Content.ReadAsStringAsync(cancellationToken);
+					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					_logger.LogWarning("403 Forbidden on GET {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
+						url, headers, contentHeaders, errBody);
+				}
 				return null;
 			}
 			var body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -495,7 +515,7 @@ public sealed class UnityRestSharp : IDisposable
 		try
 		{
 			using var response = await SendWithRetryAsync(
-				() => new HttpRequestMessage(HttpMethod.Get, url),
+				() => ApplyAuthHeaders(new HttpRequestMessage(HttpMethod.Get, url)),
 				"GET", url, cancellationToken);
 			statusCode = (int)response.StatusCode;
 			var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -517,6 +537,15 @@ public sealed class UnityRestSharp : IDisposable
 					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
 					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
 					_logger.LogWarning("403 Forbidden on GET {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
+						url, headers, contentHeaders, content);
+				}
+
+				// Dump full details on 401 to help diagnose auth failures
+				if (statusCode == 401)
+				{
+					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					_logger.LogWarning("401 Unauthorized on GET {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
 						url, headers, contentHeaders, content);
 				}
 
@@ -602,10 +631,10 @@ public sealed class UnityRestSharp : IDisposable
 			var serializedPayload = JsonSerializer.Serialize(payload, _jsonOptions);
 
 			using var response = await SendWithRetryAsync(
-				() => new HttpRequestMessage(HttpMethod.Post, url)
+				() => ApplyAuthHeaders(new HttpRequestMessage(HttpMethod.Post, url)
 				{
 					Content = new StringContent(serializedPayload, System.Text.Encoding.UTF8, "application/json")
-				},
+				}),
 				"POST", url, cancellationToken);
 			statusCode = (int)response.StatusCode;
 			var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -622,6 +651,24 @@ public sealed class UnityRestSharp : IDisposable
 			if (!response.IsSuccessStatusCode)
 			{
 				_logger.LogWarning("HTTP {StatusCode} on POST {Url}: {ReasonPhrase}", statusCode, url, response.ReasonPhrase);
+
+				// Dump full details on 403 to help diagnose server-side blocking
+				if (statusCode == 403)
+				{
+					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					_logger.LogWarning("403 Forbidden on POST {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
+						url, headers, contentHeaders, content);
+				}
+
+				// Dump full details on 401 to help diagnose auth failures
+				if (statusCode == 401)
+				{
+					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					_logger.LogWarning("401 Unauthorized on POST {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
+						url, headers, contentHeaders, content);
+				}
 
 				// If the response doesn't look like JSON, return the body snippet directly
 				var trimmed = content.TrimStart();
@@ -694,6 +741,20 @@ public sealed class UnityRestSharp : IDisposable
 	}
 
 	/// <summary>
+	/// Stamps Authorization (Bearer) and X-API-Key headers onto the given request.
+	/// Called from every request factory so that every outgoing request carries
+	/// both auth headers, regardless of HttpClient default-header state.
+	/// </summary>
+	private HttpRequestMessage ApplyAuthHeaders(HttpRequestMessage request)
+	{
+		request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+		// Remove any pre-existing X-API-Key (e.g. from a shared HttpClient) before adding ours.
+		request.Headers.Remove("X-API-Key");
+		request.Headers.Add("X-API-Key", _apiKey);
+		return request;
+	}
+
+	/// <summary>
 	/// Sends an HTTP request with retries for transient failures including:
 	/// network exceptions, timeouts, HTTP 5xx, 408, 429, and HTML 403 responses
 	/// from an upstream WAF / web server (as opposed to legitimate API JSON 403s).
@@ -743,6 +804,22 @@ public sealed class UnityRestSharp : IDisposable
 					shouldRetry = true;
 					retryReason = "HTTP 403 (HTML body — likely WAF)";
 					retryAfter = GetRetryAfter(response);
+
+					// Read and log the HTML body so we can diagnose what the WAF is saying.
+					// Safe to read here because we're about to dispose the response anyway.
+					try
+					{
+						var htmlBody = await response.Content.ReadAsStringAsync(cancellationToken);
+						var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+						var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+						_logger.LogWarning(
+							"403 HTML response on {Method} {Url} attempt {Attempt}/{Max}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
+							method, url, attempt, MaxRetryAttempts, headers, contentHeaders, htmlBody);
+					}
+					catch (Exception bodyEx)
+					{
+						_logger.LogWarning(bodyEx, "Failed to read 403 HTML body for {Method} {Url}", method, url);
+					}
 				}
 
 				if (!shouldRetry)
