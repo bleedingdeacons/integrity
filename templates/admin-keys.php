@@ -125,6 +125,10 @@ if (!defined('ABSPATH')) {
                                 <?php echo esc_html__('Write Members (update member details)', 'integrity'); ?>
                             </label><br>
                             <label>
+                                <input type="checkbox" name="perm_members_clear" value="1">
+                                <?php echo esc_html__('Read Members — clear (unmasked personal email & mobile number)', 'integrity'); ?>
+                            </label><br>
+                            <label>
                                 <input type="checkbox" name="perm_intergroup_meetings" value="1" checked>
                                 <?php echo esc_html__('Read Intergroup Meetings', 'integrity'); ?>
                             </label><br>
@@ -332,14 +336,14 @@ if (!defined('ABSPATH')) {
             <tr>
                 <td><code>GET</code></td>
                 <td><code>/wp-json/integrity/v1/members</code></td>
-                <td><code>members:read</code></td>
-                <td><?php echo esc_html__('List all members', 'integrity'); ?></td>
+                <td><code>members:read</code><br><code>members:clear</code> <?php echo esc_html__('(optional)', 'integrity'); ?></td>
+                <td><?php echo esc_html__('List all members. With members:clear, personal email and mobile number are returned unmasked.', 'integrity'); ?></td>
             </tr>
             <tr>
                 <td><code>GET</code></td>
                 <td><code>/wp-json/integrity/v1/members/{id}</code></td>
-                <td><code>members:read</code></td>
-                <td><?php echo esc_html__('Get a single member', 'integrity'); ?></td>
+                <td><code>members:read</code><br><code>members:clear</code> <?php echo esc_html__('(optional)', 'integrity'); ?></td>
+                <td><?php echo esc_html__('Get a single member. With members:clear, personal email and mobile number are returned unmasked.', 'integrity'); ?></td>
             </tr>
             <tr>
                 <td><code>POST</code></td>

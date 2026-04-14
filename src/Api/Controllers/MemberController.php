@@ -308,8 +308,9 @@ class MemberController
             $meetingCache = $this->meetingController->batchGetMeetings($meetingRepo, array_unique($meetingIds));
 
             // Transform with cached data
-            $transformedMembers = array_map(function ($member) use ($groupCache, $positionCache, $meetingCache) {
-                return $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache);
+            $clear = $this->hasClearPermission($keyData);
+            $transformedMembers = array_map(function ($member) use ($groupCache, $positionCache, $meetingCache, $clear) {
+                return $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache, $clear);
             }, $members);
 
             $this->logRequest($keyData['api_key_id'], $request, $args, 200, $startTime);
@@ -361,7 +362,13 @@ class MemberController
             $meetingCache = $this->meetingController->batchGetMeetings($meetingRepo, is_numeric($meetingPo) && (int) $meetingPo > 0 ? [(int) $meetingPo] : []);
 
             return $this->successResponse(
-                $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache)
+                $this->transformMemberWithCache(
+                    $member,
+                    $groupCache,
+                    $positionCache,
+                    $meetingCache,
+                    $this->hasClearPermission($keyData)
+                )
             );
 
         } catch (\Exception $e) {
@@ -424,20 +431,25 @@ class MemberController
                 }
             }
 
-            // Resolve personal_email: skip if the submitted value is obscured
+            $clear = $this->hasClearPermission($keyData);
+
+            // Resolve personal_email: skip if the submitted value is obscured.
+            // Keys holding members:clear receive and send values in the clear,
+            // so the round-trip obscured-value guard does not apply to them.
             $personalEmail = $existingMember->getPersonalEmail();
             if ($request->has_param('personal_email')) {
                 $submittedEmail = $request->get_param('personal_email');
-                if (!$this->isObscuredEmail($submittedEmail)) {
+                if ($clear || !$this->isObscuredEmail($submittedEmail)) {
                     $personalEmail = $submittedEmail;
                 }
             }
 
             // Resolve mobile_number: skip if the submitted value is obscured
+            // (see personal_email above for the clear-key exception).
             $mobileNumber = $existingMember->getMobileNumber();
             if ($request->has_param('mobile_number')) {
                 $submittedMobile = $request->get_param('mobile_number');
-                if (!$this->isObscuredPhone($submittedMobile)) {
+                if ($clear || !$this->isObscuredPhone($submittedMobile)) {
                     $mobileNumber = $submittedMobile;
                 }
             }
@@ -487,7 +499,7 @@ class MemberController
             $returnMember = $savedMember ?? $updatedMember;
 
             return $this->successResponse(
-                $this->buildMemberResponse($container, $returnMember)
+                $this->buildMemberResponse($container, $returnMember, $clear)
             );
 
         } catch (\Exception $e) {
@@ -610,7 +622,7 @@ class MemberController
 
             return new WP_REST_Response([
                 'success' => true,
-                'data' => $this->buildMemberResponse($container, $returnMember),
+                'data' => $this->buildMemberResponse($container, $returnMember, $this->hasClearPermission($keyData)),
             ], 201);
 
         } catch (\Exception $e) {
@@ -621,13 +633,38 @@ class MemberController
     }
 
     /**
+     * Determine whether the current API key is permitted to see member
+     * personal contact details (personal email, mobile number) in the clear.
+     *
+     * Granted by the `members:clear` permission, or the wildcard `*`.
+     * Defaults to no: without this permission, contact details are masked
+     * via the Mask utility in the same way they always have been.
+     *
+     * @param array|null $keyData Key data from extractRequestContext
+     */
+    private function hasClearPermission(?array $keyData): bool
+    {
+        if (!is_array($keyData) || empty($keyData['permissions']) || !is_array($keyData['permissions'])) {
+            return false;
+        }
+
+        $permissions = $keyData['permissions'];
+
+        return in_array('members:clear', $permissions, true)
+            || in_array('*', $permissions, true);
+    }
+
+    /**
      * Build a full member response with resolved relationships.
      *
      * @param \Psr\Container\ContainerInterface $container
      * @param Member $member
+     * @param bool $clear If true, return personal_email and mobile_number
+     *                    unmasked. Requires the `members:clear` permission
+     *                    on the calling key; resolved by the caller.
      * @return array
      */
-    private function buildMemberResponse($container, Member $member): array
+    private function buildMemberResponse($container, Member $member, bool $clear = false): array
     {
         $groupRepo = $container->get(GroupRepository::class);
         $positionRepo = $container->get(PositionRepository::class);
@@ -638,7 +675,7 @@ class MemberController
         $meetingPo = $member->getMeetingPO();
         $meetingCache = $this->meetingController->batchGetMeetings($meetingRepo, is_numeric($meetingPo) && (int) $meetingPo > 0 ? [(int) $meetingPo] : []);
 
-        return $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache);
+        return $this->transformMemberWithCache($member, $groupCache, $positionCache, $meetingCache, $clear);
     }
 
     /**
@@ -648,13 +685,18 @@ class MemberController
      * @param array<int, Group> $groupCache
      * @param array<int, Position> $positionCache
      * @param array<int, Meeting> $meetingCache
+     * @param bool $clear If true, return personal_email and mobile_number
+     *                    unmasked. Defaults to false (masked), matching the
+     *                    historical behaviour when no `members:clear`
+     *                    permission is granted.
      * @return array
      */
     private function transformMemberWithCache(
         Member $member,
         array $groupCache,
         array $positionCache,
-        array $meetingCache
+        array $meetingCache,
+        bool $clear = false
     ): array {
         // Get home group details
         $homeGroupId = null;
@@ -700,8 +742,12 @@ class MemberController
         return [
             'id' => $member->getId(),
             'anonymous_name' => $member->getAnonymousName(),
-            'personal_email' => Mask::email($member->getPersonalEmail()),
-            'mobile_number' => Mask::phone($member->getMobileNumber()),
+            'personal_email' => $clear
+                ? $member->getPersonalEmail()
+                : Mask::email($member->getPersonalEmail()),
+            'mobile_number' => $clear
+                ? $member->getMobileNumber()
+                : Mask::phone($member->getMobileNumber()),
             'show_anonymous_name' => $member->showAnonymousName(),
             'show_member_profile' => $member->showMemberProfile(),
             'anonymous_profile' => $member->getAnonymousProfile(),

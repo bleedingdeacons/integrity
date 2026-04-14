@@ -214,6 +214,9 @@ class SettingsPage
         if (!empty($_POST['perm_members_write'])) {
             $permissions[] = 'members:write';
         }
+        if (!empty($_POST['perm_members_clear'])) {
+            $permissions[] = 'members:clear';
+        }
         if (!empty($_POST['perm_intergroup_meetings'])) {
             $permissions[] = 'intergroup-meetings:read';
         }
