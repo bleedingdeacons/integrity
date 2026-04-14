@@ -216,6 +216,12 @@ class SettingsPage
         }
         if (!empty($_POST['perm_members_clear'])) {
             $permissions[] = 'members:clear';
+            // members:clear is a modifier on members:read; ensure the base
+            // read permission is present so the key can actually hit the
+            // /members endpoints.
+            if (!in_array('members:read', $permissions, true)) {
+                $permissions[] = 'members:read';
+            }
         }
         if (!empty($_POST['perm_intergroup_meetings'])) {
             $permissions[] = 'intergroup-meetings:read';

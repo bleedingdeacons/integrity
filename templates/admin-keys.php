@@ -117,16 +117,16 @@ if (!defined('ABSPATH')) {
                                 <?php echo esc_html__('Read Positions', 'integrity'); ?>
                             </label><br>
                             <label>
-                                <input type="checkbox" name="perm_members" value="1" checked>
+                                <input type="checkbox" name="perm_members" value="1" id="perm_members" checked>
                                 <?php echo esc_html__('Read Members', 'integrity'); ?>
+                            </label><br>
+                            <label style="margin-left: 1.5em;">
+                                <input type="checkbox" name="perm_members_clear" value="1" id="perm_members_clear">
+                                <?php echo esc_html__('Read Members — clear (unmasked values)', 'integrity'); ?>
                             </label><br>
                             <label>
                                 <input type="checkbox" name="perm_members_write" value="1">
                                 <?php echo esc_html__('Write Members (update member details)', 'integrity'); ?>
-                            </label><br>
-                            <label>
-                                <input type="checkbox" name="perm_members_clear" value="1">
-                                <?php echo esc_html__('Read Members — clear (unmasked personal email & mobile number)', 'integrity'); ?>
                             </label><br>
                             <label>
                                 <input type="checkbox" name="perm_intergroup_meetings" value="1" checked>
@@ -395,3 +395,31 @@ var json = await response.Content.ReadAsStringAsync();
         </pre>
     </div>
 </div>
+
+<script>
+    (function () {
+        var readCb = document.getElementById('perm_members');
+        var clearCb = document.getElementById('perm_members_clear');
+        if (!readCb || !clearCb) {
+            return;
+        }
+        // members:clear is a modifier on members:read and is meaningless on its own.
+        // Disable the clear checkbox whenever Read Members is unticked, and force
+        // Read Members back on if the admin ticks clear while read was off.
+        var sync = function () {
+            if (!readCb.checked) {
+                clearCb.checked = false;
+                clearCb.disabled = true;
+            } else {
+                clearCb.disabled = false;
+            }
+        };
+        readCb.addEventListener('change', sync);
+        clearCb.addEventListener('change', function () {
+            if (clearCb.checked && !readCb.checked) {
+                readCb.checked = true;
+            }
+        });
+        sync();
+    })();
+</script>
