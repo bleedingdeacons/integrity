@@ -946,7 +946,7 @@ public sealed class UnityRestSharp : IDisposable
 	{
 		if (!_disposed)
 		{
-			if (_httpClientSupplied) _httpClient.Dispose();
+			if (!_httpClientSupplied) _httpClient.Dispose();
 			_disposed = true;
 		}
 	}
