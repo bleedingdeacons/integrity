@@ -64,6 +64,31 @@ class ApiKeyManager
     }
 
     /**
+     * Return a cached dummy Argon2id hash used to equalise timing on the
+     * prefix-miss path in validateKey().
+     *
+     * Without this, a miss returns in microseconds while a hit spends ~100ms
+     * in password_verify(). That gap is a timing oracle for prefix
+     * enumeration: the api_key_prefix column is the first 8 chars of
+     * 'int_' + hex, so the attacker-controllable portion is only 4 hex chars
+     * (~65k values) — small enough to sweep.
+     *
+     * The hash is computed once per request using the same cost parameters
+     * as hashKey() so the cost profile of the miss path matches the hit
+     * path exactly.
+     */
+    private function dummyHash(): string
+    {
+        static $hash = null;
+        if ($hash === null) {
+            // Contents are irrelevant — password_verify just needs a
+            // well-formed Argon2id hash with matching cost parameters.
+            $hash = $this->hashKey('timing-equalisation-placeholder');
+        }
+        return $hash;
+    }
+
+    /**
      * Create a new API key record
      *
      * @param string $name Human-readable name for the key
@@ -117,6 +142,18 @@ class ApiKeyManager
     }
 
     /**
+     * Fixed number of password_verify() calls performed per validateKey()
+     * invocation. Keeps wall-clock cost independent of both (a) whether a
+     * matching prefix exists and (b) how many rows share the prefix bucket.
+     *
+     * Set generously above the expected collision count for the 4-hex-char
+     * variable portion of api_key_prefix. If a bucket legitimately exceeds
+     * this, the extra rows are still verified for correctness — the timing
+     * leak only re-emerges for unusually large buckets.
+     */
+    private const VERIFY_ITERATIONS = 8;
+
+    /**
      * Validate an API key and return key data if valid
      *
      * @param string $key The API key to validate
@@ -136,40 +173,63 @@ class ApiKeyManager
             $prefix
         ), ARRAY_A);
 
-        if (empty($results)) {
-            return null;
+        if ($results === null) {
+            $results = [];
         }
 
-        foreach ($results as $row) {
-            if ($this->verifyKey($key, $row['api_key_hash'])) {
-                if ($row['expires_at'] && strtotime($row['expires_at']) < time()) {
-                    return null;
+        // Run a fixed number of password_verify() calls regardless of how
+        // many rows matched the prefix. This prevents both the miss-vs-hit
+        // timing oracle and the bucket-size oracle (where an attacker
+        // infers how many active keys share a prefix from how many
+        // verifies ran). We do *not* short-circuit on first match — the
+        // post-loop checks (expiry, IP whitelist) and the DB update are
+        // deferred until after the fixed-cost work is done, so hit and
+        // miss paths take the same time.
+        $matchedRow = null;
+        $realCount = count($results);
+        $iterations = max(self::VERIFY_ITERATIONS, $realCount);
+
+        for ($i = 0; $i < $iterations; $i++) {
+            if ($i < $realCount) {
+                $row  = $results[$i];
+                $hash = $row['api_key_hash'];
+                if (password_verify($key, $hash) && $matchedRow === null) {
+                    $matchedRow = $row;
                 }
-
-                if ($row['ip_whitelist'] && $clientIp) {
-                    $whitelist = json_decode($row['ip_whitelist'], true);
-                    if (!empty($whitelist) && !$this->isIpAllowed($clientIp, $whitelist)) {
-                        return null;
-                    }
-                }
-
-                $wpdb->update(
-                    $tableName,
-                    [
-                        'last_used' => current_time('mysql'),
-                        'request_count' => $row['request_count'] + 1,
-                    ],
-                    ['id' => $row['id']],
-                    ['%s', '%d'],
-                    ['%d']
-                );
-
-                $row['permissions'] = json_decode($row['permissions'], true);
-                return $row;
+            } else {
+                // Padding iteration: cost-equivalent verify with no effect.
+                password_verify($key, $this->dummyHash());
             }
         }
 
-        return null;
+        if ($matchedRow === null) {
+            return null;
+        }
+
+        if ($matchedRow['expires_at'] && strtotime($matchedRow['expires_at']) < time()) {
+            return null;
+        }
+
+        if ($matchedRow['ip_whitelist'] && $clientIp) {
+            $whitelist = json_decode($matchedRow['ip_whitelist'], true);
+            if (!empty($whitelist) && !$this->isIpAllowed($clientIp, $whitelist)) {
+                return null;
+            }
+        }
+
+        $wpdb->update(
+            $tableName,
+            [
+                'last_used' => current_time('mysql'),
+                'request_count' => $matchedRow['request_count'] + 1,
+            ],
+            ['id' => $matchedRow['id']],
+            ['%s', '%d'],
+            ['%d']
+        );
+
+        $matchedRow['permissions'] = json_decode($matchedRow['permissions'], true);
+        return $matchedRow;
     }
 
     /**

@@ -458,35 +458,52 @@ class RestController
     }
 
     /**
-     * Collect all request headers for logging, redacting credentials.
+     * Collect request headers for logging, exposing only a small allowlist
+     * of non-sensitive headers useful for debugging.
      *
-     * Headers that carry authentication material or session state are
-     * replaced with "[REDACTED]" so log sinks never receive live secrets.
-     * Multi-value headers are joined with ", ".
+     * An allowlist is used (rather than a denylist of sensitive headers)
+     * so that credential-bearing headers introduced by future integrations
+     * — or uncommon variants like X-Auth-Token, X-Forwarded-Authorization,
+     * X-Amz-Security-Token — cannot silently leak into logs. Anything not
+     * on the list is replaced with "[REDACTED]".
+     *
+     * Note: WP_REST_Request::get_headers() returns header names lowercased
+     * with hyphens converted to underscores (e.g. "X-API-Key" becomes
+     * "x_api_key"). The allowlist is keyed in that normalised form.
      *
      * @return array<string, string>
      */
     private function collectRequestHeaders(WP_REST_Request $request): array
     {
-        // Lower-cased for case-insensitive matching against WP_REST_Request keys.
-        static $sensitive = [
-            'authorization'       => true,
-            'x_api_key'           => true,
-            'x-api-key'           => true,
-            'cookie'              => true,
-            'proxy_authorization' => true,
-            'proxy-authorization' => true,
+        static $allowlist = [
+            'accept'            => true,
+            'accept_encoding'   => true,
+            'accept_language'   => true,
+            'content_length'    => true,
+            'content_type'      => true,
+            'host'              => true,
+            'origin'            => true,
+            'referer'           => true,
+            'user_agent'        => true,
+            'x_forwarded_for'   => true,
+            'x_forwarded_host'  => true,
+            'x_forwarded_proto' => true,
+            'x_real_ip'         => true,
+            'x_request_id'      => true,
         ];
 
         $out = [];
         foreach ($request->get_headers() as $name => $values) {
             $joined = is_array($values) ? implode(', ', $values) : (string) $values;
             $key = strtolower((string) $name);
-            if (isset($sensitive[$key])) {
-                $out[$name] = '[REDACTED len=' . strlen($joined) . ']';
-                continue;
+            // Defensive: normalise hyphens in case upstream ever changes behaviour.
+            $key = str_replace('-', '_', $key);
+
+            if (isset($allowlist[$key])) {
+                $out[$name] = $joined;
+            } else {
+                $out[$name] = '[REDACTED]';
             }
-            $out[$name] = $joined;
         }
         return $out;
     }
