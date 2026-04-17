@@ -84,13 +84,14 @@ class MaskTest extends TestCase
     /**
      * @test
      */
-    public function email_output_triggers_isObscuredEmail_detection(): void
+    public function email_output_matches_obscured_sentinel_shape(): void
     {
-        // The RestController uses /__+/ to detect masked emails.
-        // Verify Mask output always contains consecutive underscores.
+        // ControllerTrait::isObscuredEmail uses an anchored regex that matches
+        // the exact sentinel shape: <char><2+ underscores>@<char><2+ underscores>.<tld>
+        // Verify Mask output conforms.
         $masked = Mask::email('test@example.com');
 
-        $this->assertMatchesRegularExpression('/__+/', $masked);
+        $this->assertMatchesRegularExpression('/^.[_]{2,}@.[_]{2,}\.[^._@]+$/', $masked);
     }
 
     // ─── Phone masking ────────────────────────────────────
@@ -157,14 +158,14 @@ class MaskTest extends TestCase
     /**
      * @test
      */
-    public function phone_output_triggers_isObscuredPhone_detection(): void
+    public function phone_output_matches_obscured_sentinel_shape(): void
     {
-        // The RestController uses /\*{2,}/ to detect masked phones.
-        // Verify Mask output always contains consecutive asterisks for
-        // numbers with more than 4 digits.
+        // ControllerTrait::isObscuredPhone uses an anchored regex that matches
+        // the exact sentinel shape: no digits before a final 1-4 digit suffix,
+        // with at least one asterisk present. Verify Mask output conforms.
         $masked = Mask::phone('5551234567');
 
-        $this->assertMatchesRegularExpression('/\*{2,}/', $masked);
+        $this->assertMatchesRegularExpression('/^[^\d]*\*+[^\d*]*\d{0,4}$/', $masked);
     }
 
     /**

@@ -15,15 +15,28 @@ if (!defined('ABSPATH')) {
  * Provides static helpers for masking personal data in REST API responses.
  *
  * Masking conventions (must stay in sync with the round-trip detection in
- * RestController::isObscuredEmail / isObscuredPhone):
+ * ControllerTrait::isObscuredEmail / isObscuredPhone):
  *
- *   Email:  underscores replace hidden characters   → j___@e_____.com
- *   Phone:  asterisks replace hidden digits          → ***-***-1234
+ *   Email:  underscores replace hidden characters   → j___@e______.com
+ *   Phone:  asterisks replace hidden digits, last 4 → (***) ***-5309
  *
- * These conventions differ from Scrutiny's DataObscurer (which uses bullet
- * characters for admin UI display) because the REST API values may be
- * submitted back in update requests, and the detection logic relies on
- * ASCII-safe sentinel patterns.
+ * The email sentinel shape is exactly:
+ *     <char><2+ underscores>@<char><2+ underscores>.<tld>
+ *
+ * The phone sentinel shape is exactly:
+ *     <non-digit or asterisk>*<asterisks><non-digit non-asterisk>*<up to 4 digits>
+ *
+ * Both detection regexes are anchored to the full value so that legitimate
+ * content containing the sentinel characters (e.g. RFC 5322 emails with
+ * consecutive underscores in the local part, phone extensions like "*70")
+ * is not mistakenly treated as masked.
+ *
+ * These conventions differ from Scrutiny's PersonalDataObscurer (which uses
+ * fixed-width bullet characters for admin UI display) because the REST API
+ * values may be submitted back in update requests, and the round-trip
+ * detection here requires ASCII-safe sentinel patterns. Scrutiny does not
+ * round-trip its obscured values so it can afford a fixed-width form that
+ * reveals no length information.
  */
 class Mask
 {

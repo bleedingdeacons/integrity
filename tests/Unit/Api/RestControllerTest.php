@@ -559,52 +559,11 @@ class RestControllerTest extends TestCase
     }
 
     // ── Obscured value detection ───────────────────────────────────────
-
-    /**
-     * @test
-     * @dataProvider obscuredEmailProvider
-     */
-    public function isObscuredEmail_detects_masked_values(string $input, bool $expected): void
-    {
-        $reflection = new \ReflectionClass(RestController::class);
-        $method = $reflection->getMethod('isObscuredEmail');
-        $method->setAccessible(true);
-
-        $this->assertEquals($expected, $method->invoke($this->controller, $input));
-    }
-
-    public static function obscuredEmailProvider(): array
-    {
-        return [
-            'normal email'       => ['john@example.com', false],
-            'obscured email'     => ['j___@e_____.com', true],
-            'empty'              => ['', false],
-            'single underscore'  => ['john_doe@example.com', false],
-            'double underscore'  => ['j__n@example.com', true],
-        ];
-    }
-
-    /**
-     * @test
-     * @dataProvider obscuredPhoneProvider
-     */
-    public function isObscuredPhone_detects_masked_values(string $input, bool $expected): void
-    {
-        $reflection = new \ReflectionClass(RestController::class);
-        $method = $reflection->getMethod('isObscuredPhone');
-        $method->setAccessible(true);
-
-        $this->assertEquals($expected, $method->invoke($this->controller, $input));
-    }
-
-    public static function obscuredPhoneProvider(): array
-    {
-        return [
-            'normal phone'   => ['555-123-4567', false],
-            'obscured phone' => ['***-***-4567', true],
-            'empty'          => ['', false],
-            'single star'    => ['555*1234', false],
-            'double stars'   => ['55**1234', true],
-        ];
-    }
+    //
+    // Detection lives in ControllerTrait::isObscuredEmail / isObscuredPhone
+    // and is exercised by MemberController integration tests. Previous tests
+    // at this location targeted RestController via reflection (incorrect —
+    // the methods are on the trait used by MemberController) and asserted
+    // that RFC-valid emails like "j__n@example.com" were treated as masked
+    // (the M-10 bug). Removed.
 }
