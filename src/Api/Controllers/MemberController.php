@@ -99,7 +99,7 @@ class MemberController
             'anonymous_name' => [
                 'required' => false,
                 'validate_callback' => function ($param) {
-                    return is_string($param) && strlen($param) <= 255;
+                    return is_string($param) && strlen(trim($param)) > 0 && strlen($param) <= 255;
                 },
                 'sanitize_callback' => 'sanitize_text_field',
             ],
@@ -138,7 +138,7 @@ class MemberController
             'anonymous_profile' => [
                 'required' => false,
                 'validate_callback' => function ($param) {
-                    return is_string($param);
+                    return is_string($param) && strlen($param) <= 10240;
                 },
                 'sanitize_callback' => 'wp_kses_post',
             ],
@@ -322,7 +322,9 @@ class MemberController
                 $perPage
             );
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            \Integrity\Plugin::logError('Integrity: getMembers error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             $this->logRequest($keyData['api_key_id'], $request, null, 500, $startTime);
 
             return $this->internalErrorResponse();
@@ -371,7 +373,9 @@ class MemberController
                 )
             );
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            \Integrity\Plugin::logError('Integrity: getMember error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 500, $startTime);
 
             return $this->internalErrorResponse();
@@ -502,7 +506,9 @@ class MemberController
                 $this->buildMemberResponse($container, $returnMember, $clear)
             );
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            \Integrity\Plugin::logError('Integrity: updateMember error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 500, $startTime);
 
             return $this->internalErrorResponse();
@@ -625,7 +631,9 @@ class MemberController
                 'data' => $this->buildMemberResponse($container, $returnMember, $this->hasClearPermission($keyData)),
             ], 201);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            \Integrity\Plugin::logError('Integrity: createMember error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
             $this->logRequest($keyData['api_key_id'], $request, null, 500, $startTime);
 
             return $this->internalErrorResponse();

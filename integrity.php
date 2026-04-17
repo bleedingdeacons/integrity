@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Plugin Name: Integrity
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
- * Version: 1.13.1
+ * Version: 1.14.1
  * Requires at least: 6.0
  * Requires Plugins: scrutiny
  * Requires PHP: 8.1
@@ -202,7 +202,7 @@ add_action('integrity/cleanup_cron', function (): void {
     // Clean old rate limit records
     $rateLimitTable = $wpdb->prefix . 'integrity_rate_limits';
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names cannot be parameterised with prepare(); esc_sql used as defence-in-depth
-    $wpdb->query("DELETE FROM `" . esc_sql($rateLimitTable) . "` WHERE window_start < DATE_SUB(NOW(), INTERVAL 1 DAY)");
+    $wpdb->query("DELETE FROM `" . esc_sql($rateLimitTable) . "` WHERE window_start < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 DAY)");
 
     // Clean old audit logs based on retention setting
     $retentionDays = (int) get_option('integrity_audit_log_retention_days', 90);
@@ -220,11 +220,11 @@ add_filter('rest_pre_dispatch', function ($result, $server, $request) {
         if (is_wp_error($check)) {
             function_exists('wp_log')
                 ? wp_log('integrity')->error('Integrity 400 validation failure', [
-                    'route'  => $request->get_route(),
-                    'errors' => $check->get_error_messages(),
-                    'data'   => $check->get_error_data(),
-                    'params' => $request->get_params(),
-                ])
+                'route'  => $request->get_route(),
+                'errors' => $check->get_error_messages(),
+                'data'   => $check->get_error_data(),
+                'params' => $request->get_params(),
+            ])
                 : error_log('Integrity 400 validation failure: ' . wp_json_encode([
                     'route'  => $request->get_route(),
                     'errors' => $check->get_error_messages(),
