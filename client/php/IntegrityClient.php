@@ -228,6 +228,38 @@ class Member
         public readonly string $intergroupPositionRotation,
         public readonly string $link,
         public readonly string $updated,
+        /**
+         * GDPR compliance state for the member.
+         *
+         * Null when talking to a server that pre-dates the compliance
+         * endpoint and therefore omits the gdpr_compliance object from
+         * its response. New servers always populate it.
+         */
+        public readonly ?GdprCompliance $gdprCompliance = null,
+    ) {}
+}
+
+/**
+ * GDPR compliance state recorded for a member.
+ *
+ * `acceptedAt` is the raw ISO 8601 string returned by the server (e.g.
+ * "2026-04-27T15:45:00.000Z") or an empty string when no acceptance
+ * has ever been recorded. Callers that need a DateTimeImmutable should
+ * parse with `new DateTimeImmutable($member->gdprCompliance->acceptedAt)`
+ * after a non-empty check.
+ *
+ * When `accepted` is false, `version`, `method`, and `statement` are
+ * cleared by the server; only `accepted` and `acceptedAt` carry
+ * meaningful values for revocations.
+ */
+class GdprCompliance
+{
+    public function __construct(
+        public readonly bool $accepted,
+        public readonly string $acceptedAt,
+        public readonly string $version,
+        public readonly string $method,
+        public readonly string $statement,
     ) {}
 }
 
@@ -367,6 +399,36 @@ class CreateMemberRequest
         public ?int $homeGroupId = null,
         public ?bool $isGsr = null,
         public ?int $intergroupPositionId = null,
+    ) {}
+}
+
+/**
+ * Request body for POST /members/{id}/compliance.
+ *
+ * `accepted` is required (it's the action being recorded — either
+ * acceptance or revocation). All other fields are optional and have
+ * sensible server-side defaults:
+ *
+ *   - `acceptedAt`  — defaults to "now" (UTC) when null. Accepts any
+ *                     DateTime-parseable string; the server normalises
+ *                     to UTC `Y-m-d H:i:s` before storage.
+ *   - `version`     — only persisted when `accepted` is true.
+ *   - `method`      — defaults to "api" when null and `accepted` is true.
+ *                     Ignored on revocations.
+ *   - `statement`   — only persisted when `accepted` is true.
+ *
+ * On revocation (`accepted = false`), the server clears version,
+ * method, and statement regardless of what is sent — they belonged
+ * to the now-revoked acceptance and no longer apply.
+ */
+class RecordComplianceRequest
+{
+    public function __construct(
+        public bool $accepted,
+        public ?string $acceptedAt = null,
+        public ?string $version = null,
+        public ?string $method = null,
+        public ?string $statement = null,
     ) {}
 }
 
@@ -777,6 +839,46 @@ class IntegrityClient
 
         ['body' => $body, 'status' => $status, 'headers' => $headers] =
             $this->request('POST', '/members/create', body: $payload);
+
+        return $this->buildSingleResponse(
+            $body,
+            $status,
+            $headers,
+            fn (array $item) => $this->hydrateMember($item),
+        );
+    }
+
+    /**
+     * Record a member's GDPR compliance state (acceptance or revocation).
+     *
+     * Maps to POST /members/{id}/compliance. Requires the `members:write`
+     * permission. Returns the full member object with the updated
+     * `gdprCompliance` populated.
+     *
+     * Optional fields are only included in the request body when set;
+     * the server applies its own defaults to anything left null.
+     *
+     * @return ApiResponse<Member>
+     */
+    public function recordCompliance(int $id, RecordComplianceRequest $req): ApiResponse
+    {
+        $payload = ['accepted' => $req->accepted];
+
+        if ($req->acceptedAt !== null) {
+            $payload['accepted_at'] = $req->acceptedAt;
+        }
+        if ($req->version !== null) {
+            $payload['version'] = $req->version;
+        }
+        if ($req->method !== null) {
+            $payload['method'] = $req->method;
+        }
+        if ($req->statement !== null) {
+            $payload['statement'] = $req->statement;
+        }
+
+        ['body' => $body, 'status' => $status, 'headers' => $headers] =
+            $this->request('POST', "/members/{$id}/compliance", body: $payload);
 
         return $this->buildSingleResponse(
             $body,
@@ -1250,6 +1352,22 @@ class IntegrityClient
     /** @param array<string,mixed> $data */
     private function hydrateMember(array $data): Member
     {
+        // gdpr_compliance was added with the compliance endpoint. Older
+        // server versions omit the key entirely — treat that as null
+        // rather than synthesising a fake "not accepted" state, which
+        // would be indistinguishable from an actively-recorded denial.
+        $gdprCompliance = null;
+        if (isset($data['gdpr_compliance']) && is_array($data['gdpr_compliance'])) {
+            $g = $data['gdpr_compliance'];
+            $gdprCompliance = new GdprCompliance(
+                accepted:   (bool) ($g['accepted'] ?? false),
+                acceptedAt: (string) ($g['accepted_at'] ?? ''),
+                version:    (string) ($g['version'] ?? ''),
+                method:     (string) ($g['method'] ?? ''),
+                statement:  (string) ($g['statement'] ?? ''),
+            );
+        }
+
         return new Member(
             id: (int) ($data['id'] ?? 0),
             anonymousName: (string) ($data['anonymous_name'] ?? ''),
@@ -1269,6 +1387,7 @@ class IntegrityClient
             intergroupPositionRotation: (string) ($data['intergroup_position_rotation'] ?? ''),
             link: (string) ($data['link'] ?? ''),
             updated: (string) ($data['updated'] ?? ''),
+            gdprCompliance: $gdprCompliance,
         );
     }
 

@@ -641,6 +641,226 @@ class MemberController
     }
 
     /**
+     * Argument definitions for the record-compliance endpoint.
+     *
+     * `accepted` is the only required field. Everything else is optional and
+     * has a sensible default applied in {@see recordCompliance()}.
+     *
+     * `accepted_at` accepts ISO 8601 (preferred — matches the format
+     * returned to clients) or the legacy `Y-m-d H:i:s` shape used
+     * internally by ACF/WordPress. When omitted, the handler stamps
+     * the current UTC time.
+     */
+    public function getRecordComplianceArgs(): array
+    {
+        return [
+            'id' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_numeric($param) && $param > 0;
+                },
+                'sanitize_callback' => 'absint',
+            ],
+            'accepted' => [
+                'required' => true,
+                'validate_callback' => function ($param) {
+                    return is_bool($param) || in_array($param, ['true', 'false', '1', '0', 1, 0], true);
+                },
+                'sanitize_callback' => function ($param) {
+                    return filter_var($param, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+                },
+            ],
+            'accepted_at' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    if ($param === '' || $param === null) {
+                        return true;
+                    }
+                    if (!is_string($param)) {
+                        return false;
+                    }
+                    try {
+                        new \DateTimeImmutable($param);
+                        return true;
+                    } catch (\Throwable $e) {
+                        return false;
+                    }
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'version' => [
+                'required' => false,
+                'default' => '',
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen($param) <= 50;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'method' => [
+                'required' => false,
+                'default' => '',
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen($param) <= 50;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'statement' => [
+                'required' => false,
+                'default' => '',
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen($param) <= 2000;
+                },
+                'sanitize_callback' => 'sanitize_textarea_field',
+            ],
+        ];
+    }
+
+    /**
+     * Record a member's GDPR compliance state.
+     *
+     * Writes the five `gdpr_*` fields on the member, leaving every other
+     * field untouched. Recording either an acceptance or a revocation goes
+     * through the same `MemberRepository::save()` path as a regular
+     * update, so Unity's member-changing hook fires and Scrutiny picks
+     * the change up automatically — there is no integrity-to-scrutiny
+     * call.
+     *
+     * Behaviour:
+     *
+     * - `accepted: true`  — records a new acceptance. `version` should be
+     *                       supplied to identify the policy text. `method`
+     *                       defaults to `"api"` when omitted, since the
+     *                       value can only have arrived through this
+     *                       endpoint. `accepted_at` is normalised to UTC
+     *                       `Y-m-d H:i:s` for storage and stamped to "now"
+     *                       when missing.
+     *
+     * - `accepted: false` — records a revocation. `version`, `method`,
+     *                       and `statement` are cleared because they
+     *                       belonged to the now-revoked acceptance and
+     *                       no longer apply. `accepted_at` is updated
+     *                       to the time of the revocation so auditors
+     *                       have a "consent ended at" anchor; supplying
+     *                       it explicitly is supported for back-fills.
+     *
+     * The endpoint is idempotent: posting the same state that already
+     * exists will be a no-op at the repository layer (the change tracker
+     * detects no diff, scrutiny logs nothing) and returns 200 with the
+     * unchanged state.
+     */
+    public function recordCompliance(WP_REST_Request $request): WP_REST_Response
+    {
+        ['start_time' => $startTime, 'key_data' => $keyData] = $this->extractRequestContext($request);
+        $id = (int) $request->get_param('id');
+
+        try {
+            $container = Plugin::getContainer();
+            $memberRepo = $container->get(MemberRepository::class);
+            $memberFactory = $container->get(MemberFactory::class);
+
+            $existingMember = $memberRepo->findById($id);
+
+            if (!$existingMember) {
+                $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 404, $startTime);
+                return $this->notFoundResponse('Member');
+            }
+
+            $accepted = (bool) $request->get_param('accepted');
+
+            // Normalise accepted_at to Y-m-d H:i:s in UTC. Domain storage
+            // matches the format used by TsmlMemberFactory so the round
+            // trip through the repository preserves the value byte-for-byte.
+            $acceptedAtParam = (string) ($request->get_param('accepted_at') ?? '');
+            if ($acceptedAtParam !== '') {
+                try {
+                    $acceptedAt = (new \DateTimeImmutable($acceptedAtParam))
+                        ->setTimezone(new \DateTimeZone('UTC'))
+                        ->format('Y-m-d H:i:s');
+                } catch (\Throwable $e) {
+                    // Should not happen — validate_callback already rejected
+                    // unparseable values — but fall through gracefully if it
+                    // somehow does, returning 422 rather than 500.
+                    $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 422, $startTime);
+                    return $this->errorResponse('invalid_accepted_at', 'The accepted_at value could not be parsed as a date', 422);
+                }
+            } else {
+                $acceptedAt = gmdate('Y-m-d H:i:s');
+            }
+
+            if ($accepted) {
+                // Recording an acceptance — apply submitted metadata, with
+                // `method` defaulting to "api" since that is the only
+                // channel this endpoint can have been reached from.
+                $version = (string) $request->get_param('version');
+                $method = (string) $request->get_param('method');
+                if ($method === '') {
+                    $method = 'api';
+                }
+                $statement = (string) $request->get_param('statement');
+            } else {
+                // Recording a revocation — clear fields that belonged to
+                // the previous acceptance. Submitted version/method/statement
+                // values are intentionally ignored; revocations have no
+                // policy to be versioned against.
+                $version = '';
+                $method = '';
+                $statement = '';
+            }
+
+            $updatedMember = $memberFactory->createNew(
+                $id,
+                $existingMember->getAnonymousName(),
+                $existingMember->showAnonymousName(),
+                $existingMember->showMemberProfile(),
+                $existingMember->getAnonymousProfile(),
+                $existingMember->getIntergroupPosition(),
+                $existingMember->getIntergroupPositionRotation(),
+                $existingMember->getHomeGroup(),
+                $existingMember->isGSR(),
+                $existingMember->getMeetingPO(),
+                $existingMember->getPersonalEmail(),
+                $existingMember->getMobileNumber(),
+                $accepted,
+                $acceptedAt,
+                $version,
+                $method,
+                $statement
+            );
+
+            $saved = $memberRepo->save($updatedMember);
+
+            if (!$saved) {
+                $this->logRequest($keyData['api_key_id'], $request, ['id' => $id, 'accepted' => $accepted], 500, $startTime);
+                return $this->errorResponse('save_failed', 'Failed to record compliance state', 500);
+            }
+
+            // Re-fetch so the response reflects the persisted state, including
+            // any normalisation the repository may have applied.
+            $savedMember = $memberRepo->findById($id);
+            $returnMember = $savedMember ?? $updatedMember;
+
+            $this->logRequest(
+                $keyData['api_key_id'],
+                $request,
+                ['id' => $id, 'accepted' => $accepted],
+                200,
+                $startTime
+            );
+
+            return $this->successResponse(
+                $this->buildMemberResponse($container, $returnMember, $this->hasClearPermission($keyData))
+            );
+
+        } catch (\Throwable $e) {
+            \Integrity\Plugin::logError('Integrity: recordCompliance error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
+            $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 500, $startTime);
+
+            return $this->internalErrorResponse();
+        }
+    }
+
+    /**
      * Determine whether the current API key is permitted to see member
      * personal contact details (personal email, mobile number) in the clear.
      *
@@ -766,6 +986,13 @@ class MemberController
             'intergroup_position_id' => $intergroupPositionId,
             'intergroup_position_name' => $intergroupPositionName,
             'intergroup_position_rotation' => $member->getIntergroupPositionRotation(),
+            'gdpr_compliance' => [
+                'accepted' => $member->isGdprAccepted(),
+                'accepted_at' => $this->formatUpdatedTimestamp($member->getGdprAcceptedAt()),
+                'version' => $member->getGdprAcceptanceVersion(),
+                'method' => $member->getGdprAcceptanceMethod(),
+                'statement' => $member->getGdprAcceptanceStatement(),
+            ],
             'link' => $link,
             'updated' => $this->formatUpdatedTimestamp($member->getUpdated()),
         ];

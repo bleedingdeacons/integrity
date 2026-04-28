@@ -322,6 +322,29 @@ public sealed class UnityRestSharp : IDisposable
 		return await PostAsync<Member>(url, request, cancellationToken);
 	}
 
+	/// <summary>
+	/// Records a member's GDPR compliance state — either an acceptance or
+	/// a revocation. Maps to <c>POST /members/{id}/compliance</c>.
+	/// Requires the <c>members:write</c> permission.
+	/// </summary>
+	/// <remarks>
+	/// Returns the full member with the updated <c>gdpr_compliance</c>
+	/// sub-object populated, so the caller can verify the persisted state
+	/// without a follow-up <c>GET</c>. The endpoint is idempotent at the
+	/// repository layer: posting the current state is a no-op.
+	/// </remarks>
+	/// <param name="id">Member ID to record compliance against</param>
+	/// <param name="request">The compliance action to record</param>
+	/// <param name="cancellationToken">Cancellation token</param>
+	public async Task<ApiResponse<Member>> RecordComplianceAsync(
+		int id,
+		RecordComplianceRequest request,
+		CancellationToken cancellationToken = default)
+	{
+		var url = $"{_baseUrl}/wp-json/integrity/v1/members/{id}/compliance";
+		return await PostAsync<Member>(url, request, cancellationToken);
+	}
+
 	#endregion
 
 	#region Intergroup Meetings

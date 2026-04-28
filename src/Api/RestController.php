@@ -219,6 +219,13 @@ class RestController
             'permission_callback' => [$this, 'checkPermission'],
             'args' => $this->memberController->getCreateMemberArgs(),
         ]);
+
+        register_rest_route(self::NAMESPACE, '/members/(?P<id>\d+)/compliance', [
+            'methods' => 'POST',
+            'callback' => [$this->memberController, 'recordCompliance'],
+            'permission_callback' => [$this, 'checkPermission'],
+            'args' => $this->memberController->getRecordComplianceArgs(),
+        ]);
     }
 
     private function registerIntergroupMeetingRoutes(): void
@@ -555,7 +562,10 @@ class RestController
         }
 
         if (strpos($endpoint, '/members') !== false) {
-            if (strpos($endpoint, '/update') !== false || strpos($endpoint, '/create') !== false) {
+            if (strpos($endpoint, '/update') !== false
+                || strpos($endpoint, '/create') !== false
+                || strpos($endpoint, '/compliance') !== false
+            ) {
                 return 'members:write';
             }
             return 'members:read';

@@ -39,6 +39,17 @@ namespace TheBleedingDeacons.Unity.Models
         public DateTime? Updated { get; init; }
 
         /// <summary>
+        /// GDPR compliance state for the member.
+        ///
+        /// <para>
+        /// Null when talking to a server that pre-dates the compliance
+        /// endpoint and therefore omits <c>gdpr_compliance</c> from its
+        /// response. New servers always populate it.
+        /// </para>
+        /// </summary>
+        public GdprCompliance? GdprCompliance { get; init; }
+
+        /// <summary>
         /// Gets whether this member has expanded home group data.
         /// </summary>
         [JsonIgnore]

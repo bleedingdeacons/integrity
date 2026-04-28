@@ -64,10 +64,10 @@ class RestControllerTest extends TestCase
      */
     public function register_registers_all_expected_routes(): void
     {
-        // Groups (2) + Meetings (2) + Positions (2) + Members (4) +
-        // Intergroup Meetings (6) + Health (1) = 17
+        // Groups (2) + Meetings (2) + Positions (2) + Members (5) +
+        // Intergroup Meetings (6) + Health (1) = 18
         WP_Mock::userFunction('register_rest_route')
-            ->times(17);
+            ->times(18);
 
         // Controller mocks must return args arrays when register() wires routes
         $this->groupController->shouldReceive('getGroupsArgs')->once()->andReturn([]);
@@ -76,6 +76,7 @@ class RestControllerTest extends TestCase
         $this->memberController->shouldReceive('getMembersArgs')->once()->andReturn([]);
         $this->memberController->shouldReceive('getUpdateMemberArgs')->once()->andReturn([]);
         $this->memberController->shouldReceive('getCreateMemberArgs')->once()->andReturn([]);
+        $this->memberController->shouldReceive('getRecordComplianceArgs')->once()->andReturn([]);
         $this->intergroupMeetingController->shouldReceive('getIntergroupMeetingsArgs')->once()->andReturn([]);
         $this->intergroupMeetingController->shouldReceive('getRegisterAttendeeArgs')->once()->andReturn([]);
         $this->intergroupMeetingController->shouldReceive('getUnregisterAttendeeArgs')->once()->andReturn([]);
@@ -360,6 +361,7 @@ class RestControllerTest extends TestCase
             'members read'                => ['/integrity/v1/members', 'members:read'],
             'members update'              => ['/integrity/v1/members/1/update', 'members:write'],
             'members create'              => ['/integrity/v1/members/create', 'members:write'],
+            'members compliance'          => ['/integrity/v1/members/1/compliance', 'members:write'],
             'intergroup-meetings read'    => ['/integrity/v1/intergroup-meetings', 'intergroup-meetings:read'],
             'intergroup-meetings register'   => ['/integrity/v1/intergroup-meetings/1/register-group', 'intergroup-meetings:write'],
             'intergroup-meetings unregister' => ['/integrity/v1/intergroup-meetings/1/unregister-group', 'intergroup-meetings:write'],

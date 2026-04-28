@@ -515,6 +515,144 @@ public class UnityRestSharpTests
         Assert.IsFalse(body.Contains("mobile_number"));
     }
 
+    [TestMethod]
+    public async Task RecordComplianceAsync_Should_Send_Post_With_Body()
+    {
+        _mockHandler.SetupResponse("/members/7/compliance", HttpStatusCode.OK, new
+        {
+            success = true,
+            data = new
+            {
+                id = 7,
+                anonymous_name = "Bob R.",
+                gdpr_compliance = new
+                {
+                    accepted = true,
+                    accepted_at = "2026-04-27T15:45:00.000Z",
+                    version = "2.1",
+                    method = "api",
+                    statement = "I agree to the privacy policy.",
+                },
+            },
+        });
+
+        var request = new RecordComplianceRequest
+        {
+            Accepted = true,
+            Version = "2.1",
+            Statement = "I agree to the privacy policy.",
+        };
+
+        var result = await _client.RecordComplianceAsync(7, request);
+
+        Assert.IsTrue(result.Success);
+        Assert.IsNotNull(result.Data);
+        Assert.AreEqual(HttpMethod.Post, _mockHandler.LastRequest!.Method);
+        Assert.IsTrue(_mockHandler.LastRequest.RequestUri!.ToString().Contains("/members/7/compliance"));
+
+        var body = await _mockHandler.LastRequest.Content!.ReadAsStringAsync();
+        Assert.IsTrue(body.Contains("\"accepted\":true"));
+        Assert.IsTrue(body.Contains("\"version\":\"2.1\""));
+        Assert.IsTrue(body.Contains("statement"));
+
+        // Method/accepted_at were not set on the request → should be omitted.
+        Assert.IsFalse(body.Contains("\"method\""));
+        Assert.IsFalse(body.Contains("\"accepted_at\""));
+    }
+
+    [TestMethod]
+    public async Task RecordComplianceAsync_Should_Hydrate_GdprCompliance_From_Response()
+    {
+        _mockHandler.SetupResponse("/members/7/compliance", HttpStatusCode.OK, new
+        {
+            success = true,
+            data = new
+            {
+                id = 7,
+                anonymous_name = "Bob R.",
+                gdpr_compliance = new
+                {
+                    accepted = true,
+                    accepted_at = "2026-04-27T15:45:00.000Z",
+                    version = "2.1",
+                    method = "api",
+                    statement = "I agree to the privacy policy.",
+                },
+            },
+        });
+
+        var request = new RecordComplianceRequest { Accepted = true, Version = "2.1" };
+        var result = await _client.RecordComplianceAsync(7, request);
+
+        Assert.IsNotNull(result.Data);
+        Assert.IsNotNull(result.Data.GdprCompliance);
+        Assert.IsTrue(result.Data.GdprCompliance.Accepted);
+        Assert.AreEqual("2.1", result.Data.GdprCompliance.Version);
+        Assert.AreEqual("api", result.Data.GdprCompliance.Method);
+        Assert.AreEqual("I agree to the privacy policy.", result.Data.GdprCompliance.Statement);
+        Assert.IsNotNull(result.Data.GdprCompliance.AcceptedAt);
+        Assert.AreEqual(
+            new DateTime(2026, 4, 27, 15, 45, 0, DateTimeKind.Utc),
+            result.Data.GdprCompliance.AcceptedAt!.Value.ToUniversalTime());
+    }
+
+    [TestMethod]
+    public async Task RecordComplianceAsync_Should_Treat_Missing_GdprCompliance_As_Null()
+    {
+        // Older server that pre-dates the gdpr_compliance field — clients
+        // built against the new model should hydrate cleanly with null
+        // rather than fabricating a "not accepted" state.
+        _mockHandler.SetupResponse("/members/3/compliance", HttpStatusCode.OK, new
+        {
+            success = true,
+            data = new { id = 3, anonymous_name = "Legacy" },
+        });
+
+        var result = await _client.RecordComplianceAsync(
+            3,
+            new RecordComplianceRequest { Accepted = false });
+
+        Assert.IsTrue(result.Success);
+        Assert.IsNotNull(result.Data);
+        Assert.IsNull(result.Data.GdprCompliance);
+    }
+
+    [TestMethod]
+    public async Task RecordComplianceAsync_Should_Send_Revocation()
+    {
+        _mockHandler.SetupResponse("/members/9/compliance", HttpStatusCode.OK, new
+        {
+            success = true,
+            data = new
+            {
+                id = 9,
+                gdpr_compliance = new
+                {
+                    accepted = false,
+                    accepted_at = "2026-04-27T16:00:00.000Z",
+                    version = "",
+                    method = "",
+                    statement = "",
+                },
+            },
+        });
+
+        var result = await _client.RecordComplianceAsync(
+            9,
+            new RecordComplianceRequest { Accepted = false });
+
+        Assert.IsTrue(result.Success);
+        Assert.IsNotNull(result.Data);
+        Assert.IsNotNull(result.Data.GdprCompliance);
+        Assert.IsFalse(result.Data.GdprCompliance.Accepted);
+        Assert.AreEqual(string.Empty, result.Data.GdprCompliance.Version);
+        Assert.AreEqual(string.Empty, result.Data.GdprCompliance.Method);
+        Assert.AreEqual(string.Empty, result.Data.GdprCompliance.Statement);
+
+        var body = await _mockHandler.LastRequest!.Content!.ReadAsStringAsync();
+        Assert.IsTrue(body.Contains("\"accepted\":false"));
+    }
+
     #endregion
 
     #region Intergroup Meetings - GET
