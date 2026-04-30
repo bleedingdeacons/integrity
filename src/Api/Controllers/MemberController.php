@@ -567,16 +567,14 @@ class MemberController
                 }
             }
 
-            // Create the WordPress post for the new member
-            $postId = wp_insert_post([
-                'post_type' => 'intergroup-member',
-                'post_title' => $anonymousName,
-                'post_status' => 'publish',
-            ], true);
+            // Create the member record via the repository so it owns
+            // post insertion and fires unity/member_created. The rest
+            // of the fields are written by the save() call below — this
+            // mirrors the admin form's two-phase create-then-fill flow.
+            $postId = $memberRepo->create($anonymousName);
 
-            if (is_wp_error($postId)) {
-                \Integrity\Plugin::logError('Integrity: wp_insert_post failed for member create', [
-                    'error'          => $postId->get_error_message(),
+            if ($postId <= 0) {
+                \Integrity\Plugin::logError('Integrity: repository create failed for member', [
                     'anonymous_name' => $anonymousName,
                 ]);
 
