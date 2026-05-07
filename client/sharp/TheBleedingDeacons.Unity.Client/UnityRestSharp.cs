@@ -48,24 +48,21 @@ public sealed class UnityRestSharp : IDisposable
 		_apiKey = apiKey;
 		_httpClient = httpClient ?? new HttpClient();
 
-		// Note: Authorization and X-API-Key are stamped onto every outgoing
-		// HttpRequestMessage via ApplyAuthHeaders() rather than set as defaults
-		// on the HttpClient. This guarantees every request carries both headers
-		// even when a caller supplies a shared HttpClient that already has
-		// (possibly conflicting) default headers of its own.
-
-		// Set explicit Host header from baseUrl (some WAFs require it rather than relying on auto-derived host)
+		// All request headers (Authorization, X-API-Key, Accept, User-Agent) are
+		// stamped onto every outgoing HttpRequestMessage via ApplyRequestHeaders()
+		// rather than set as defaults on the HttpClient. This guarantees that
+		// constructing UnityRestSharp against a shared HttpClient is idempotent
+		// and that headers cannot accumulate or conflict across constructions.
+		//
+		// The one exception is the Host header below: it is a single-value
+		// setter (assignment, not add) so it cannot accumulate, and some WAFs
+		// require it set explicitly rather than relying on auto-derivation.
 		if (Uri.TryCreate(_baseUrl, UriKind.Absolute, out var baseUri))
 		{
 			_httpClient.DefaultRequestHeaders.Host = baseUri.IsDefaultPort
 				? baseUri.Host
 				: $"{baseUri.Host}:{baseUri.Port}";
 		}
-
-		// Set default headers
-		_httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
-		_httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("IntegrityClient/1.0");
-		//_httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 
 
 		// Configure JSON options
@@ -496,7 +493,7 @@ public sealed class UnityRestSharp : IDisposable
 		{
 			_logger.LogDebug("Health check GET {Url}", url);
 			using var response = await SendWithRetryAsync(
-				() => ApplyAuthHeaders(new HttpRequestMessage(HttpMethod.Get, url)),
+				() => ApplyRequestHeaders(new HttpRequestMessage(HttpMethod.Get, url)),
 				"GET", url, cancellationToken);
 			if (!response.IsSuccessStatusCode)
 			{
@@ -538,7 +535,7 @@ public sealed class UnityRestSharp : IDisposable
 		try
 		{
 			using var response = await SendWithRetryAsync(
-				() => ApplyAuthHeaders(new HttpRequestMessage(HttpMethod.Get, url)),
+				() => ApplyRequestHeaders(new HttpRequestMessage(HttpMethod.Get, url)),
 				"GET", url, cancellationToken);
 			statusCode = (int)response.StatusCode;
 			var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -654,7 +651,7 @@ public sealed class UnityRestSharp : IDisposable
 			var serializedPayload = JsonSerializer.Serialize(payload, _jsonOptions);
 
 			using var response = await SendWithRetryAsync(
-				() => ApplyAuthHeaders(new HttpRequestMessage(HttpMethod.Post, url)
+				() => ApplyRequestHeaders(new HttpRequestMessage(HttpMethod.Post, url)
 				{
 					Content = new StringContent(serializedPayload, System.Text.Encoding.UTF8, "application/json")
 				}),
@@ -764,16 +761,22 @@ public sealed class UnityRestSharp : IDisposable
 	}
 
 	/// <summary>
-	/// Stamps Authorization (Bearer) and X-API-Key headers onto the given request.
-	/// Called from every request factory so that every outgoing request carries
-	/// both auth headers, regardless of HttpClient default-header state.
+	/// Stamps Authorization, X-API-Key, Accept, and User-Agent headers onto the
+	/// given request. Called from every request factory so that every outgoing
+	/// request carries the correct headers regardless of HttpClient
+	/// default-header state — this means UnityRestSharp can be constructed
+	/// repeatedly against a shared HttpClient without any header accumulation.
 	/// </summary>
-	private HttpRequestMessage ApplyAuthHeaders(HttpRequestMessage request)
+	private HttpRequestMessage ApplyRequestHeaders(HttpRequestMessage request)
 	{
 		request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
 		// Remove any pre-existing X-API-Key (e.g. from a shared HttpClient) before adding ours.
 		request.Headers.Remove("X-API-Key");
 		request.Headers.Add("X-API-Key", _apiKey);
+		request.Headers.Accept.Clear();
+		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+		request.Headers.UserAgent.Clear();
+		request.Headers.UserAgent.Add(new ProductInfoHeaderValue("IntegrityClient", "1.0"));
 		return request;
 	}
 
