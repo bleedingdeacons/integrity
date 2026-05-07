@@ -22,6 +22,10 @@ class SettingsPage
     private const CAPABILITY = 'manage_options';
     private const MENU_SLUG = 'integrity-settings';
     private const NONCE_ACTION = 'integrity_admin_action';
+    private const AJAX_REFRESH_LOGS = 'integrity_audit_refresh_logs';
+
+    /** @var string The hook suffix returned by add_submenu_page() for the audit page. */
+    private string $auditHookSuffix = '';
 
     private ApiKeyManager $apiKeyManager;
     private AuditLogger $auditLogger;
@@ -44,6 +48,7 @@ class SettingsPage
         add_action('admin_post_integrity_delete_key', [$this, 'handleDeleteKey']);
         add_action('admin_post_integrity_clear_logs', [$this, 'handleClearLogs']);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
+        add_action('wp_ajax_' . self::AJAX_REFRESH_LOGS, [$this, 'ajaxRefreshLogs']);
     }
 
     /**
@@ -61,6 +66,23 @@ class SettingsPage
             [],
             INTEGRITY_VERSION
         );
+
+        // Audit page: enqueue the partial-refresh script.
+        if ($this->auditHookSuffix !== '' && $hook === $this->auditHookSuffix) {
+            wp_enqueue_script(
+                'integrity-admin-audit',
+                INTEGRITY_PLUGIN_URL . 'assets/admin-audit.js',
+                [],
+                INTEGRITY_VERSION,
+                true
+            );
+
+            wp_localize_script('integrity-admin-audit', 'integrityAuditRefresh', [
+                'url'    => admin_url('admin-ajax.php'),
+                'action' => self::AJAX_REFRESH_LOGS,
+                'nonce'  => wp_create_nonce(self::AJAX_REFRESH_LOGS),
+            ]);
+        }
     }
 
     /**
@@ -87,7 +109,7 @@ class SettingsPage
             [$this, 'renderPage']
         );
 
-        add_submenu_page(
+        $this->auditHookSuffix = (string) add_submenu_page(
             self::MENU_SLUG,
             __('Audit Log', 'integrity'),
             __('Audit Log', 'integrity'),
@@ -115,6 +137,21 @@ class SettingsPage
         register_setting('integrity_settings', 'integrity_audit_log_retention_days');
         register_setting('integrity_settings', 'integrity_default_rate_limit');
         register_setting('integrity_settings', 'integrity_require_https');
+        register_setting('integrity_settings', 'integrity_audit_auto_refresh_enabled');
+        register_setting('integrity_settings', 'integrity_audit_auto_refresh_interval', [
+            'type' => 'integer',
+            'sanitize_callback' => static function ($value) {
+                $value = (int) $value;
+                if ($value < 5) {
+                    $value = 5;
+                }
+                if ($value > 3600) {
+                    $value = 3600;
+                }
+                return $value;
+            },
+            'default' => 30,
+        ]);
     }
 
     /**
@@ -145,26 +182,125 @@ class SettingsPage
             wp_die(__('You do not have permission to access this page.', 'integrity'));
         }
 
-        $page = isset($_GET['paged']) ? max(1, (int) $_GET['paged']) : 1;
+        $data = $this->getAuditPageData();
+
+        // Extract for the template's expected scope.
+        $result     = $data['result'];
+        $stats      = $data['stats'];
+        $keys       = $data['keys'];
+        $page       = $data['page'];
+        $perPage    = $data['per_page'];
+        $filters    = $data['filters'];
+        $totalPages = $data['total_pages'];
+
+        include INTEGRITY_PLUGIN_DIR . 'templates/admin-audit.php';
+    }
+
+    /**
+     * AJAX handler: re-render only the request log partial.
+     *
+     * Mirrors the sentinel LogViewerPage::ajaxRefresh pattern — the same
+     * partial used for the initial page render is re-rendered into a
+     * buffer and returned as JSON so the JS can swap the container's
+     * innerHTML without a full page reload.
+     */
+    public function ajaxRefreshLogs(): void
+    {
+        check_ajax_referer(self::AJAX_REFRESH_LOGS, 'nonce');
+
+        if (!current_user_can(self::CAPABILITY)) {
+            wp_send_json_error('Unauthorized', 403);
+            return;
+        }
+
+        $data = $this->getAuditPageData();
+
+        // Variables expected by the partial template.
+        $result     = $data['result'];
+        $keys       = $data['keys'];
+        $page       = $data['page'];
+        $totalPages = $data['total_pages'];
+        $baseUrl    = $data['base_url'];
+
+        ob_start();
+        include INTEGRITY_PLUGIN_DIR . 'templates/admin-audit-logs-partial.php';
+        $html = (string) ob_get_clean();
+
+        wp_send_json_success(['html' => $html]);
+    }
+
+    /**
+     * Build the data needed to render the audit page or its log partial.
+     *
+     * Filters and pagination come from $_GET on a normal page load, and
+     * from a serialized form payload on AJAX refresh — see admin-audit.js,
+     * which posts the audit page's filter form fields alongside `nonce`
+     * and `action`.
+     *
+     * @return array{
+     *     result: array{logs: array, total: int},
+     *     stats: array,
+     *     keys: array,
+     *     page: int,
+     *     per_page: int,
+     *     filters: array{
+     *         api_key_id: ?int,
+     *         response_code: ?int,
+     *         ip_address: ?string,
+     *         date_from: ?string,
+     *         date_to: ?string,
+     *     },
+     *     total_pages: int,
+     *     base_url: string,
+     * }
+     */
+    private function getAuditPageData(): array
+    {
+        $page    = isset($_REQUEST['paged']) ? max(1, (int) $_REQUEST['paged']) : 1;
         $perPage = 50;
 
         $filters = [
-            'api_key_id' => isset($_GET['api_key_id']) ? (int) $_GET['api_key_id'] : null,
-            'response_code' => isset($_GET['response_code']) ? (int) $_GET['response_code'] : null,
-            'ip_address' => isset($_GET['ip_address']) ? sanitize_text_field($_GET['ip_address']) : null,
-            'date_from' => isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : null,
-            'date_to' => isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : null,
+            'api_key_id'    => isset($_REQUEST['api_key_id']) && $_REQUEST['api_key_id'] !== ''
+                ? (int) $_REQUEST['api_key_id']
+                : null,
+            'response_code' => isset($_REQUEST['response_code']) && $_REQUEST['response_code'] !== ''
+                ? (int) $_REQUEST['response_code']
+                : null,
+            'ip_address'    => isset($_REQUEST['ip_address']) && $_REQUEST['ip_address'] !== ''
+                ? sanitize_text_field(wp_unslash($_REQUEST['ip_address']))
+                : null,
+            'date_from'     => isset($_REQUEST['date_from']) && $_REQUEST['date_from'] !== ''
+                ? sanitize_text_field(wp_unslash($_REQUEST['date_from']))
+                : null,
+            'date_to'       => isset($_REQUEST['date_to']) && $_REQUEST['date_to'] !== ''
+                ? sanitize_text_field(wp_unslash($_REQUEST['date_to']))
+                : null,
         ];
 
         $result = $this->auditLogger->getLogs(array_merge($filters, [
-            'page' => $page,
+            'page'     => $page,
             'per_page' => $perPage,
         ]));
 
         $stats = $this->auditLogger->getStats(30);
-        $keys = $this->apiKeyManager->getAllKeys();
+        $keys  = $this->apiKeyManager->getAllKeys();
 
-        include INTEGRITY_PLUGIN_DIR . 'templates/admin-audit.php';
+        $totalPages = (int) ceil(($result['total'] ?? 0) / $perPage);
+
+        // Stable base URL for pagination links inside the partial — without
+        // this, AJAX-rendered pagination links would point at admin-ajax.php.
+        $baseUrl = admin_url('admin.php?page=' . self::MENU_SLUG . '-audit');
+
+        return [
+            'result'      => $result,
+            'stats'       => $stats,
+            'keys'        => $keys,
+            'page'        => $page,
+            'per_page'    => $perPage,
+            'filters'     => $filters,
+            'total_pages' => $totalPages,
+            'base_url'    => $baseUrl,
+        ];
     }
 
     /**

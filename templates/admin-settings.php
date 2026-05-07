@@ -86,6 +86,37 @@ if (!defined('ABSPATH')) {
                         </p>
                     </td>
                 </tr>
+                <tr>
+                    <th scope="row">
+                        <?php echo esc_html__('Auto-refresh Audit Log', 'integrity'); ?>
+                    </th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="integrity_audit_auto_refresh_enabled" value="1"
+                                   <?php checked(get_option('integrity_audit_auto_refresh_enabled', true)); ?>>
+                            <?php echo esc_html__('Automatically refresh the audit log page on a timer', 'integrity'); ?>
+                        </label>
+                        <p class="description">
+                            <?php echo esc_html__('When enabled, the audit log page will reload at the interval below. Can also be toggled per-session from the audit log page.', 'integrity'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">
+                        <label for="integrity_audit_auto_refresh_interval">
+                            <?php echo esc_html__('Auto-refresh Interval', 'integrity'); ?>
+                        </label>
+                    </th>
+                    <td>
+                        <input type="number" id="integrity_audit_auto_refresh_interval" name="integrity_audit_auto_refresh_interval"
+                               value="<?php echo esc_attr(get_option('integrity_audit_auto_refresh_interval', 30)); ?>"
+                               min="5" max="3600" class="small-text">
+                        <span><?php echo esc_html__('seconds', 'integrity'); ?></span>
+                        <p class="description">
+                            <?php echo esc_html__('How often the audit log auto-refreshes. Minimum 5 seconds, maximum 3600 (1 hour).', 'integrity'); ?>
+                        </p>
+                    </td>
+                </tr>
             </table>
         </div>
 

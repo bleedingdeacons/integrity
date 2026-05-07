@@ -1,6 +1,15 @@
 <?php
 /**
  * Admin Audit Log Template
+ *
+ * Expects the following variables in scope (provided by SettingsPage::renderAuditPage):
+ *   $result      array  { logs: array, total: int }
+ *   $stats       array  aggregated stats
+ *   $keys        array  list of all API keys
+ *   $page        int    current page number
+ *   $perPage     int    page size
+ *   $filters     array  active filter values
+ *   $totalPages  int    total number of pages
  */
 
 use Integrity\Admin\SettingsPage;
@@ -8,8 +17,6 @@ use Integrity\Admin\SettingsPage;
 if (!defined('ABSPATH')) {
     exit;
 }
-
-$totalPages = (int) ceil($result['total'] / $perPage);
 ?>
 <div class="wrap integrity-admin">
     <h1><?php echo esc_html__('Integrity API Audit Log', 'integrity'); ?></h1>
@@ -25,26 +32,7 @@ $totalPages = (int) ceil($result['total'] / $perPage);
 
     <!-- Stats Overview -->
     <div class="integrity-stats-grid">
-        <div class="integrity-stat-box">
-            <h3><?php echo esc_html(number_format($stats['total_requests'])); ?></h3>
-            <p><?php echo esc_html__('Total Requests', 'integrity'); ?></p>
-        </div>
-        <div class="integrity-stat-box success">
-            <h3><?php echo esc_html(number_format($stats['successful_requests'])); ?></h3>
-            <p><?php echo esc_html__('Successful', 'integrity'); ?></p>
-        </div>
-        <div class="integrity-stat-box warning">
-            <h3><?php echo esc_html(number_format($stats['failed_auth'])); ?></h3>
-            <p><?php echo esc_html__('Failed Auth', 'integrity'); ?></p>
-        </div>
-        <div class="integrity-stat-box danger">
-            <h3><?php echo esc_html(number_format($stats['rate_limited'])); ?></h3>
-            <p><?php echo esc_html__('Rate Limited', 'integrity'); ?></p>
-        </div>
-        <div class="integrity-stat-box">
-            <h3><?php echo esc_html($stats['avg_response_time']); ?>s</h3>
-            <p><?php echo esc_html__('Avg Response', 'integrity'); ?></p>
-        </div>
+        <?php include INTEGRITY_PLUGIN_DIR . 'templates/admin-audit-stats-partial.php'; ?>
     </div>
 
     <!-- Clear Logs -->
@@ -89,7 +77,7 @@ $totalPages = (int) ceil($result['total'] / $perPage);
     <!-- Filters -->
     <div class="integrity-section">
         <h2><?php echo esc_html__('Filter Logs', 'integrity'); ?></h2>
-        <form method="get" action="">
+        <form id="integrity-audit-filters-form" method="get" action="">
             <input type="hidden" name="page" value="integrity-settings-audit">
 
             <div class="integrity-filters">
@@ -144,97 +132,35 @@ $totalPages = (int) ceil($result['total'] / $perPage);
 
     <!-- Logs Table -->
     <div class="integrity-section">
-        <h2><?php echo esc_html__('Request Log', 'integrity'); ?></h2>
+        <?php
+        $autoRefreshEnabled = (bool) get_option('integrity_audit_auto_refresh_enabled', true);
+        $autoRefreshInterval = max(5, (int) get_option('integrity_audit_auto_refresh_interval', 30));
+        ?>
+        <div class="integrity-log-header">
+            <h2><?php echo esc_html__('Request Log', 'integrity'); ?></h2>
+            <div class="integrity-log-controls">
+                <label class="integrity-auto-refresh-toggle">
+                    <input type="checkbox" id="integrity-auto-refresh"
+                           <?php checked($autoRefreshEnabled); ?>
+                           data-interval="<?php echo esc_attr((string) $autoRefreshInterval); ?>">
+                    <?php printf(
+                        esc_html__('Auto-refresh every %ds', 'integrity'),
+                        $autoRefreshInterval
+                    ); ?>
+                </label>
+                <span id="integrity-refresh-countdown" class="integrity-refresh-countdown" aria-live="polite"></span>
+                <button type="button" class="button" id="integrity-refresh-btn">
+                    <span class="dashicons dashicons-update" style="vertical-align: text-bottom;"></span>
+                    <?php echo esc_html__('Refresh', 'integrity'); ?>
+                </button>
+            </div>
+        </div>
 
-        <?php if (empty($result['logs'])): ?>
-            <p><?php echo esc_html__('No log entries found.', 'integrity'); ?></p>
-        <?php else: ?>
-            <table class="wp-list-table widefat fixed striped">
-                <thead>
-                <tr>
-                    <th><?php echo esc_html__('Time', 'integrity'); ?></th>
-                    <th><?php echo esc_html__('API Key', 'integrity'); ?></th>
-                    <th><?php echo esc_html__('Endpoint', 'integrity'); ?></th>
-                    <th><?php echo esc_html__('Method', 'integrity'); ?></th>
-                    <th><?php echo esc_html__('Status', 'integrity'); ?></th>
-                    <th><?php echo esc_html__('IP Address', 'integrity'); ?></th>
-                    <th><?php echo esc_html__('Response Time', 'integrity'); ?></th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($result['logs'] as $log): ?>
-                    <tr>
-                        <td><?php echo esc_html(wp_date('j M Y, H:i', strtotime($log['created_at']))); ?></td>
-                        <td>
-                            <?php
-                            if ($log['api_key_id']) {
-                                $keyName = '';
-                                foreach ($keys as $key) {
-                                    if ($key['id'] == $log['api_key_id']) {
-                                        $keyName = $key['name'];
-                                        break;
-                                    }
-                                }
-                                echo esc_html($keyName ?: '#' . $log['api_key_id']);
-                            } else {
-                                echo '<em>' . esc_html__('None', 'integrity') . '</em>';
-                            }
-                            ?>
-                        </td>
-                        <td><code><?php echo esc_html($log['endpoint']); ?></code></td>
-                        <td><code><?php echo esc_html($log['method']); ?></code></td>
-                        <td>
-                                <span class="integrity-status-code status-<?php echo esc_attr((int)($log['response_code'] / 100)); ?>xx">
-                                    <?php echo esc_html($log['response_code']); ?>
-                                </span>
-                        </td>
-                        <td>
-                            <a href="<?php echo esc_url(add_query_arg('ip_address', $log['ip_address'])); ?>">
-                                <?php echo esc_html($log['ip_address']); ?>
-                            </a>
-                        </td>
-                        <td><?php echo esc_html(round($log['response_time'] * 1000, 2)); ?>ms</td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-
-            <!-- Pagination -->
-            <?php if ($totalPages > 1): ?>
-                <div class="tablenav bottom">
-                    <div class="tablenav-pages">
-                        <span class="displaying-num">
-                            <?php printf(
-                                    esc_html__('%s items', 'integrity'),
-                                    number_format($result['total'])
-                            ); ?>
-                        </span>
-                        <span class="pagination-links">
-                            <?php if ($page > 1): ?>
-                                <a class="first-page button" href="<?php echo esc_url(add_query_arg('paged', 1)); ?>">
-                                    &laquo;
-                                </a>
-                                <a class="prev-page button" href="<?php echo esc_url(add_query_arg('paged', $page - 1)); ?>">
-                                    &lsaquo;
-                                </a>
-                            <?php endif; ?>
-
-                            <span class="paging-input">
-                                <?php echo esc_html($page); ?> of <?php echo esc_html($totalPages); ?>
-                            </span>
-
-                            <?php if ($page < $totalPages): ?>
-                                <a class="next-page button" href="<?php echo esc_url(add_query_arg('paged', $page + 1)); ?>">
-                                    &rsaquo;
-                                </a>
-                                <a class="last-page button" href="<?php echo esc_url(add_query_arg('paged', $totalPages)); ?>">
-                                    &raquo;
-                                </a>
-                            <?php endif; ?>
-                        </span>
-                    </div>
-                </div>
-            <?php endif; ?>
-        <?php endif; ?>
+        <div id="integrity-audit-logs-container">
+            <?php
+            $baseUrl = admin_url('admin.php?page=integrity-settings-audit');
+            include INTEGRITY_PLUGIN_DIR . 'templates/admin-audit-logs-partial.php';
+            ?>
+        </div>
     </div>
 </div>

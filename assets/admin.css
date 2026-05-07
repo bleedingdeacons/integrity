@@ -187,6 +187,53 @@
     font-size: 12px;
 }
 
+/* Audit Log Table Column Widths */
+.integrity-admin .integrity-audit-table .col-time {
+    width: 9%;
+}
+.integrity-admin .integrity-audit-table .col-key-name {
+    width: 7%;
+}
+.integrity-admin .integrity-audit-table .col-endpoint {
+    width: 38%;
+}
+.integrity-admin .integrity-audit-table .col-method {
+    width: 7%;
+}
+.integrity-admin .integrity-audit-table .col-status {
+    width: 7%;
+}
+
+/* Audit Log Header / Refresh Controls */
+.integrity-admin .integrity-log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.integrity-admin .integrity-log-header h2 {
+    margin: 0;
+}
+.integrity-admin .integrity-log-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.integrity-admin .integrity-auto-refresh-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+.integrity-admin .integrity-refresh-countdown {
+    color: #646970;
+    font-size: 12px;
+    min-width: 40px;
+    text-align: right;
+}
+
 /* Form Table */
 .integrity-admin .form-table th {
     width: 200px;

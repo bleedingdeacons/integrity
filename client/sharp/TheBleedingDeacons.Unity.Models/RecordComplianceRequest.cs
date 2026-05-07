@@ -36,7 +36,14 @@ namespace TheBleedingDeacons.Unity.Models
     ///   </item>
     ///   <item>
     ///     <description>
-    ///       <see cref="Statement"/> — only persisted on acceptances.
+    ///       <see cref="PolicyId"/> — identifies the privacy policy the
+    ///       member accepted. The server resolves it through the
+    ///       Scrutiny privacy-policy repository and persists the
+    ///       repository's policy body as the recorded statement, so the
+    ///       wording comes from upstream rather than being trusted from
+    ///       the client. Only persisted on acceptances; ignored on
+    ///       revocations. Replaces the previous <c>statement</c> field
+    ///       on the wire — clients no longer send the policy body.
     ///     </description>
     ///   </item>
     /// </list>
@@ -85,9 +92,15 @@ namespace TheBleedingDeacons.Unity.Models
         public string? Method { get; init; }
 
         /// <summary>
-        /// Optional verbatim statement the member accepted.
+        /// Optional WordPress post ID of the privacy policy that the
+        /// member accepted. The server uses this to look up the policy
+        /// body via Scrutiny's <c>PrivacyPolicyRepository</c> and
+        /// persists that body as the recorded statement. When omitted,
+        /// the server records an empty statement (the "wording unknown"
+        /// fallback). Ignored on revocations.
         /// </summary>
+        [JsonPropertyName("policy_id")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string? Statement { get; init; }
+        public int? PolicyId { get; init; }
     }
 }

@@ -21,6 +21,7 @@ use Unity\Members\Interfaces\MemberRepository;
 use Unity\Plugin;
 use Unity\Positions\Interfaces\Position;
 use Unity\Positions\Interfaces\PositionRepository;
+use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -702,13 +703,15 @@ class MemberController
                 },
                 'sanitize_callback' => 'sanitize_text_field',
             ],
-            'statement' => [
+            'policy_id' => [
                 'required' => false,
-                'default' => '',
                 'validate_callback' => function ($param) {
-                    return is_string($param) && strlen($param) <= 2000;
+                    if ($param === '' || $param === null) {
+                        return true;
+                    }
+                    return is_numeric($param) && (int) $param > 0;
                 },
-                'sanitize_callback' => 'sanitize_textarea_field',
+                'sanitize_callback' => 'absint',
             ],
         ];
     }
@@ -733,6 +736,17 @@ class MemberController
      *                       `Y-m-d H:i:s` for storage and stamped to "now"
      *                       when missing.
      *
+     *                       The recorded statement is sourced from
+     *                       Scrutiny's privacy-policy repository using
+     *                       the supplied `policy_id`, never trusted from
+     *                       the request body. When `policy_id` is omitted
+     *                       the recorded statement is left empty
+     *                       ("wording unknown"); when supplied but the
+     *                       policy cannot be resolved, the request is
+     *                       rejected with 422 so a stale or wrong client
+     *                       value fails loudly rather than silently
+     *                       persisting an empty statement.
+     *
      * - `accepted: false` — records a revocation. `version`, `method`,
      *                       and `statement` are cleared because they
      *                       belonged to the now-revoked acceptance and
@@ -740,6 +754,8 @@ class MemberController
      *                       to the time of the revocation so auditors
      *                       have a "consent ended at" anchor; supplying
      *                       it explicitly is supported for back-fills.
+     *                       `policy_id` is ignored on revocations for
+     *                       the same reason.
      *
      * The endpoint is idempotent: posting the same state that already
      * exists will be a no-op at the repository layer (the change tracker
@@ -794,10 +810,47 @@ class MemberController
                 if ($method === '') {
                     $method = 'api';
                 }
-                $statement = (string) $request->get_param('statement');
+
+                // The recorded statement is taken from Scrutiny's privacy-
+                // policy repository — never from the client. The client
+                // sends a `policy_id` (the WP post ID of the policy the
+                // member accepted) and we resolve the body server-side, so
+                // a tampered or stale client cannot cause us to persist
+                // wording that doesn't match an actual published policy.
+                //
+                // Behaviour matrix:
+                //   policy_id missing          → empty statement
+                //                                ("wording unknown" — same
+                //                                principle as version: a
+                //                                recorded acceptance with
+                //                                missing metadata is more
+                //                                useful than a rejected tap)
+                //   policy_id present + found  → statement is the policy body
+                //   policy_id present + not found
+                //                              → 422 (loud failure rather
+                //                                than silent empty persist —
+                //                                a client that thought it
+                //                                had a policy id but didn't
+                //                                is a bug worth surfacing)
+                $policyIdParam = $request->get_param('policy_id');
+                $policyId = ($policyIdParam === '' || $policyIdParam === null)
+                    ? 0
+                    : (int) $policyIdParam;
+
+                if ($policyId > 0) {
+                    $policyRepo = $container->get(PrivacyPolicyRepository::class);
+                    $policy = $policyRepo->findById($policyId);
+                    if ($policy === null) {
+                        $this->logRequest($keyData['api_key_id'], $request, ['id' => $id, 'policy_id' => $policyId], 422, $startTime);
+                        return $this->errorResponse('invalid_policy_id', 'Privacy policy not found', 422);
+                    }
+                    $statement = (string) $policy->getPolicy();
+                } else {
+                    $statement = '';
+                }
             } else {
                 // Recording a revocation — clear fields that belonged to
-                // the previous acceptance. Submitted version/method/statement
+                // the previous acceptance. Submitted version/method/policy_id
                 // values are intentionally ignored; revocations have no
                 // policy to be versioned against.
                 $version = '';

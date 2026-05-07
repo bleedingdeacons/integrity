@@ -539,8 +539,7 @@ public class UnityRestSharpTests
         var request = new RecordComplianceRequest
         {
             Accepted = true,
-            Version = "2.1",
-            Statement = "I agree to the privacy policy.",
+            Version = "2.1",            
         };
 
         var result = await _client.RecordComplianceAsync(7, request);

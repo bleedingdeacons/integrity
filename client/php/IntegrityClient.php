@@ -415,7 +415,13 @@ class CreateMemberRequest
  *   - `version`     — only persisted when `accepted` is true.
  *   - `method`      — defaults to "api" when null and `accepted` is true.
  *                     Ignored on revocations.
- *   - `statement`   — only persisted when `accepted` is true.
+ *   - `policyId`    — WordPress post ID of the privacy policy the member
+ *                     accepted. The server looks it up through Scrutiny's
+ *                     PrivacyPolicyRepository and persists the policy body
+ *                     as the recorded statement. Only persisted when
+ *                     `accepted` is true; ignored on revocations.
+ *                     Replaces the previous `statement` field — clients
+ *                     no longer send the policy body on the wire.
  *
  * On revocation (`accepted = false`), the server clears version,
  * method, and statement regardless of what is sent — they belonged
@@ -428,7 +434,7 @@ class RecordComplianceRequest
         public ?string $acceptedAt = null,
         public ?string $version = null,
         public ?string $method = null,
-        public ?string $statement = null,
+        public ?int $policyId = null,
     ) {}
 }
 
@@ -873,8 +879,8 @@ class IntegrityClient
         if ($req->method !== null) {
             $payload['method'] = $req->method;
         }
-        if ($req->statement !== null) {
-            $payload['statement'] = $req->statement;
+        if ($req->policyId !== null) {
+            $payload['policy_id'] = $req->policyId;
         }
 
         ['body' => $body, 'status' => $status, 'headers' => $headers] =
