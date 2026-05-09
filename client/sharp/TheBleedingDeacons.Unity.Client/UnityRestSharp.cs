@@ -551,17 +551,18 @@ public sealed class UnityRestSharp : IDisposable
 
 			if (!response.IsSuccessStatusCode)
 			{
-				// Dump full details on 400 to help diagnose bad-request failures.
-				// GET has no request body, so we log the request URL (which includes
-				// query parameters) along with the response headers and body.
-				if (statusCode == 400)
+				// Dump full details on 400 / 409 / 422 to help diagnose payload-rejection
+				// failures (bad request, conflict, unprocessable entity). GET has no
+				// request body, so we log the request URL (which includes query
+				// parameters) along with the response headers and body.
+				if (statusCode is 400 or 409 or 422)
 				{
 					var requestHeaders = FormatHeaders(response.RequestMessage?.Headers);
 					var headers = FormatHeaders(response.Headers);
 					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning(
-						"400 Bad Request on GET {Url}.\nRequest headers:\n{RequestHeaders}\nResponse headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nResponse body:\n{Body}",
-						url, requestHeaders, headers, contentHeaders, content);
+						"HTTP {StatusCode} ({ReasonPhrase}) on GET {Url}.\nRequest headers:\n{RequestHeaders}\nResponse headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nResponse body:\n{Body}",
+						statusCode, response.ReasonPhrase, url, requestHeaders, headers, contentHeaders, content);
 				}
 
 				// Dump full details on 403 to help diagnose server-side blocking
@@ -685,17 +686,18 @@ public sealed class UnityRestSharp : IDisposable
 			{
 				_logger.LogWarning("HTTP {StatusCode} on POST {Url}: {ReasonPhrase}", statusCode, url, response.ReasonPhrase);
 
-				// Dump full details on 400 to help diagnose bad-request failures.
-				// For POST this includes the serialized request payload, which is
-				// almost always the root cause of a 400.
-				if (statusCode == 400)
+				// Dump full details on 400 / 409 / 422 to help diagnose payload-rejection
+				// failures (bad request, conflict, unprocessable entity). For POST this
+				// includes the serialized request payload, which is almost always the
+				// root cause.
+				if (statusCode is 400 or 409 or 422)
 				{
 					var requestHeaders = FormatHeaders(response.RequestMessage?.Headers);
 					var headers = FormatHeaders(response.Headers);
 					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning(
-						"400 Bad Request on POST {Url}.\nRequest headers:\n{RequestHeaders}\nRequest body:\n{RequestBody}\nResponse headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nResponse body:\n{Body}",
-						url, requestHeaders, serializedPayload, headers, contentHeaders, content);
+						"HTTP {StatusCode} ({ReasonPhrase}) on POST {Url}.\nRequest headers:\n{RequestHeaders}\nRequest body:\n{RequestBody}\nResponse headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nResponse body:\n{Body}",
+						statusCode, response.ReasonPhrase, url, requestHeaders, serializedPayload, headers, contentHeaders, content);
 				}
 
 				// Dump full details on 403 to help diagnose server-side blocking
