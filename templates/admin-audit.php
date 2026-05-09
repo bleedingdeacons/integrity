@@ -98,6 +98,7 @@ if (!defined('ABSPATH')) {
                     <select name="response_code">
                         <option value=""><?php echo esc_html__('All', 'integrity'); ?></option>
                         <option value="200" <?php selected($filters['response_code'], 200); ?>>200 OK</option>
+                        <option value="400" <?php selected($filters['response_code'], 400); ?>>400 Bad Request</option>
                         <option value="401" <?php selected($filters['response_code'], 401); ?>>401 Unauthorized</option>
                         <option value="403" <?php selected($filters['response_code'], 403); ?>>403 Forbidden</option>
                         <option value="404" <?php selected($filters['response_code'], 404); ?>>404 Not Found</option>
