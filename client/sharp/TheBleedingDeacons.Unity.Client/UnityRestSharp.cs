@@ -502,8 +502,8 @@ public sealed class UnityRestSharp : IDisposable
 				if (statusCode == 403)
 				{
 					var errBody = await response.Content.ReadAsStringAsync(cancellationToken);
-					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var headers = FormatHeaders(response.Headers);
+					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning("403 Forbidden on GET {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
 						url, headers, contentHeaders, errBody);
 				}
@@ -556,9 +556,9 @@ public sealed class UnityRestSharp : IDisposable
 				// query parameters) along with the response headers and body.
 				if (statusCode == 400)
 				{
-					var requestHeaders = string.Join("\n", response.RequestMessage?.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}") ?? Array.Empty<string>());
-					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var requestHeaders = FormatHeaders(response.RequestMessage?.Headers);
+					var headers = FormatHeaders(response.Headers);
+					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning(
 						"400 Bad Request on GET {Url}.\nRequest headers:\n{RequestHeaders}\nResponse headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nResponse body:\n{Body}",
 						url, requestHeaders, headers, contentHeaders, content);
@@ -567,8 +567,8 @@ public sealed class UnityRestSharp : IDisposable
 				// Dump full details on 403 to help diagnose server-side blocking
 				if (statusCode == 403)
 				{
-					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var headers = FormatHeaders(response.Headers);
+					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning("403 Forbidden on GET {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
 						url, headers, contentHeaders, content);
 				}
@@ -576,8 +576,8 @@ public sealed class UnityRestSharp : IDisposable
 				// Dump full details on 401 to help diagnose auth failures
 				if (statusCode == 401)
 				{
-					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var headers = FormatHeaders(response.Headers);
+					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning("401 Unauthorized on GET {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
 						url, headers, contentHeaders, content);
 				}
@@ -690,9 +690,9 @@ public sealed class UnityRestSharp : IDisposable
 				// almost always the root cause of a 400.
 				if (statusCode == 400)
 				{
-					var requestHeaders = string.Join("\n", response.RequestMessage?.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}") ?? Array.Empty<string>());
-					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var requestHeaders = FormatHeaders(response.RequestMessage?.Headers);
+					var headers = FormatHeaders(response.Headers);
+					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning(
 						"400 Bad Request on POST {Url}.\nRequest headers:\n{RequestHeaders}\nRequest body:\n{RequestBody}\nResponse headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nResponse body:\n{Body}",
 						url, requestHeaders, serializedPayload, headers, contentHeaders, content);
@@ -701,8 +701,8 @@ public sealed class UnityRestSharp : IDisposable
 				// Dump full details on 403 to help diagnose server-side blocking
 				if (statusCode == 403)
 				{
-					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var headers = FormatHeaders(response.Headers);
+					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning("403 Forbidden on POST {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
 						url, headers, contentHeaders, content);
 				}
@@ -710,8 +710,8 @@ public sealed class UnityRestSharp : IDisposable
 				// Dump full details on 401 to help diagnose auth failures
 				if (statusCode == 401)
 				{
-					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var headers = FormatHeaders(response.Headers);
+					var contentHeaders = FormatHeaders(response.Content.Headers);
 					_logger.LogWarning("401 Unauthorized on POST {Url}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
 						url, headers, contentHeaders, content);
 				}
@@ -862,8 +862,8 @@ public sealed class UnityRestSharp : IDisposable
 					try
 					{
 						var htmlBody = await response.Content.ReadAsStringAsync(cancellationToken);
-						var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
-						var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+						var headers = FormatHeaders(response.Headers);
+						var contentHeaders = FormatHeaders(response.Content.Headers);
 						_logger.LogWarning(
 							"403 HTML response on {Method} {Url} attempt {Attempt}/{Max}. Response headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nBody:\n{Body}",
 							method, url, attempt, MaxRetryAttempts, headers, contentHeaders, htmlBody);
@@ -934,6 +934,37 @@ public sealed class UnityRestSharp : IDisposable
 
 		// Unreachable — loop either returns or throws.
 		throw new RestApiRequestFailed(method, url, MaxRetryAttempts, null, "retry loop exited unexpectedly", lastException);
+	}
+
+	// Header names whose VALUES must be redacted in any header dump. Names are
+	// matched case-insensitively. Authorization and X-API-Key carry the API
+	// credentials we send out; Cookie / Set-Cookie / Proxy-Authorization are
+	// included defensively in case the WAF or upstream ever attaches them.
+	private static readonly HashSet<string> RedactedHeaderNames = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"Authorization",
+		"X-API-Key",
+		"Cookie",
+		"Set-Cookie",
+		"Proxy-Authorization",
+	};
+
+	/// <summary>
+	/// Formats a header collection into the same multi-line indented shape used
+	/// by the previous inline string.Join calls, but redacts the values of any
+	/// header listed in <see cref="RedactedHeaderNames"/>. Returns an empty
+	/// string for a null collection so call sites don't need to null-check.
+	/// </summary>
+	private static string FormatHeaders(System.Net.Http.Headers.HttpHeaders? headers)
+	{
+		if (headers is null) return string.Empty;
+		return string.Join("\n", headers.Select(h =>
+		{
+			var value = RedactedHeaderNames.Contains(h.Key)
+				? "***REDACTED***"
+				: string.Join(", ", h.Value);
+			return $"  {h.Key}: {value}";
+		}));
 	}
 
 	private static bool IsLikelyWafHtml(HttpResponseMessage response)
