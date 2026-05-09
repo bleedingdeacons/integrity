@@ -551,6 +551,19 @@ public sealed class UnityRestSharp : IDisposable
 
 			if (!response.IsSuccessStatusCode)
 			{
+				// Dump full details on 400 to help diagnose bad-request failures.
+				// GET has no request body, so we log the request URL (which includes
+				// query parameters) along with the response headers and body.
+				if (statusCode == 400)
+				{
+					var requestHeaders = string.Join("\n", response.RequestMessage?.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}") ?? Array.Empty<string>());
+					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					_logger.LogWarning(
+						"400 Bad Request on GET {Url}.\nRequest headers:\n{RequestHeaders}\nResponse headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nResponse body:\n{Body}",
+						url, requestHeaders, headers, contentHeaders, content);
+				}
+
 				// Dump full details on 403 to help diagnose server-side blocking
 				if (statusCode == 403)
 				{
@@ -671,6 +684,19 @@ public sealed class UnityRestSharp : IDisposable
 			if (!response.IsSuccessStatusCode)
 			{
 				_logger.LogWarning("HTTP {StatusCode} on POST {Url}: {ReasonPhrase}", statusCode, url, response.ReasonPhrase);
+
+				// Dump full details on 400 to help diagnose bad-request failures.
+				// For POST this includes the serialized request payload, which is
+				// almost always the root cause of a 400.
+				if (statusCode == 400)
+				{
+					var requestHeaders = string.Join("\n", response.RequestMessage?.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}") ?? Array.Empty<string>());
+					var headers = string.Join("\n", response.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					var contentHeaders = string.Join("\n", response.Content.Headers.Select(h => $"  {h.Key}: {string.Join(", ", h.Value)}"));
+					_logger.LogWarning(
+						"400 Bad Request on POST {Url}.\nRequest headers:\n{RequestHeaders}\nRequest body:\n{RequestBody}\nResponse headers:\n{Headers}\nContent headers:\n{ContentHeaders}\nResponse body:\n{Body}",
+						url, requestHeaders, serializedPayload, headers, contentHeaders, content);
+				}
 
 				// Dump full details on 403 to help diagnose server-side blocking
 				if (statusCode == 403)

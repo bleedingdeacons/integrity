@@ -8,7 +8,7 @@
 	  
     <!-- Package Info -->
     <PackageId>Integrity.Client</PackageId>
-    <Version>1.10.0</Version>
+    <Version>1.10.1</Version>
     <Authors>The Bleeding Deacons</Authors>
     <Company>The Bleeding Deacons</Company>
     <Product>Integrity API Client</Product>
