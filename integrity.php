@@ -103,9 +103,9 @@ add_action('unity/loaded', function ($container): void {
 add_action('plugins_loaded', function (): void {
     if (!class_exists('Unity\\Plugin')) {
         add_action('admin_notices', function() {
-            echo '<div class="notice notice-error is-dismissible"><p>';
-            echo '<strong>Integrity Plugin Error:</strong> ';
-            echo esc_html__('Integrity requires the Unity plugin to be installed and activated.', 'integrity');
+            echo '<div class="notice notice-error"><p>';
+            echo '<strong>' . esc_html__('Integrity', 'integrity') . ':</strong> ';
+            echo esc_html__('This plugin requires the Unity plugin to be installed and activated.', 'integrity');
             echo '</p></div>';
         });
     }
