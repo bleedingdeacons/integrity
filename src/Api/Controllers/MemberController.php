@@ -459,32 +459,52 @@ class MemberController
                 }
             }
 
-            // Build updated member using existing values as defaults (partial update)
+            // Build updated member using existing values as defaults (partial update).
+            //
+            // Named arguments throughout, and every field this endpoint cannot
+            // change is passed explicitly from $existingMember. Omitting a
+            // parameter does not preserve it: createNew() substitutes its own
+            // default, and TsmlMemberRepository::updateFields() writes every
+            // field unconditionally — so an omission persists as a deletion.
+            // That is how a PATCH of a mobile number used to erase the
+            // member's GDPR consent record.
             $updatedMember = $memberFactory->createNew(
-                $id,
-                $request->has_param('anonymous_name')
+                id: $id,
+                anonymousName: $request->has_param('anonymous_name')
                     ? $request->get_param('anonymous_name')
                     : $existingMember->getAnonymousName(),
-                $request->has_param('show_anonymous_name')
+                showAnonymousName: $request->has_param('show_anonymous_name')
                     ? $request->get_param('show_anonymous_name')
                     : $existingMember->showAnonymousName(),
-                $request->has_param('show_member_profile')
+                showMemberProfile: $request->has_param('show_member_profile')
                     ? $request->get_param('show_member_profile')
                     : $existingMember->showMemberProfile(),
-                $request->has_param('anonymous_profile')
+                anonymousProfile: $request->has_param('anonymous_profile')
                     ? $request->get_param('anonymous_profile')
                     : $existingMember->getAnonymousProfile(),
-                $intergroupPositionId,
-                $request->has_param('intergroup_position_rotation')
+                intergroupPosition: $intergroupPositionId,
+                intergroupPositionRotation: $request->has_param('intergroup_position_rotation')
                     ? $request->get_param('intergroup_position_rotation')
                     : $existingMember->getIntergroupPositionRotation(),
-                $homeGroupId,
-                $request->has_param('is_gsr')
+                homeGroup: $homeGroupId,
+                isGSR: $request->has_param('is_gsr')
                     ? $request->get_param('is_gsr')
                     : $existingMember->isGSR(),
-                $existingMember->getMeetingPO(),
-                $personalEmail,
-                $mobileNumber,
+                meetingPO: $existingMember->getMeetingPO(),
+                personalEmail: $personalEmail,
+                mobileNumber: $mobileNumber,
+                // Not exposed by this endpoint's schema — preserved verbatim.
+                twelfthStepper: $existingMember->isTwelfthStepper(),
+                telephoneResponder: $existingMember->isTelephoneResponder(),
+                area: $existingMember->getArea(),
+                accepts: $existingMember->getAccepts(),
+                // GDPR consent is recorded via recordCompliance(), never here.
+                gdprAccepted: $existingMember->isGdprAccepted(),
+                gdprAcceptedAt: $existingMember->getGdprAcceptedAt(),
+                gdprAcceptanceVersion: $existingMember->getGdprAcceptanceVersion(),
+                gdprAcceptanceMethod: $existingMember->getGdprAcceptanceMethod(),
+                gdprAcceptanceStatement: $existingMember->getGdprAcceptanceStatement(),
+                updated: $existingMember->getUpdated(),
             );
 
             // Save
@@ -584,20 +604,26 @@ class MemberController
                 return $this->errorResponse('create_failed', 'Failed to create member', 500);
             }
 
-            // Build the member object with all fields via the factory
+            // Build the member object with all fields via the factory.
+            //
+            // This is the create path — the post was inserted immediately
+            // above, so there is no prior state and createNew()'s defaults
+            // for the unlisted parameters are the correct starting values.
+            // Named arguments regardless: a positional call here would
+            // silently rebind if the signature ever gains a parameter.
             $newMember = $memberFactory->createNew(
-                $postId,
-                $anonymousName,
-                false,   // show_anonymous_name
-                false,   // show_member_profile
-                '',      // anonymous_profile
-                $intergroupPositionId,
-                $intergroupPositionRotation,
-                $homeGroupId,
-                $isGsr,
-                null,    // meeting_po
-                $personalEmail,
-                $mobileNumber,
+                id: $postId,
+                anonymousName: $anonymousName,
+                showAnonymousName: false,
+                showMemberProfile: false,
+                anonymousProfile: '',
+                intergroupPosition: $intergroupPositionId,
+                intergroupPositionRotation: $intergroupPositionRotation,
+                homeGroup: $homeGroupId,
+                isGSR: $isGsr,
+                meetingPO: null,
+                personalEmail: $personalEmail,
+                mobileNumber: $mobileNumber,
             );
 
             // Save ACF / meta fields
@@ -858,24 +884,37 @@ class MemberController
                 $statement = '';
             }
 
+            // Named arguments throughout. This call previously passed the five
+            // GDPR values positionally at positions 13-17, which is where
+            // twelfthStepper, telephoneResponder, area and accepts live —
+            // they were inserted into the middle of createNew()'s signature
+            // after this code was written. $acceptedAt (a string) bound to
+            // bool $telephoneResponder and $method (a string) bound to
+            // array $accepts, so every call to this endpoint was fatal.
             $updatedMember = $memberFactory->createNew(
-                $id,
-                $existingMember->getAnonymousName(),
-                $existingMember->showAnonymousName(),
-                $existingMember->showMemberProfile(),
-                $existingMember->getAnonymousProfile(),
-                $existingMember->getIntergroupPosition(),
-                $existingMember->getIntergroupPositionRotation(),
-                $existingMember->getHomeGroup(),
-                $existingMember->isGSR(),
-                $existingMember->getMeetingPO(),
-                $existingMember->getPersonalEmail(),
-                $existingMember->getMobileNumber(),
-                $accepted,
-                $acceptedAt,
-                $version,
-                $method,
-                $statement
+                id: $id,
+                anonymousName: $existingMember->getAnonymousName(),
+                showAnonymousName: $existingMember->showAnonymousName(),
+                showMemberProfile: $existingMember->showMemberProfile(),
+                anonymousProfile: $existingMember->getAnonymousProfile(),
+                intergroupPosition: $existingMember->getIntergroupPosition(),
+                intergroupPositionRotation: $existingMember->getIntergroupPositionRotation(),
+                homeGroup: $existingMember->getHomeGroup(),
+                isGSR: $existingMember->isGSR(),
+                meetingPO: $existingMember->getMeetingPO(),
+                personalEmail: $existingMember->getPersonalEmail(),
+                mobileNumber: $existingMember->getMobileNumber(),
+                twelfthStepper: $existingMember->isTwelfthStepper(),
+                telephoneResponder: $existingMember->isTelephoneResponder(),
+                area: $existingMember->getArea(),
+                accepts: $existingMember->getAccepts(),
+                // The only fields this endpoint sets.
+                gdprAccepted: $accepted,
+                gdprAcceptedAt: $acceptedAt,
+                gdprAcceptanceVersion: $version,
+                gdprAcceptanceMethod: $method,
+                gdprAcceptanceStatement: $statement,
+                updated: $existingMember->getUpdated(),
             );
 
             $saved = $memberRepo->save($updatedMember);
