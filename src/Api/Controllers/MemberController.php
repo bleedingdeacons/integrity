@@ -18,6 +18,7 @@ use Unity\Meetings\Interfaces\MeetingRepository;
 use Unity\Members\Interfaces\Member;
 use Unity\Members\Interfaces\MemberFactory;
 use Unity\Members\Interfaces\MemberRepository;
+use Unity\Members\Interfaces\MemberRevisor;
 use Unity\Plugin;
 use Unity\Positions\Interfaces\Position;
 use Unity\Positions\Interfaces\PositionRepository;
@@ -394,7 +395,7 @@ class MemberController
         try {
             $container = Plugin::getContainer();
             $memberRepo = $container->get(MemberRepository::class);
-            $memberFactory = $container->get(MemberFactory::class);
+            $memberRevisor = $container->get(MemberRevisor::class);
 
             // Fetch existing member
             $existingMember = $memberRepo->findById($id);
@@ -459,52 +460,36 @@ class MemberController
                 }
             }
 
-            // Build updated member using existing values as defaults (partial update).
-            //
-            // Named arguments throughout, and every field this endpoint cannot
-            // change is passed explicitly from $existingMember. Omitting a
-            // parameter does not preserve it: createNew() substitutes its own
-            // default, and TsmlMemberRepository::updateFields() writes every
-            // field unconditionally — so an omission persists as a deletion.
-            // That is how a PATCH of a mobile number used to erase the
-            // member's GDPR consent record.
-            $updatedMember = $memberFactory->createNew(
-                id: $id,
+            // A partial update, expressed as one: name only the fields the
+            // request actually supplied, and revise() carries the rest over.
+            // A parameter left null means "leave it alone", so the fields this
+            // endpoint does not expose -- twelfthStepper, telephoneResponder,
+            // area, accepts and the whole GDPR consent block -- simply do not
+            // appear here and cannot be lost by being forgotten.
+            $updatedMember = $memberRevisor->revise(
+                $existingMember,
                 anonymousName: $request->has_param('anonymous_name')
                     ? $request->get_param('anonymous_name')
-                    : $existingMember->getAnonymousName(),
+                    : null,
                 showAnonymousName: $request->has_param('show_anonymous_name')
                     ? $request->get_param('show_anonymous_name')
-                    : $existingMember->showAnonymousName(),
+                    : null,
                 showMemberProfile: $request->has_param('show_member_profile')
                     ? $request->get_param('show_member_profile')
-                    : $existingMember->showMemberProfile(),
+                    : null,
                 anonymousProfile: $request->has_param('anonymous_profile')
                     ? $request->get_param('anonymous_profile')
-                    : $existingMember->getAnonymousProfile(),
+                    : null,
                 intergroupPosition: $intergroupPositionId,
                 intergroupPositionRotation: $request->has_param('intergroup_position_rotation')
                     ? $request->get_param('intergroup_position_rotation')
-                    : $existingMember->getIntergroupPositionRotation(),
+                    : null,
                 homeGroup: $homeGroupId,
                 isGSR: $request->has_param('is_gsr')
                     ? $request->get_param('is_gsr')
-                    : $existingMember->isGSR(),
-                meetingPO: $existingMember->getMeetingPO(),
+                    : null,
                 personalEmail: $personalEmail,
-                mobileNumber: $mobileNumber,
-                // Not exposed by this endpoint's schema — preserved verbatim.
-                twelfthStepper: $existingMember->isTwelfthStepper(),
-                telephoneResponder: $existingMember->isTelephoneResponder(),
-                area: $existingMember->getArea(),
-                accepts: $existingMember->getAccepts(),
-                // GDPR consent is recorded via recordCompliance(), never here.
-                gdprAccepted: $existingMember->isGdprAccepted(),
-                gdprAcceptedAt: $existingMember->getGdprAcceptedAt(),
-                gdprAcceptanceVersion: $existingMember->getGdprAcceptanceVersion(),
-                gdprAcceptanceMethod: $existingMember->getGdprAcceptanceMethod(),
-                gdprAcceptanceStatement: $existingMember->getGdprAcceptanceStatement(),
-                updated: $existingMember->getUpdated(),
+                mobileNumber: $mobileNumber
             );
 
             // Save
@@ -796,7 +781,7 @@ class MemberController
         try {
             $container = Plugin::getContainer();
             $memberRepo = $container->get(MemberRepository::class);
-            $memberFactory = $container->get(MemberFactory::class);
+            $memberRevisor = $container->get(MemberRevisor::class);
 
             $existingMember = $memberRepo->findById($id);
 
@@ -884,37 +869,22 @@ class MemberController
                 $statement = '';
             }
 
-            // Named arguments throughout. This call previously passed the five
-            // GDPR values positionally at positions 13-17, which is where
-            // twelfthStepper, telephoneResponder, area and accepts live —
-            // they were inserted into the middle of createNew()'s signature
-            // after this code was written. $acceptedAt (a string) bound to
-            // bool $telephoneResponder and $method (a string) bound to
-            // array $accepts, so every call to this endpoint was fatal.
-            $updatedMember = $memberFactory->createNew(
-                id: $id,
-                anonymousName: $existingMember->getAnonymousName(),
-                showAnonymousName: $existingMember->showAnonymousName(),
-                showMemberProfile: $existingMember->showMemberProfile(),
-                anonymousProfile: $existingMember->getAnonymousProfile(),
-                intergroupPosition: $existingMember->getIntergroupPosition(),
-                intergroupPositionRotation: $existingMember->getIntergroupPositionRotation(),
-                homeGroup: $existingMember->getHomeGroup(),
-                isGSR: $existingMember->isGSR(),
-                meetingPO: $existingMember->getMeetingPO(),
-                personalEmail: $existingMember->getPersonalEmail(),
-                mobileNumber: $existingMember->getMobileNumber(),
-                twelfthStepper: $existingMember->isTwelfthStepper(),
-                telephoneResponder: $existingMember->isTelephoneResponder(),
-                area: $existingMember->getArea(),
-                accepts: $existingMember->getAccepts(),
-                // The only fields this endpoint sets.
+            // This endpoint sets the GDPR block and nothing else, and now says
+            // so. It previously restated all 22 of createNew()'s parameters to
+            // express that, and passed the five GDPR values positionally at
+            // positions 13-17 -- which is where twelfthStepper,
+            // telephoneResponder, area and accepts live, having been inserted
+            // into the middle of the signature after this code was written.
+            // $acceptedAt (a string) bound to bool $telephoneResponder and
+            // $method (a string) bound to array $accepts, so every call to
+            // this endpoint was fatal. There is nothing left here to misbind.
+            $updatedMember = $memberRevisor->revise(
+                $existingMember,
                 gdprAccepted: $accepted,
                 gdprAcceptedAt: $acceptedAt,
                 gdprAcceptanceVersion: $version,
                 gdprAcceptanceMethod: $method,
-                gdprAcceptanceStatement: $statement,
-                updated: $existingMember->getUpdated(),
+                gdprAcceptanceStatement: $statement
             );
 
             $saved = $memberRepo->save($updatedMember);
