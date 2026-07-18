@@ -15,6 +15,7 @@ use Unity\Groups\Interfaces\GroupViewFactory;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeeting;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepository;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingGroupAttendanceRepository;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendance;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendanceRepository;
 use Unity\Members\Interfaces\Member;
 use Unity\Members\Interfaces\MemberRepository;
