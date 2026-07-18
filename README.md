@@ -1,8 +1,12 @@
 # Integrity
 
+[![CI](https://github.com/bleedingdeacons/integrity/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bleedingdeacons/integrity/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/version-1.18.7-blue)
+![PHP](https://img.shields.io/badge/php-8.1%2B-777bb4)
+![Licence](https://img.shields.io/badge/licence-MIT%20(Modified)-green)
+
 Secure REST API bridge for the [Unity](https://github.com/thebleedingdeacons/unity) WordPress plugin suite. Integrity provides authenticated, rate-limited access to Groups, Meetings, Members, Positions, and Intergroup Meetings for external applications — with client libraries for both PHP and .NET.
 
-**Version:** 1.18.7
 **Requires:** WordPress 6.0+ · PHP 8.0+
 **Dependencies:** Unity, Scrutiny
 **License:** MIT (Modified — see [License](#license))
