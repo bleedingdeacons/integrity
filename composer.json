@@ -1,4 +1,4 @@
-    {
+{
     "name": "bleeding-deacons/integrity",
     "description": "Secure REST API bridge for Unity WordPress plugin - provides authenticated access to Groups and Meetings for external applications",
     "type": "wordpress-plugin",
@@ -48,7 +48,8 @@
             "@cs",
             "@stan",
             "@test"
-        ]
+        ],
+        "phpstan": "phpstan analyse"
     },
     "config": {
         "optimize-autoloader": true,
