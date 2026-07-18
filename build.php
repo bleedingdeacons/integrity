@@ -95,7 +95,13 @@ class PluginBuilder
             'sharp',
             'Integrity-cli',
             'csharp-client',
-            'client'
+            'client',
+
+            // Dev artefacts that must never ship
+            '.phpunit.result.cache',
+            '.phpunit.cache',
+            'phpstan-baseline.neon',
+            '.claude',
     ];
 
     // Files and directories to exclude in dev builds
