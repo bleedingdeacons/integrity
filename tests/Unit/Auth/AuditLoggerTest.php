@@ -14,6 +14,16 @@ use Mockery;
  */
 class AuditLoggerTest extends TestCase
 {
+    private AuditLogger $auditLogger;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Instance methods now; static when these tests were written.
+        $this->auditLogger = new AuditLogger();
+    }
+
     /**
      * @test
      */
@@ -26,6 +36,13 @@ class AuditLoggerTest extends TestCase
         WP_Mock::userFunction('get_option')
             ->with('integrity_enable_audit_log', true)
             ->andReturn(true);
+
+        // log() resolves the client IP, which consults the trusted-proxy
+        // allowlist. Added to the source after these tests were written;
+        // none configured, so REMOTE_ADDR is used directly.
+        WP_Mock::userFunction('get_option')
+            ->with('integrity_trusted_proxies', [])
+            ->andReturn([]);
 
         WP_Mock::userFunction('sanitize_text_field')
             ->andReturnArg(0);
@@ -46,7 +63,7 @@ class AuditLoggerTest extends TestCase
             ->once()
             ->andReturn(1);
 
-        AuditLogger::log(
+        $this->auditLogger->log(
             1,
             '/integrity/v1/groups',
             'GET',
@@ -75,7 +92,7 @@ class AuditLoggerTest extends TestCase
         // insert should NOT be called
         $wpdb->shouldNotReceive('insert');
 
-        AuditLogger::log(
+        $this->auditLogger->log(
             1,
             '/integrity/v1/groups',
             'GET',
@@ -119,7 +136,7 @@ class AuditLoggerTest extends TestCase
             ->once()
             ->andReturn(1);
 
-        AuditLogger::log(
+        $this->auditLogger->log(
             1,
             '/test',
             'POST',
@@ -322,7 +339,7 @@ class AuditLoggerTest extends TestCase
         $wpdb->shouldReceive('esc_like')
             ->andReturnArg(0);
 
-        $result = AuditLogger::getLogs(['page' => 1, 'per_page' => 50]);
+        $result = $this->auditLogger->getLogs(['page' => 1, 'per_page' => 50]);
 
         $this->assertArrayHasKey('logs', $result);
         $this->assertArrayHasKey('total', $result);
@@ -363,7 +380,7 @@ class AuditLoggerTest extends TestCase
         $wpdb->shouldReceive('get_results')
             ->andReturn($mockLogs);
 
-        $result = AuditLogger::getLogs();
+        $result = $this->auditLogger->getLogs();
 
         $this->assertIsArray($result['logs'][0]['request_params']);
         $this->assertEquals('bar', $result['logs'][0]['request_params']['foo']);
@@ -393,7 +410,7 @@ class AuditLoggerTest extends TestCase
                 [['ip_address' => '192.168.1.1', 'count' => 100]]
             );
 
-        $stats = AuditLogger::getStats(30);
+        $stats = $this->auditLogger->getStats(30);
 
         $this->assertArrayHasKey('total_requests', $stats);
         $this->assertArrayHasKey('successful_requests', $stats);

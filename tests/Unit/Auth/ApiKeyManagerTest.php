@@ -14,12 +14,23 @@ use Mockery;
  */
 class ApiKeyManagerTest extends TestCase
 {
+    private ApiKeyManager $apiKeyManager;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // ApiKeyManager's methods were static when these tests were written
+        // and are instance methods now; it takes no constructor arguments.
+        $this->apiKeyManager = new ApiKeyManager();
+    }
+
     /**
      * @test
      */
     public function generateKey_returns_array_with_required_keys(): void
     {
-        $result = ApiKeyManager::generateKey();
+        $result = $this->apiKeyManager->generateKey();
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('key', $result);
@@ -32,7 +43,7 @@ class ApiKeyManagerTest extends TestCase
      */
     public function generateKey_creates_key_with_int_prefix(): void
     {
-        $result = ApiKeyManager::generateKey();
+        $result = $this->apiKeyManager->generateKey();
 
         $this->assertStringStartsWith('int_', $result['key']);
     }
@@ -42,7 +53,7 @@ class ApiKeyManagerTest extends TestCase
      */
     public function generateKey_creates_key_of_expected_length(): void
     {
-        $result = ApiKeyManager::generateKey();
+        $result = $this->apiKeyManager->generateKey();
 
         // int_ (4) + 64 hex chars (32 bytes) = 68 characters
         $this->assertEquals(68, strlen($result['key']));
@@ -55,7 +66,7 @@ class ApiKeyManagerTest extends TestCase
     {
         $keys = [];
         for ($i = 0; $i < 100; $i++) {
-            $result = ApiKeyManager::generateKey();
+            $result = $this->apiKeyManager->generateKey();
             $keys[] = $result['key'];
         }
 
@@ -68,7 +79,7 @@ class ApiKeyManagerTest extends TestCase
      */
     public function generateKey_prefix_is_first_8_chars(): void
     {
-        $result = ApiKeyManager::generateKey();
+        $result = $this->apiKeyManager->generateKey();
 
         $this->assertEquals(substr($result['key'], 0, 8), $result['prefix']);
     }
@@ -78,7 +89,7 @@ class ApiKeyManagerTest extends TestCase
      */
     public function hashKey_returns_non_empty_string(): void
     {
-        $hash = ApiKeyManager::hashKey('int_test_key_12345');
+        $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
 
         $this->assertIsString($hash);
         $this->assertNotEmpty($hash);
@@ -89,8 +100,8 @@ class ApiKeyManagerTest extends TestCase
      */
     public function hashKey_returns_different_hash_for_different_keys(): void
     {
-        $hash1 = ApiKeyManager::hashKey('int_test_key_12345');
-        $hash2 = ApiKeyManager::hashKey('int_test_key_67890');
+        $hash1 = $this->apiKeyManager->hashKey('int_test_key_12345');
+        $hash2 = $this->apiKeyManager->hashKey('int_test_key_67890');
 
         $this->assertNotEquals($hash1, $hash2);
     }
@@ -100,7 +111,7 @@ class ApiKeyManagerTest extends TestCase
      */
     public function hashKey_uses_argon2id(): void
     {
-        $hash = ApiKeyManager::hashKey('int_test_key_12345');
+        $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
 
         // Argon2id hashes start with $argon2id$
         $this->assertStringStartsWith('$argon2id$', $hash);
@@ -112,9 +123,9 @@ class ApiKeyManagerTest extends TestCase
     public function verifyKey_returns_true_for_valid_key(): void
     {
         $key = 'int_test_key_12345';
-        $hash = ApiKeyManager::hashKey($key);
+        $hash = $this->apiKeyManager->hashKey($key);
 
-        $this->assertTrue(ApiKeyManager::verifyKey($key, $hash));
+        $this->assertTrue($this->apiKeyManager->verifyKey($key, $hash));
     }
 
     /**
@@ -123,9 +134,9 @@ class ApiKeyManagerTest extends TestCase
     public function verifyKey_returns_false_for_invalid_key(): void
     {
         $key = 'int_test_key_12345';
-        $hash = ApiKeyManager::hashKey($key);
+        $hash = $this->apiKeyManager->hashKey($key);
 
-        $this->assertFalse(ApiKeyManager::verifyKey('int_wrong_key', $hash));
+        $this->assertFalse($this->apiKeyManager->verifyKey('int_wrong_key', $hash));
     }
 
     /**
@@ -133,9 +144,9 @@ class ApiKeyManagerTest extends TestCase
      */
     public function verifyKey_returns_false_for_empty_key(): void
     {
-        $hash = ApiKeyManager::hashKey('int_test_key_12345');
+        $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
 
-        $this->assertFalse(ApiKeyManager::verifyKey('', $hash));
+        $this->assertFalse($this->apiKeyManager->verifyKey('', $hash));
     }
 
     /**
@@ -144,19 +155,19 @@ class ApiKeyManagerTest extends TestCase
     public function verifyKey_is_timing_safe(): void
     {
         $key = 'int_test_key_12345';
-        $hash = ApiKeyManager::hashKey($key);
+        $hash = $this->apiKeyManager->hashKey($key);
 
         // Measure time for correct key
         $start = microtime(true);
         for ($i = 0; $i < 100; $i++) {
-            ApiKeyManager::verifyKey($key, $hash);
+            $this->apiKeyManager->verifyKey($key, $hash);
         }
         $correctTime = microtime(true) - $start;
 
         // Measure time for wrong key (same length)
         $start = microtime(true);
         for ($i = 0; $i < 100; $i++) {
-            ApiKeyManager::verifyKey('int_wrong_key_1234', $hash);
+            $this->apiKeyManager->verifyKey('int_wrong_key_1234', $hash);
         }
         $wrongTime = microtime(true) - $start;
 
@@ -200,7 +211,7 @@ class ApiKeyManagerTest extends TestCase
         WP_Mock::userFunction('get_current_user_id')
             ->andReturn(1);
 
-        $result = ApiKeyManager::createKey('Test Key', ['groups:read']);
+        $result = $this->apiKeyManager->createKey('Test Key', ['groups:read']);
 
         $this->assertTrue($result['success']);
         $this->assertArrayHasKey('key', $result);
@@ -237,7 +248,7 @@ class ApiKeyManagerTest extends TestCase
         WP_Mock::userFunction('get_current_user_id')
             ->andReturn(1);
 
-        $result = ApiKeyManager::createKey('Test Key', ['groups:read']);
+        $result = $this->apiKeyManager->createKey('Test Key', ['groups:read']);
 
         $this->assertFalse($result['success']);
         $this->assertArrayHasKey('error', $result);
@@ -263,7 +274,7 @@ class ApiKeyManagerTest extends TestCase
             )
             ->andReturn(1);
 
-        $result = ApiKeyManager::revokeKey(123);
+        $result = $this->apiKeyManager->revokeKey(123);
 
         $this->assertTrue($result);
     }
@@ -281,7 +292,7 @@ class ApiKeyManagerTest extends TestCase
             ->once()
             ->andReturn(false);
 
-        $result = ApiKeyManager::revokeKey(123);
+        $result = $this->apiKeyManager->revokeKey(123);
 
         $this->assertFalse($result);
     }
@@ -304,7 +315,7 @@ class ApiKeyManagerTest extends TestCase
             )
             ->andReturn(1);
 
-        $result = ApiKeyManager::deleteKey(456);
+        $result = $this->apiKeyManager->deleteKey(456);
 
         $this->assertTrue($result);
     }
@@ -322,7 +333,7 @@ class ApiKeyManagerTest extends TestCase
             ->once()
             ->andReturn(false);
 
-        $result = ApiKeyManager::deleteKey(456);
+        $result = $this->apiKeyManager->deleteKey(456);
 
         $this->assertFalse($result);
     }
@@ -357,7 +368,7 @@ class ApiKeyManagerTest extends TestCase
             ->once()
             ->andReturn($mockKeys);
 
-        $result = ApiKeyManager::getAllKeys();
+        $result = $this->apiKeyManager->getAllKeys();
 
         $this->assertIsArray($result);
         $this->assertCount(1, $result);
@@ -396,7 +407,7 @@ class ApiKeyManagerTest extends TestCase
             ->once()
             ->andReturn($mockKey);
 
-        $result = ApiKeyManager::getKey(1);
+        $result = $this->apiKeyManager->getKey(1);
 
         $this->assertIsArray($result);
         $this->assertEquals(1, $result['id']);
@@ -420,7 +431,7 @@ class ApiKeyManagerTest extends TestCase
             ->once()
             ->andReturn(null);
 
-        $result = ApiKeyManager::getKey(999);
+        $result = $this->apiKeyManager->getKey(999);
 
         $this->assertNull($result);
     }
@@ -446,7 +457,7 @@ class ApiKeyManagerTest extends TestCase
                 return json_encode($data);
             });
 
-        $result = ApiKeyManager::updateKey(1, [
+        $result = $this->apiKeyManager->updateKey(1, [
             'name' => 'Updated Name',
             'rate_limit' => 2000,
         ]);
@@ -459,7 +470,7 @@ class ApiKeyManagerTest extends TestCase
      */
     public function updateKey_returns_false_when_no_data_provided(): void
     {
-        $result = ApiKeyManager::updateKey(1, []);
+        $result = $this->apiKeyManager->updateKey(1, []);
 
         $this->assertFalse($result);
     }

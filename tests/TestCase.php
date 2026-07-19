@@ -13,6 +13,11 @@ use WP_Mock;
  * Base TestCase for Integrity plugin tests
  *
  * Provides setup and teardown for WP_Mock and Mockery integration.
+ *
+ * Extends PHPUnit's TestCase and drives WP_Mock by hand, matching Unity and
+ * tsml-for-unity. WP_Mock\Tools\TestCase is not used anywhere in the suite,
+ * and at the wp_mock 0.4.x pinned here it could not be: it overrides
+ * expectOutputString(), which PHPUnit 10 made final, so autoloading it fatals.
  */
 abstract class TestCase extends PHPUnitTestCase
 {
@@ -25,6 +30,20 @@ abstract class TestCase extends PHPUnitTestCase
     {
         parent::setUp();
         WP_Mock::setUp();
+
+        // The escaping helpers are pure pass-throughs as far as these tests
+        // are concerned: the classes under test call them when interpolating
+        // table names into SQL, and without a definition PHP fatals on an
+        // undefined function before the assertion is ever reached.
+        WP_Mock::passthruFunction('esc_sql');
+
+        // Likewise wp_parse_args: the classes under test use it to apply
+        // defaults to an options array, and its real behaviour is what the
+        // assertions expect, so stub the behaviour rather than a return value.
+        WP_Mock::userFunction('wp_parse_args')
+            ->andReturnUsing(
+                static fn ($args, $defaults = []): array => array_merge($defaults, (array) $args)
+            );
     }
 
     /**
@@ -91,6 +110,17 @@ abstract class TestCase extends PHPUnitTestCase
         $request->shouldReceive('get_header')
             ->andReturnUsing(function ($key) use ($headers) {
                 return $headers[$key] ?? null;
+            });
+
+        // WP_REST_Request::get_headers() returns each header as an array of
+        // values. The audit logger collects them all to record the request,
+        // so a double without this method fails before reaching the assertion.
+        $request->shouldReceive('get_headers')
+            ->andReturnUsing(function () use ($headers) {
+                return array_map(
+                    static fn ($value): array => is_array($value) ? $value : [$value],
+                    $headers
+                );
             });
         
         $request->shouldReceive('get_route')
