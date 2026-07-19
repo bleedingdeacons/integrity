@@ -1,0 +1,6 @@
+Keeps this directory present in a clone.
+
+phpunit.xml declares an "Integration" testsuite pointing here, and the
+composer test:integration script runs it. PHPUnit 9.6 treats a missing
+testsuite directory as a fatal error (exit 2) where PHPUnit 10 tolerated it,
+so without this file CI fails before running a single test.
