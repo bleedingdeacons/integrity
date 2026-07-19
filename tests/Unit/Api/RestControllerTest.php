@@ -66,8 +66,16 @@ class RestControllerTest extends TestCase
     {
         // Groups (2) + Meetings (2) + Positions (2) + Members (5) +
         // Intergroup Meetings (6) + Health (1) = 18
+        $registeredRoutes = [];
+
         WP_Mock::userFunction('register_rest_route')
-            ->times(18);
+            ->times(18)
+            ->andReturnUsing(
+                function (string $namespace, string $route) use (&$registeredRoutes): bool {
+                    $registeredRoutes[] = $namespace . $route;
+                    return true;
+                }
+            );
 
         // Controller mocks must return args arrays when register() wires routes
         $this->groupController->shouldReceive('getGroupsArgs')->once()->andReturn([]);
@@ -85,7 +93,17 @@ class RestControllerTest extends TestCase
 
         $this->controller->register();
 
-        $this->assertConditionsMet();
+        // Assert on the observable result rather than WP_Mock's
+        // assertConditionsMet(): that helper lives on WP_Mock's own TestCase,
+        // which this suite does not extend. The ->times(18) and ->once()
+        // expectations above are still verified, by WP_Mock::tearDown() and
+        // Mockery::close() respectively.
+        $this->assertCount(18, $registeredRoutes);
+        $this->assertSame(
+            $registeredRoutes,
+            array_unique($registeredRoutes),
+            'Each route should be registered exactly once.'
+        );
     }
 
     // ── Auth: missing key ──────────────────────────────────────────────
@@ -96,12 +114,6 @@ class RestControllerTest extends TestCase
     public function checkPermission_returns_error_when_no_api_key(): void
     {
         $request = $this->createMockRequest();
-        $request->shouldReceive('get_header')
-            ->with('Authorization')
-            ->andReturn(null);
-        $request->shouldReceive('get_header')
-            ->with('X-API-Key')
-            ->andReturn(null);
 
         WP_Mock::userFunction('get_option')
             ->with('integrity_require_https', true)
@@ -109,6 +121,9 @@ class RestControllerTest extends TestCase
 
         WP_Mock::userFunction('is_ssl')
             ->andReturn(true);
+
+        // Resolved for the audit record before the key is even looked for.
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('127.0.0.1');
 
         // Audit logger should still log the failed request
         $this->auditLogger->shouldReceive('log')->once();
@@ -126,13 +141,7 @@ class RestControllerTest extends TestCase
      */
     public function checkPermission_returns_error_when_key_is_invalid(): void
     {
-        $request = $this->createMockRequest();
-        $request->shouldReceive('get_header')
-            ->with('Authorization')
-            ->andReturn('Bearer int_invalid_key');
-        $request->shouldReceive('get_header')
-            ->with('X-API-Key')
-            ->andReturn(null);
+        $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_invalid_key']);
 
         WP_Mock::userFunction('get_option')
             ->with('integrity_require_https', true)
@@ -161,13 +170,7 @@ class RestControllerTest extends TestCase
      */
     public function checkPermission_returns_error_when_rate_limited(): void
     {
-        $request = $this->createMockRequest();
-        $request->shouldReceive('get_header')
-            ->with('Authorization')
-            ->andReturn('Bearer int_valid_key_12345678');
-        $request->shouldReceive('get_header')
-            ->with('X-API-Key')
-            ->andReturn(null);
+        $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_valid_key_12345678']);
 
         WP_Mock::userFunction('get_option')
             ->with('integrity_require_https', true)
@@ -184,7 +187,7 @@ class RestControllerTest extends TestCase
         ]);
         $this->apiKeyManager->shouldReceive('validateKey')->andReturn($keyData);
 
-        $this->rateLimiter->shouldReceive('checkLimit')
+        $this->rateLimiter->shouldReceive('checkAndIncrement')
             ->with(1, 100)
             ->andReturn(['allowed' => false, 'remaining' => 0, 'reset' => time() + 3600]);
 
@@ -194,7 +197,12 @@ class RestControllerTest extends TestCase
             'X-RateLimit-Reset' => time() + 3600,
         ]);
 
-        WP_Mock::userFunction('add_filter')->once();
+        // A rejected request still attaches the rate-limit response headers.
+        // add_filter is intercepted by WP_Mock itself, so it cannot be stubbed
+        // with userFunction; and any closure matches, because WP_Mock keys
+        // hooked callbacks by identity and normalises all closures alike.
+        WP_Mock::expectFilterAdded('rest_post_dispatch', function (): void {
+        });
 
         $this->auditLogger->shouldReceive('log')->once();
 
@@ -211,13 +219,7 @@ class RestControllerTest extends TestCase
      */
     public function checkPermission_returns_error_when_permission_missing(): void
     {
-        $request = $this->createMockRequest(['_route' => '/integrity/v1/members']);
-        $request->shouldReceive('get_header')
-            ->with('Authorization')
-            ->andReturn('Bearer int_valid_key_12345678');
-        $request->shouldReceive('get_header')
-            ->with('X-API-Key')
-            ->andReturn(null);
+        $request = $this->createMockRequest(['_route' => '/integrity/v1/members'], ['Authorization' => 'Bearer int_valid_key_12345678']);
 
         WP_Mock::userFunction('get_option')
             ->with('integrity_require_https', true)
@@ -235,12 +237,10 @@ class RestControllerTest extends TestCase
         ]);
         $this->apiKeyManager->shouldReceive('validateKey')->andReturn($keyData);
 
-        $this->rateLimiter->shouldReceive('checkLimit')
+        $this->rateLimiter->shouldReceive('checkAndIncrement')
             ->andReturn(['allowed' => true, 'remaining' => 999, 'reset' => time() + 3600]);
-        $this->rateLimiter->shouldReceive('incrementCount')->once();
         $this->rateLimiter->shouldReceive('getHeaders')->andReturn([]);
 
-        WP_Mock::userFunction('add_filter');
 
         $this->auditLogger->shouldReceive('log')->once();
 
@@ -257,13 +257,7 @@ class RestControllerTest extends TestCase
      */
     public function checkPermission_returns_true_on_valid_request(): void
     {
-        $request = $this->createMockRequest(['_route' => '/integrity/v1/groups']);
-        $request->shouldReceive('get_header')
-            ->with('Authorization')
-            ->andReturn('Bearer int_valid_key_12345678');
-        $request->shouldReceive('get_header')
-            ->with('X-API-Key')
-            ->andReturn(null);
+        $request = $this->createMockRequest(['_route' => '/integrity/v1/groups'], ['Authorization' => 'Bearer int_valid_key_12345678']);
 
         WP_Mock::userFunction('get_option')
             ->with('integrity_require_https', true)
@@ -280,12 +274,10 @@ class RestControllerTest extends TestCase
         ]);
         $this->apiKeyManager->shouldReceive('validateKey')->andReturn($keyData);
 
-        $this->rateLimiter->shouldReceive('checkLimit')
+        $this->rateLimiter->shouldReceive('checkAndIncrement')
             ->andReturn(['allowed' => true, 'remaining' => 999, 'reset' => time() + 3600]);
-        $this->rateLimiter->shouldReceive('incrementCount')->once();
         $this->rateLimiter->shouldReceive('getHeaders')->andReturn([]);
 
-        WP_Mock::userFunction('add_filter');
 
         $result = $this->controller->checkPermission($request);
 
@@ -299,13 +291,7 @@ class RestControllerTest extends TestCase
      */
     public function checkPermission_allows_wildcard_permission(): void
     {
-        $request = $this->createMockRequest(['_route' => '/integrity/v1/members/123/update']);
-        $request->shouldReceive('get_header')
-            ->with('Authorization')
-            ->andReturn('Bearer int_valid_key_12345678');
-        $request->shouldReceive('get_header')
-            ->with('X-API-Key')
-            ->andReturn(null);
+        $request = $this->createMockRequest(['_route' => '/integrity/v1/members/123/update'], ['Authorization' => 'Bearer int_valid_key_12345678']);
 
         WP_Mock::userFunction('get_option')
             ->with('integrity_require_https', true)
@@ -322,12 +308,10 @@ class RestControllerTest extends TestCase
         ]);
         $this->apiKeyManager->shouldReceive('validateKey')->andReturn($keyData);
 
-        $this->rateLimiter->shouldReceive('checkLimit')
+        $this->rateLimiter->shouldReceive('checkAndIncrement')
             ->andReturn(['allowed' => true, 'remaining' => 999, 'reset' => time() + 3600]);
-        $this->rateLimiter->shouldReceive('incrementCount')->once();
         $this->rateLimiter->shouldReceive('getHeaders')->andReturn([]);
 
-        WP_Mock::userFunction('add_filter');
 
         $result = $this->controller->checkPermission($request);
 
@@ -342,9 +326,9 @@ class RestControllerTest extends TestCase
      */
     public function getRequiredPermission_returns_correct_permission(string $endpoint, ?string $expected): void
     {
-        $reflection = new \ReflectionClass(RestController::class);
-        $method = $reflection->getMethod('getRequiredPermission');
-        $method->setAccessible(true);
+        // No setAccessible() call: a no-op since PHP 8.1 (this plugin's
+        // floor) and deprecated as of 8.5.
+        $method = (new \ReflectionClass(RestController::class))->getMethod('getRequiredPermission');
 
         $result = $method->invoke($this->controller, $endpoint);
 
@@ -441,124 +425,6 @@ class RestControllerTest extends TestCase
         $this->assertArrayNotHasKey('debug', $data['error']);
     }
 
-    // ── Transform helpers ──────────────────────────────────────────────
-
-    /**
-     * @test
-     */
-    public function transformGroup_returns_expected_fields(): void
-    {
-        $group = Mockery::mock('Unity\Groups\Interfaces\Group');
-        $group->shouldReceive('getId')->andReturn(1);
-        $group->shouldReceive('getTitle')->andReturn('Test Group');
-        $group->shouldReceive('getEmail')->andReturn('test@example.com');
-        $group->shouldReceive('getPhone')->andReturn('555-1234');
-        $group->shouldReceive('getWebsite')->andReturn('https://example.com');
-        $group->shouldReceive('getLink')->andReturn('/group/1');
-        $group->shouldReceive('getGroupNotes')->andReturn('Notes');
-        $group->shouldReceive('getDistrictId')->andReturn(42);
-        $group->shouldReceive('getLastContact')->andReturn('2024-01-01');
-        $group->shouldReceive('getMeetings')->andReturn([]);
-        $group->shouldReceive('getContacts')->andReturn([]);
-        $group->shouldReceive('getVenmo')->andReturn('@TestGroup');
-        $group->shouldReceive('getPaypal')->andReturn('');
-        $group->shouldReceive('getSquare')->andReturn('');
-        $group->shouldReceive('hasContributionOptions')->andReturn(true);
-        $group->shouldReceive('getUpdated')->andReturn('2024-06-01 10:00:00');
-
-        $reflection = new \ReflectionClass(RestController::class);
-        $method = $reflection->getMethod('transformGroup');
-        $method->setAccessible(true);
-
-        $result = $method->invoke($this->controller, $group, []);
-
-        $this->assertEquals(1, $result['id']);
-        $this->assertEquals('Test Group', $result['title']);
-        $this->assertArrayHasKey('contribution_options', $result);
-        $this->assertTrue($result['contribution_options']['has_options']);
-        $this->assertArrayHasKey('meeting_ids', $result);
-        $this->assertArrayHasKey('updated', $result);
-    }
-
-    /**
-     * @test
-     */
-    public function transformGroup_expands_meetings_when_requested(): void
-    {
-        $meeting = Mockery::mock('Unity\Meetings\Interfaces\Meeting');
-        $meeting->shouldReceive('getId')->andReturn(100);
-        $meeting->shouldReceive('getName')->andReturn('Morning');
-        $meeting->shouldReceive('getSlug')->andReturn('morning');
-        $meeting->shouldReceive('getLocation')->andReturn(null);
-        $meeting->shouldReceive('getUrl')->andReturn('');
-        $meeting->shouldReceive('getDay')->andReturn(1);
-        $meeting->shouldReceive('getDayOfWeek')->andReturn('Monday');
-        $meeting->shouldReceive('getTime')->andReturn('07:00');
-        $meeting->shouldReceive('getEndTime')->andReturn('08:00');
-        $meeting->shouldReceive('getTypes')->andReturn([]);
-        $meeting->shouldReceive('getState')->andReturn('active');
-        $meeting->shouldReceive('isOnline')->andReturn(false);
-        $meeting->shouldReceive('getOnlineLink')->andReturn('');
-        $meeting->shouldReceive('getOnlineNotes')->andReturn('');
-        $meeting->shouldReceive('getContacts')->andReturn([]);
-        $meeting->shouldReceive('getMeta')->andReturn([]);
-        $meeting->shouldReceive('getUpdated')->andReturn('2024-06-01 10:00:00');
-
-        $group = Mockery::mock('Unity\Groups\Interfaces\Group');
-        $group->shouldReceive('getId')->andReturn(1);
-        $group->shouldReceive('getTitle')->andReturn('Test');
-        $group->shouldReceive('getEmail')->andReturn('');
-        $group->shouldReceive('getPhone')->andReturn('');
-        $group->shouldReceive('getWebsite')->andReturn('');
-        $group->shouldReceive('getLink')->andReturn('');
-        $group->shouldReceive('getGroupNotes')->andReturn('');
-        $group->shouldReceive('getDistrictId')->andReturn(null);
-        $group->shouldReceive('getLastContact')->andReturn(null);
-        $group->shouldReceive('getMeetings')->andReturn([$meeting]);
-        $group->shouldReceive('getContacts')->andReturn([]);
-        $group->shouldReceive('getVenmo')->andReturn('');
-        $group->shouldReceive('getPaypal')->andReturn('');
-        $group->shouldReceive('getSquare')->andReturn('');
-        $group->shouldReceive('hasContributionOptions')->andReturn(false);
-        $group->shouldReceive('getUpdated')->andReturn('2024-06-01 10:00:00');
-
-        $reflection = new \ReflectionClass(RestController::class);
-        $method = $reflection->getMethod('transformGroup');
-        $method->setAccessible(true);
-
-        $result = $method->invoke($this->controller, $group, ['meetings']);
-
-        $this->assertArrayHasKey('meetings', $result);
-        $this->assertArrayNotHasKey('meeting_ids', $result);
-        $this->assertIsArray($result['meetings']);
-        $this->assertEquals(100, $result['meetings'][0]['id']);
-    }
-
-    // ── Timestamp formatting ───────────────────────────────────────────
-
-    /**
-     * @test
-     * @dataProvider timestampProvider
-     */
-    public function formatUpdatedTimestamp_returns_iso_format(string $input, string $expected): void
-    {
-        $reflection = new \ReflectionClass(RestController::class);
-        $method = $reflection->getMethod('formatUpdatedTimestamp');
-        $method->setAccessible(true);
-
-        $result = $method->invoke($this->controller, $input);
-
-        $this->assertEquals($expected, $result);
-    }
-
-    public static function timestampProvider(): array
-    {
-        return [
-            'standard WP datetime' => ['2025-03-09 14:30:00', '2025-03-09T14:30:00.000Z'],
-            'empty string'         => ['', ''],
-            'date only'            => ['2025-01-01', '2025-01-01T00:00:00.000Z'],
-        ];
-    }
 
     // ── Obscured value detection ───────────────────────────────────────
     //

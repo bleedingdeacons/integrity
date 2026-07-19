@@ -14,10 +14,10 @@
         "php": ">=8.1"
     },
     "require-dev": {
-        "10up/wp_mock": "^0.4.2",
+        "10up/wp_mock": "^1.0",
         "mockery/mockery": "^1.4",
         "phpstan/phpstan": "^1.4",
-        "phpunit/phpunit": "^9.0|^10.0",
+        "phpunit/phpunit": "^9.6|^10.0",
         "psr/container": "^2.0",
         "squizlabs/php_codesniffer": "^3.6",
         "szepeviktor/phpstan-wordpress": "^1.0"

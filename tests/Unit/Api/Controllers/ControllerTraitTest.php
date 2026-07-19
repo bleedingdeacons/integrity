@@ -8,7 +8,13 @@ use Integrity\Api\Controllers\ControllerTrait;
 use Integrity\Tests\TestCase;
 
 /**
- * Tests for ControllerTrait::isObscuredEmail / isObscuredPhone.
+ * Tests for ControllerTrait's shared helpers.
+ *
+ * formatUpdatedTimestamp() lives here because the trait is where it lives in
+ * the source; it used to be a RestController method, and its tests moved with
+ * it.
+ *
+ * The detection methods below guard the update path in MemberController.
  *
  * These detection methods guard the update path in MemberController against
  * round-tripping a masked value back into storage. They must:
@@ -30,8 +36,29 @@ class ControllerTraitTest extends TestCase
             use ControllerTrait {
                 isObscuredEmail as public;
                 isObscuredPhone as public;
+                formatUpdatedTimestamp as public;
             }
         };
+    }
+
+    // ── Timestamp formatting ──────────────────────────────────────────
+
+    /**
+     * @test
+     * @dataProvider timestampProvider
+     */
+    public function formatUpdatedTimestamp_returns_iso_format(string $input, string $expected): void
+    {
+        $this->assertSame($expected, $this->subject()->formatUpdatedTimestamp($input));
+    }
+
+    public static function timestampProvider(): array
+    {
+        return [
+            'standard WP datetime' => ['2025-03-09 14:30:00', '2025-03-09T14:30:00.000Z'],
+            'empty string'         => ['', ''],
+            'date only'            => ['2025-01-01', '2025-01-01T00:00:00.000Z'],
+        ];
     }
 
     // ── Email ─────────────────────────────────────────────────────────
