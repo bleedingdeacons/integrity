@@ -39,7 +39,6 @@
         "build:clean": "php build.php clean",
         "test": "phpunit",
         "test:unit": "phpunit --testsuite=Unit",
-        "test:integration": "phpunit --testsuite=Integration",
         "test:coverage": "phpunit --coverage-html ./tests/coverage",
         "cs": "phpcs --standard=WordPress ./src",
         "cs:fix": "phpcbf --standard=WordPress ./src",
