@@ -355,7 +355,7 @@ composer install
 composer test
 
 # Run static analysis
-composer analyse
+composer phpstan
 
 # Code style check
 composer cs
