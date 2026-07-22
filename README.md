@@ -348,19 +348,24 @@ integrity/
 
 ## Development
 
+Install the dev dependencies and run the suite from the plugin directory:
+
 ```bash
-# Install PHP dependencies
 composer install
-
-# Run tests
-composer test
-
-# Run static analysis
-composer phpstan
-
-# Code style check
-composer cs
 ```
+
+| Command | Description |
+|---|---|
+| `composer test` | Run the full PHPUnit test suite |
+| `composer test:unit` | Run unit tests only |
+| `composer test:coverage` | Generate an HTML coverage report |
+| `composer phpstan` | Run PHPStan static analysis |
+| `composer cs` | Check WordPress coding standards |
+| `composer cs:fix` | Auto-fix coding standard violations |
+| `composer check` | Run CS + PHPStan + tests in sequence |
+
+Line coverage is reported to [Coveralls](https://coveralls.io/github/bleedingdeacons/integrity?branch=main)
+on every CI run — see the coverage badge at the top of this file.
 
 ## Security Best Practices
 
