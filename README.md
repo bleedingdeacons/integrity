@@ -364,6 +364,10 @@ composer install
 | `composer cs:fix` | Auto-fix coding standard violations |
 | `composer check` | Run CS + PHPStan + tests in sequence |
 
+The suite covers the REST controllers (Groups, Meetings, Members, Positions
+and Intergroup Meetings — driven through a mock Unity container) and the
+auth layer (API-key manager, rate limiter, audit logger and value masking).
+
 Line coverage is reported to [Coveralls](https://coveralls.io/github/bleedingdeacons/integrity?branch=main)
 on every CI run — see the coverage badge at the top of this file.
 
