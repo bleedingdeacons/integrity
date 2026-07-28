@@ -39,6 +39,7 @@ class MemberControllerWriteTest extends TestCase
     private $positionRepo;
     private $revisor;
     private $factory;
+    private $policyRepo;
     private MemberController $controller;
 
     protected function setUp(): void
@@ -50,6 +51,7 @@ class MemberControllerWriteTest extends TestCase
         $this->positionRepo = Mockery::mock(PositionRepository::class);
         $this->revisor = Mockery::mock(MemberRevisor::class);
         $this->factory = Mockery::mock(MemberFactory::class);
+        $this->policyRepo = Mockery::mock(PrivacyPolicyRepository::class);
 
         $container = Mockery::mock(Container::class);
         $container->shouldReceive('get')->with(MemberRepository::class)->andReturn($this->memberRepo)->byDefault();
@@ -58,7 +60,7 @@ class MemberControllerWriteTest extends TestCase
         $container->shouldReceive('get')->with(MeetingRepository::class)->andReturn(Mockery::mock(MeetingRepository::class))->byDefault();
         $container->shouldReceive('get')->with(MemberRevisor::class)->andReturn($this->revisor)->byDefault();
         $container->shouldReceive('get')->with(MemberFactory::class)->andReturn($this->factory)->byDefault();
-        $container->shouldReceive('get')->with(PrivacyPolicyRepository::class)->andReturn(Mockery::mock(PrivacyPolicyRepository::class))->byDefault();
+        $container->shouldReceive('get')->with(PrivacyPolicyRepository::class)->andReturn($this->policyRepo)->byDefault();
 
         $plugin = Mockery::mock('alias:Unity\Plugin');
         $plugin->shouldReceive('getContainer')->andReturn($container);
@@ -216,6 +218,113 @@ class MemberControllerWriteTest extends TestCase
     {
         $this->memberRepo->shouldReceive('create')->andThrow(new \RuntimeException('boom'));
         $r = $this->controller->createMember($this->request(['anonymous_name' => 'Newbie']));
+        $this->assertSame(500, $r->get_status());
+    }
+
+    // ─── getMembers (filters + exception) ─────────────────────────────
+
+    /** @test */
+    public function get_members_applies_search_and_home_group_filters(): void
+    {
+        $this->memberRepo->shouldReceive('findAll')->andReturn([$this->member()]);
+        $this->memberRepo->shouldReceive('count')->andReturn(1);
+        $this->groupRepo->shouldReceive('batchGetGroups')->never();
+
+        $r = $this->controller->getMembers($this->request([
+            'per_page' => 25, 'page' => 1, 'search' => 'Anon', 'home_group_id' => 3,
+        ]));
+
+        $this->assertSame(200, $r->get_status());
+    }
+
+    /** @test */
+    public function get_members_returns_500_on_exception(): void
+    {
+        $this->memberRepo->shouldReceive('findAll')->andThrow(new \RuntimeException('boom'));
+        $r = $this->controller->getMembers($this->request(['per_page' => 25, 'page' => 1]));
+        $this->assertSame(500, $r->get_status());
+    }
+
+    // ─── recordCompliance ─────────────────────────────────────────────
+
+    private function complianceRequest(array $params = []): object
+    {
+        return $this->request(array_merge([
+            'id' => 1, 'accepted' => true, 'accepted_at' => '', 'version' => '1.0',
+            'method' => 'api', 'policy_id' => null,
+        ], $params));
+    }
+
+    /** @test */
+    public function record_compliance_returns_404_when_member_missing(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn(null);
+        $r = $this->controller->recordCompliance($this->complianceRequest());
+        $this->assertSame(404, $r->get_status());
+    }
+
+    /** @test */
+    public function record_compliance_accepts_with_an_empty_statement_when_no_policy(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->revisor->shouldReceive('revise')->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+
+        $r = $this->controller->recordCompliance($this->complianceRequest(['accepted_at' => '2026-01-01T00:00:00Z']));
+        $this->assertSame(200, $r->get_status());
+    }
+
+    /** @test */
+    public function record_compliance_resolves_the_statement_from_a_valid_policy(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $policy = Mockery::mock();
+        $policy->shouldReceive('getPolicy')->andReturn('The policy body');
+        $this->policyRepo->shouldReceive('findById')->with(50)->andReturn($policy);
+        $this->revisor->shouldReceive('revise')->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+
+        $r = $this->controller->recordCompliance($this->complianceRequest(['policy_id' => 50]));
+        $this->assertSame(200, $r->get_status());
+    }
+
+    /** @test */
+    public function record_compliance_returns_422_for_an_unknown_policy(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->policyRepo->shouldReceive('findById')->with(50)->andReturn(null);
+
+        $r = $this->controller->recordCompliance($this->complianceRequest(['policy_id' => 50]));
+        $this->assertSame(422, $r->get_status());
+    }
+
+    /** @test */
+    public function record_compliance_records_a_revocation(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->revisor->shouldReceive('revise')->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+
+        $r = $this->controller->recordCompliance($this->complianceRequest(['accepted' => false]));
+        $this->assertSame(200, $r->get_status());
+    }
+
+    /** @test */
+    public function record_compliance_returns_500_when_save_fails(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->revisor->shouldReceive('revise')->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(false);
+
+        $r = $this->controller->recordCompliance($this->complianceRequest());
+        $this->assertSame(500, $r->get_status());
+    }
+
+    /** @test */
+    public function record_compliance_returns_500_on_exception(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));
+        $r = $this->controller->recordCompliance($this->complianceRequest());
         $this->assertSame(500, $r->get_status());
     }
 }
