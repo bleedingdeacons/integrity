@@ -38,6 +38,8 @@ class IntergroupMeetingController
 
     /**
      * Get arguments for intergroup meetings endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getIntergroupMeetingsArgs(): array
     {
@@ -83,6 +85,8 @@ class IntergroupMeetingController
 
     /**
      * Get arguments for register attendee endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getRegisterAttendeeArgs(): array
     {
@@ -138,6 +142,8 @@ class IntergroupMeetingController
 
     /**
      * Get arguments for unregister attendee endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getUnregisterAttendeeArgs(): array
     {
@@ -161,6 +167,8 @@ class IntergroupMeetingController
 
     /**
      * Get arguments for register officer endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getRegisterOfficerArgs(): array
     {
@@ -198,6 +206,8 @@ class IntergroupMeetingController
 
     /**
      * Get arguments for unregister officer endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getUnregisterOfficerArgs(): array
     {
@@ -767,7 +777,7 @@ class IntergroupMeetingController
      * @param IntergroupMeeting $intergroupMeeting
      * @param array<int, Member> $memberCache
      * @param array<int, IntergroupMeetingOfficerAttendance> $officerAttendanceCache Map of position ID to attendance record
-     * @return array
+     * @return array<string, mixed>
      */
     private function transformIntergroupMeetingWithCache(
         IntergroupMeeting $intergroupMeeting,
