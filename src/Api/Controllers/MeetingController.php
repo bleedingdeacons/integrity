@@ -30,6 +30,8 @@ class MeetingController
 
     /**
      * Get arguments for meetings endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getMeetingsArgs(): array
     {
@@ -220,6 +222,8 @@ class MeetingController
 
     /**
      * Transform a Meeting object to API response format.
+     *
+     * @return array<string, mixed>
      */
     private function transformMeeting(Meeting $meeting): array
     {

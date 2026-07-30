@@ -238,9 +238,9 @@ class SettingsPage
      * and `action`.
      *
      * @return array{
-     *     result: array{logs: array, total: int},
-     *     stats: array,
-     *     keys: array,
+     *     result: array{logs: array<int, array<string, mixed>>, total: int},
+     *     stats: array<string, mixed>,
+     *     keys: array<int, array<string, mixed>>,
      *     page: int,
      *     per_page: int,
      *     filters: array{

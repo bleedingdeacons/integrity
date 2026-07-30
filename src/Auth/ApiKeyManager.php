@@ -92,10 +92,10 @@ class ApiKeyManager
      * Create a new API key record
      *
      * @param string $name Human-readable name for the key
-     * @param array $permissions Array of allowed permissions
+     * @param array<int, string> $permissions Array of allowed permissions
      * @param int|null $rateLimit Optional rate limit (requests per hour)
      * @param string|null $expiresAt Optional expiration date (Y-m-d H:i:s)
-     * @param array|null $ipWhitelist Optional array of allowed IP addresses/ranges
+     * @param array<int, string>|null $ipWhitelist Optional array of allowed IP addresses/ranges
      * @return array{success: bool, key?: string, id?: int, error?: string}
      */
     public function createKey(
@@ -158,7 +158,7 @@ class ApiKeyManager
      *
      * @param string $key The API key to validate
      * @param string|null $clientIp The client's IP address for whitelist validation
-     * @return array|null Key data if valid, null otherwise
+     * @return array<string, mixed>|null Key data if valid, null otherwise
      */
     public function validateKey(string $key, ?string $clientIp = null): ?array
     {
@@ -236,7 +236,7 @@ class ApiKeyManager
      * Check if an IP address is in the whitelist
      *
      * @param string $ip The IP address to check
-     * @param array $whitelist Array of allowed IPs/CIDR ranges
+     * @param array<int, string> $whitelist Array of allowed IPs/CIDR ranges
      * @return bool Whether the IP is allowed
      */
     private function isIpAllowed(string $ip, array $whitelist): bool
@@ -350,7 +350,7 @@ class ApiKeyManager
     /**
      * Get all API keys (without sensitive data)
      *
-     * @return array List of API keys
+     * @return array<int, array<string, mixed>> List of API keys
      */
     public function getAllKeys(): array
     {
@@ -378,7 +378,7 @@ class ApiKeyManager
      * Get a single API key by ID (without sensitive data)
      *
      * @param int $keyId The key ID
-     * @return array|null Key data or null if not found
+     * @return array<string, mixed>|null Key data or null if not found
      */
     public function getKey(int $keyId): ?array
     {
@@ -406,7 +406,7 @@ class ApiKeyManager
      * Update an API key
      *
      * @param int $keyId The key ID to update
-     * @param array $data The data to update
+     * @param array<string, mixed> $data The data to update
      * @return bool Whether the operation succeeded
      */
     public function updateKey(int $keyId, array $data): bool

@@ -51,6 +51,8 @@ class MemberController
 
     /**
      * Get arguments for members endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getMembersArgs(): array
     {
@@ -87,6 +89,8 @@ class MemberController
 
     /**
      * Get arguments for update member endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getUpdateMemberArgs(): array
     {
@@ -183,6 +187,8 @@ class MemberController
 
     /**
      * Get arguments for create member endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getCreateMemberArgs(): array
     {
@@ -660,6 +666,8 @@ class MemberController
      * returned to clients) or the legacy `Y-m-d H:i:s` shape used
      * internally by ACF/WordPress. When omitted, the handler stamps
      * the current UTC time.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getRecordComplianceArgs(): array
     {
@@ -928,7 +936,7 @@ class MemberController
      * Defaults to no: without this permission, contact details are masked
      * via the Mask utility in the same way they always have been.
      *
-     * @param array|null $keyData Key data from extractRequestContext
+     * @param array<string, mixed>|null $keyData Key data from extractRequestContext
      */
     private function hasClearPermission(?array $keyData): bool
     {
@@ -950,7 +958,7 @@ class MemberController
      * @param bool $clear If true, return personal_email and mobile_number
      *                    unmasked. Requires the `members:clear` permission
      *                    on the calling key; resolved by the caller.
-     * @return array
+     * @return array<string, mixed>
      */
     private function buildMemberResponse($container, Member $member, bool $clear = false): array
     {
@@ -977,7 +985,7 @@ class MemberController
      *                    unmasked. Defaults to false (masked), matching the
      *                    historical behaviour when no `members:clear`
      *                    permission is granted.
-     * @return array
+     * @return array<string, mixed>
      */
     private function transformMemberWithCache(
         Member $member,

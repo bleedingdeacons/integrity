@@ -30,6 +30,8 @@ class PositionController
 
     /**
      * Get arguments for positions endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getPositionsArgs(): array
     {
@@ -130,6 +132,8 @@ class PositionController
 
     /**
      * Transform a Position object to API response format.
+     *
+     * @return array<string, mixed>
      */
     private function transformPosition(Position $position): array
     {

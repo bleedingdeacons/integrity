@@ -62,7 +62,7 @@ class AuditLogger
      * @param int|null $apiKeyId The API key ID (null for failed auth)
      * @param string $endpoint The requested endpoint
      * @param string $method The HTTP method
-     * @param array|null $requestParams Sanitized request parameters
+     * @param array<string, mixed>|null $requestParams Sanitized request parameters
      * @param int $responseCode The HTTP response code
      * @param float $responseTime Response time in seconds
      * @return void
@@ -104,8 +104,8 @@ class AuditLogger
     /**
      * Sanitize request parameters to remove sensitive data
      *
-     * @param array $params The parameters to sanitize
-     * @return array Sanitized parameters
+     * @param array<string, mixed> $params The parameters to sanitize
+     * @return array<string, mixed> Sanitized parameters
      */
     private function sanitizeParams(array $params): array
     {
@@ -292,8 +292,8 @@ class AuditLogger
     /**
      * Get audit logs with pagination and filtering
      *
-     * @param array $args Query arguments
-     * @return array{logs: array, total: int}
+     * @param array<string, mixed> $args Query arguments
+     * @return array{logs: array<int, array<string, mixed>>, total: int}
      */
     public function getLogs(array $args = []): array
     {
@@ -388,7 +388,7 @@ class AuditLogger
      * Get summary statistics for the dashboard
      *
      * @param int $days Number of days to look back
-     * @return array Statistics
+     * @return array<string, mixed> Statistics
      */
     public function getStats(int $days = 30): array
     {

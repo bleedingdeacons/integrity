@@ -31,6 +31,8 @@ class GroupController
 
     /**
      * Get arguments for groups endpoint.
+     *
+     * @return array<string, mixed> WP REST argument definitions.
      */
     public function getGroupsArgs(): array
     {
@@ -184,6 +186,9 @@ class GroupController
 
     /**
      * Transform a Group object to API response format.
+     *
+     * @param array<int, string> $expand Related resources to inline.
+     * @return array<string, mixed>
      */
     private function transformGroup(Group $group, array $expand = []): array
     {
@@ -231,6 +236,8 @@ class GroupController
      *
      * Replicates the same shape as MeetingController::transformMeeting()
      * without introducing a cross-controller dependency.
+     *
+     * @return array<string, mixed>
      */
     private function transformMeetingForGroup(Meeting $meeting): array
     {

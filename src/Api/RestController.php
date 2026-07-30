@@ -440,7 +440,7 @@ class RestController
      *  2. The callback removes itself after firing (one-shot per request).
      *
      * @param int   $rateLimit       The rate limit ceiling for this API key
-     * @param array $rateLimitResult Result from RateLimiter::checkAndIncrement()
+     * @param array{allowed: bool, remaining: int, reset: int} $rateLimitResult Result from RateLimiter::checkAndIncrement()
      */
     private function attachRateLimitFilter(int $rateLimit, array $rateLimitResult): void
     {
@@ -451,7 +451,9 @@ class RestController
 
         $this->rateLimitFilter = function (WP_REST_Response $result) use ($rateLimit, $rateLimitResult): WP_REST_Response {
             foreach ($this->rateLimiter->getHeaders($rateLimit, $rateLimitResult['remaining'], $rateLimitResult['reset']) as $header => $value) {
-                $result->header($header, $value);
+                // Header values are ints (limit, remaining, reset timestamp);
+                // WP_HTTP_Response::header() documents $value as a string.
+                $result->header($header, (string) $value);
             }
 
             // Self-remove so this closure never fires again

@@ -142,7 +142,7 @@ class RateLimiter
      * @param int $limit The rate limit
      * @param int $remaining The remaining requests
      * @param int $reset The reset timestamp
-     * @return array Headers array
+     * @return array<string, int> Headers array
      */
     public function getHeaders(int $limit, int $remaining, int $reset): array
     {
