@@ -29,7 +29,7 @@ trait ControllerTrait
     /**
      * Extract timing/key context stored by the permission check.
      *
-     * @return array{start_time: float, key_data: array}
+     * @return array{start_time: float, key_data: array<string, mixed>}
      */
     protected function extractRequestContext(WP_REST_Request $request): array
     {
@@ -41,6 +41,8 @@ trait ControllerTrait
 
     /**
      * Log a request via the audit logger.
+     *
+     * @param array<string, mixed>|null $params
      */
     protected function logRequest(
         int $apiKeyId,
@@ -61,6 +63,8 @@ trait ControllerTrait
 
     /**
      * Build a standard success response.
+     *
+     * @param array<string, mixed> $data A single transformed entity.
      */
     protected function successResponse(array $data, int $status = 200): WP_REST_Response
     {
@@ -72,6 +76,8 @@ trait ControllerTrait
 
     /**
      * Build a standard paginated success response.
+     *
+     * @param array<int, array<string, mixed>> $data A list of transformed entities.
      */
     protected function paginatedResponse(array $data, int $total, int $page, int $perPage, int $status = 200): WP_REST_Response
     {
@@ -122,7 +128,12 @@ trait ControllerTrait
     /**
      * Transform a Contact object to API response format.
      *
-     * @param Contact|array $contact
+     * The array form is the legacy shape kept for backwards compatibility;
+     * every key is optional because callers predating the Contact interface
+     * supplied whichever fields they had.
+     *
+     * @param Contact|array{name?: string, email?: string, phone?: string, updated?: string} $contact
+     * @return array{name: string, email: string, phone: string, updated: string}
      */
     protected function transformContact($contact): array
     {
@@ -155,6 +166,24 @@ trait ControllerTrait
 
     /**
      * Transform a Location object to API response format.
+     *
+     * @return array{
+     *     id: int,
+     *     name: string,
+     *     address: string,
+     *     city: string,
+     *     state: string,
+     *     postal_code: string,
+     *     country: string,
+     *     region: string,
+     *     notes: string,
+     *     link: string,
+     *     latitude: float|null,
+     *     longitude: float|null,
+     *     timezone: string,
+     *     formatted_address: string,
+     *     updated: string
+     * }
      */
     protected function transformLocation(Location $location): array
     {
