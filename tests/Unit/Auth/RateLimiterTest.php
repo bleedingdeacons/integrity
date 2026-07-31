@@ -6,7 +6,6 @@ namespace Integrity\Tests\Unit\Auth;
 
 use Integrity\Auth\RateLimiter;
 use Integrity\Tests\TestCase;
-use WP_Mock;
 use Mockery;
 
 /**

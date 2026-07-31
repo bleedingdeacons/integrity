@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
+use BleedingDeacons\WpMocks\WpState;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Tests\TestCase;
-use WP_Mock;
 use Mockery;
 
 /**
  * Unit tests for ApiKeyManager
+ *
+ * sanitize_text_field(), wp_json_encode(), current_time() and
+ * get_current_user_id() are real functions in wp-mocks, so only the options
+ * these paths read still need seeding.
  */
 class ApiKeyManagerTest extends TestCase
 {
@@ -192,24 +196,7 @@ class ApiKeyManagerTest extends TestCase
         
         $wpdb->insert_id = 1;
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_default_rate_limit', 1000)
-            ->andReturn(1000);
-
-        WP_Mock::userFunction('sanitize_text_field')
-            ->andReturnArg(0);
-
-        WP_Mock::userFunction('wp_json_encode')
-            ->andReturnUsing(function ($data) {
-                return json_encode($data);
-            });
-
-        WP_Mock::userFunction('current_time')
-            ->with('mysql')
-            ->andReturn('2024-01-01 00:00:00');
-
-        WP_Mock::userFunction('get_current_user_id')
-            ->andReturn(1);
+        WpState::$options['integrity_default_rate_limit'] = 1000;
 
         $result = $this->apiKeyManager->createKey('Test Key', ['groups:read']);
 
@@ -231,22 +218,7 @@ class ApiKeyManagerTest extends TestCase
             ->once()
             ->andReturn(false);
 
-        WP_Mock::userFunction('get_option')
-            ->andReturn(1000);
-
-        WP_Mock::userFunction('sanitize_text_field')
-            ->andReturnArg(0);
-
-        WP_Mock::userFunction('wp_json_encode')
-            ->andReturnUsing(function ($data) {
-                return json_encode($data);
-            });
-
-        WP_Mock::userFunction('current_time')
-            ->andReturn('2024-01-01 00:00:00');
-
-        WP_Mock::userFunction('get_current_user_id')
-            ->andReturn(1);
+        WpState::$options['integrity_default_rate_limit'] = 1000;
 
         $result = $this->apiKeyManager->createKey('Test Key', ['groups:read']);
 
@@ -448,14 +420,6 @@ class ApiKeyManagerTest extends TestCase
         $wpdb->shouldReceive('update')
             ->once()
             ->andReturn(1);
-
-        WP_Mock::userFunction('sanitize_text_field')
-            ->andReturnArg(0);
-
-        WP_Mock::userFunction('wp_json_encode')
-            ->andReturnUsing(function ($data) {
-                return json_encode($data);
-            });
 
         $result = $this->apiKeyManager->updateKey(1, [
             'name' => 'Updated Name',

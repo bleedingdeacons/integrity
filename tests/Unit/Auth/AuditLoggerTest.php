@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
+use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
-use WP_Mock;
 use Mockery;
 
 /**
  * Unit tests for AuditLogger
+ *
+ * Options are seeded into WpState rather than stubbed one expectation at a
+ * time: wp-mocks' get_option() is a real function over that store, so a test
+ * says what the site is configured to do and the class reads it back.
  */
 class AuditLoggerTest extends TestCase
 {
@@ -33,28 +38,12 @@ class AuditLoggerTest extends TestCase
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_enable_audit_log', true)
-            ->andReturn(true);
+        WpState::$options['integrity_enable_audit_log'] = true;
 
         // log() resolves the client IP, which consults the trusted-proxy
         // allowlist. Added to the source after these tests were written;
         // none configured, so REMOTE_ADDR is used directly.
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxies', [])
-            ->andReturn([]);
-
-        WP_Mock::userFunction('sanitize_text_field')
-            ->andReturnArg(0);
-
-        WP_Mock::userFunction('wp_json_encode')
-            ->andReturnUsing(function ($data) {
-                return json_encode($data);
-            });
-
-        WP_Mock::userFunction('current_time')
-            ->with('mysql')
-            ->andReturn('2024-01-01 12:00:00');
+        WpState::$options['integrity_trusted_proxies'] = [];
 
         $_SERVER['REMOTE_ADDR'] = '192.168.1.100';
         $_SERVER['HTTP_USER_AGENT'] = 'TestAgent/1.0';
@@ -85,9 +74,7 @@ class AuditLoggerTest extends TestCase
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_enable_audit_log', true)
-            ->andReturn(false);
+        WpState::$options['integrity_enable_audit_log'] = false;
 
         // insert should NOT be called
         $wpdb->shouldNotReceive('insert');
@@ -113,24 +100,21 @@ class AuditLoggerTest extends TestCase
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
 
-        WP_Mock::userFunction('get_option')
-            ->andReturn(true);
-
-        WP_Mock::userFunction('sanitize_text_field')
-            ->andReturnArg(0);
-
-        WP_Mock::userFunction('current_time')
-            ->andReturn('2024-01-01 12:00:00');
+        WpState::$options['integrity_enable_audit_log'] = true;
+        WpState::$options['integrity_trusted_proxies'] = [];
 
         $_SERVER['REMOTE_ADDR'] = '192.168.1.100';
 
+        // The redaction happens before encoding, so intercept the encoder to
+        // see the array as the logger built it.
         $capturedParams = null;
-
-        WP_Mock::userFunction('wp_json_encode')
-            ->andReturnUsing(function ($data) use (&$capturedParams) {
+        Functions\when('wp_json_encode')->alias(
+            static function ($data) use (&$capturedParams) {
                 $capturedParams = $data;
+
                 return json_encode($data);
-            });
+            }
+        );
 
         $wpdb->shouldReceive('insert')
             ->once()
@@ -166,9 +150,7 @@ class AuditLoggerTest extends TestCase
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.50';
         $_SERVER['HTTP_CF_CONNECTING_IP'] = '198.51.100.25';
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxies', [])
-            ->andReturn([]);
+        WpState::$options['integrity_trusted_proxies'] = [];
 
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
@@ -185,13 +167,8 @@ class AuditLoggerTest extends TestCase
         $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.50, 10.0.0.1';
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxies', [])
-            ->andReturn(['10.0.0.1']);
-
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxy_header', 'HTTP_X_FORWARDED_FOR')
-            ->andReturn('HTTP_X_FORWARDED_FOR');
+        WpState::$options['integrity_trusted_proxies'] = ['10.0.0.1'];
+        WpState::$options['integrity_trusted_proxy_header'] = 'HTTP_X_FORWARDED_FOR';
 
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
@@ -207,13 +184,8 @@ class AuditLoggerTest extends TestCase
         $_SERVER['REMOTE_ADDR'] = '172.70.100.5';
         $_SERVER['HTTP_CF_CONNECTING_IP'] = '198.51.100.25';
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxies', [])
-            ->andReturn(['172.64.0.0/13', '173.245.48.0/20']);
-
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxy_header', 'HTTP_X_FORWARDED_FOR')
-            ->andReturn('HTTP_CF_CONNECTING_IP');
+        WpState::$options['integrity_trusted_proxies'] = ['172.64.0.0/13', '173.245.48.0/20'];
+        WpState::$options['integrity_trusted_proxy_header'] = 'HTTP_CF_CONNECTING_IP';
 
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
@@ -229,9 +201,7 @@ class AuditLoggerTest extends TestCase
         $_SERVER['REMOTE_ADDR'] = '192.168.1.100';
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '10.10.10.10';
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxies', [])
-            ->andReturn(['10.0.0.1']);
+        WpState::$options['integrity_trusted_proxies'] = ['10.0.0.1'];
 
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
@@ -249,13 +219,8 @@ class AuditLoggerTest extends TestCase
         $_SERVER['REMOTE_ADDR'] = '10.0.5.42';
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.99';
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxies', [])
-            ->andReturn(['10.0.0.0/8']);
-
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxy_header', 'HTTP_X_FORWARDED_FOR')
-            ->andReturn('HTTP_X_FORWARDED_FOR');
+        WpState::$options['integrity_trusted_proxies'] = ['10.0.0.0/8'];
+        WpState::$options['integrity_trusted_proxy_header'] = 'HTTP_X_FORWARDED_FOR';
 
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
@@ -286,13 +251,8 @@ class AuditLoggerTest extends TestCase
         $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
         unset($_SERVER['HTTP_X_FORWARDED_FOR']);
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxies', [])
-            ->andReturn(['10.0.0.1']);
-
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_trusted_proxy_header', 'HTTP_X_FORWARDED_FOR')
-            ->andReturn('HTTP_X_FORWARDED_FOR');
+        WpState::$options['integrity_trusted_proxies'] = ['10.0.0.1'];
+        WpState::$options['integrity_trusted_proxy_header'] = 'HTTP_X_FORWARDED_FOR';
 
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();

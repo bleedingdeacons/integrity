@@ -104,7 +104,7 @@ class IntergroupMeetingControllerReadTest extends TestCase
      */
     public function get_meetings_resolves_group_names_and_officer_records(): void
     {
-        \WP_Mock::userFunction('get_the_title')->with(10)->andReturn('Group Ten');
+        \BleedingDeacons\WpMocks\WpState::addPost(10, ['post_title' => 'Group Ten']);
 
         $officerRecord = Mockery::mock(\Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendance::class);
         $officerRecord->shouldReceive('getOfficerId')->andReturn(7);

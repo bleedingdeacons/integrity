@@ -4,7 +4,19 @@ declare(strict_types=1);
 
 /**
  * PHPUnit Bootstrap File for Integrity Plugin Tests
+ *
+ * WordPress stand-ins, the Brain Monkey lifecycle and WP_Error all come from
+ * bleedingdeacons/wp-mocks, shared across the plugin suite. The package's
+ * bootstrap loads Patchwork before anything patchable — Brain Monkey only
+ * requires it inside Monkey\setUp(), by which time the stubs are defined, so
+ * leaving it to Brain Monkey means any attempt to override a stub dies with
+ * Patchwork\Exceptions\DefinedTooEarly.
+ *
+ * Anything defining WordPress functions of its own must therefore come after
+ * the require below, not before it.
  */
+
+use BleedingDeacons\WpMocks\WpState;
 
 // Load Composer autoloader
 $autoloader = dirname(__DIR__) . '/vendor/autoload.php';
@@ -12,12 +24,10 @@ if (!file_exists($autoloader)) {
     die("Composer autoloader not found. Run 'composer install' first.\n");
 }
 require_once $autoloader;
+require_once dirname(__DIR__) . '/vendor/bleedingdeacons/wp-mocks/bootstrap.php';
 
-// Load WP_Mock
-if (!class_exists('WP_Mock')) {
-    die("WP_Mock is required for testing. Run 'composer install' first.\n");
-}
-WP_Mock::bootstrap();
+// Makes plugins_url()/plugin_dir_url() answer with Integrity's own path.
+WpState::$pluginSlug = 'integrity';
 
 // Define WordPress constants that might be needed
 if (!defined('ABSPATH')) {
@@ -36,41 +46,10 @@ if (!defined('INTEGRITY_VERSION')) {
     define('INTEGRITY_VERSION', '1.0.0');
 }
 
-// Mock WordPress classes that don't exist in test environment
-if (!class_exists('WP_Error')) {
-    class WP_Error {
-        public $errors = [];
-        public $error_data = [];
-
-        public function __construct($code = '', $message = '', $data = '') {
-            if (!empty($code)) {
-                $this->errors[$code][] = $message;
-                if (!empty($data)) {
-                    $this->error_data[$code] = $data;
-                }
-            }
-        }
-
-        public function get_error_code() {
-            return array_key_first($this->errors) ?? '';
-        }
-
-        public function get_error_message($code = '') {
-            if (empty($code)) {
-                $code = $this->get_error_code();
-            }
-            return $this->errors[$code][0] ?? '';
-        }
-
-        public function get_error_data($code = '') {
-            if (empty($code)) {
-                $code = $this->get_error_code();
-            }
-            return $this->error_data[$code] ?? null;
-        }
-    }
-}
-
+// WP_Error is not defined here any more — wp-mocks carries an equivalent, and
+// this plugin only ever reads get_error_code()/message()/data() off one.
+//
+// WP_REST_Response is not part of the shared stubs, so it stays local.
 if (!class_exists('WP_REST_Response')) {
     class WP_REST_Response {
         protected $data;

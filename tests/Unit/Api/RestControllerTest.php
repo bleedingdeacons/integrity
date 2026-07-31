@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api;
 
+use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Filters;
+use Closure;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Api\Controllers\IntergroupMeetingController;
 use Integrity\Api\Controllers\MeetingController;
@@ -15,10 +18,13 @@ use Integrity\Auth\AuditLogger;
 use Integrity\Auth\RateLimiter;
 use Integrity\Tests\TestCase;
 use Mockery;
-use WP_Mock;
 
 /**
  * Unit tests for the refactored RestController (instance-based DI)
+ *
+ * register_rest_route() is a real function in wp-mocks that records into
+ * WpState::$restRoutes, and get_option()/is_ssl() read the same store, so the
+ * per-test expectation stacks these tests used to carry are gone.
  */
 class RestControllerTest extends TestCase
 {
@@ -64,19 +70,6 @@ class RestControllerTest extends TestCase
      */
     public function register_registers_all_expected_routes(): void
     {
-        // Groups (2) + Meetings (2) + Positions (2) + Members (5) +
-        // Intergroup Meetings (6) + Health (1) = 18
-        $registeredRoutes = [];
-
-        WP_Mock::userFunction('register_rest_route')
-            ->times(18)
-            ->andReturnUsing(
-                function (string $namespace, string $route) use (&$registeredRoutes): bool {
-                    $registeredRoutes[] = $namespace . $route;
-                    return true;
-                }
-            );
-
         // Controller mocks must return args arrays when register() wires routes
         $this->groupController->shouldReceive('getGroupsArgs')->once()->andReturn([]);
         $this->meetingController->shouldReceive('getMeetingsArgs')->once()->andReturn([]);
@@ -93,11 +86,15 @@ class RestControllerTest extends TestCase
 
         $this->controller->register();
 
-        // Assert on the observable result rather than WP_Mock's
-        // assertConditionsMet(): that helper lives on WP_Mock's own TestCase,
-        // which this suite does not extend. The ->times(18) and ->once()
-        // expectations above are still verified, by WP_Mock::tearDown() and
-        // Mockery::close() respectively.
+        // Groups (2) + Meetings (2) + Positions (2) + Members (5) +
+        // Intergroup Meetings (6) + Health (1) = 18. wp-mocks records every
+        // register_rest_route() call, so this reads the real registrations
+        // rather than a capture closure over a stub.
+        $registeredRoutes = array_map(
+            static fn (array $r): string => $r['namespace'] . $r['route'],
+            WpState::$restRoutes
+        );
+
         $this->assertCount(18, $registeredRoutes);
         $this->assertSame(
             $registeredRoutes,
@@ -115,12 +112,7 @@ class RestControllerTest extends TestCase
     {
         $request = $this->createMockRequest();
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_require_https', true)
-            ->andReturn(false);
-
-        WP_Mock::userFunction('is_ssl')
-            ->andReturn(true);
+        WpState::$options['integrity_require_https'] = false;
 
         // Resolved for the audit record before the key is even looked for.
         $this->auditLogger->shouldReceive('getClientIp')->andReturn('127.0.0.1');
@@ -143,12 +135,7 @@ class RestControllerTest extends TestCase
     {
         $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_invalid_key']);
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_require_https', true)
-            ->andReturn(false);
-
-        WP_Mock::userFunction('is_ssl')
-            ->andReturn(true);
+        WpState::$options['integrity_require_https'] = false;
 
         $this->auditLogger->shouldReceive('getClientIp')->andReturn('127.0.0.1');
         $this->apiKeyManager->shouldReceive('validateKey')
@@ -172,12 +159,7 @@ class RestControllerTest extends TestCase
     {
         $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_valid_key_12345678']);
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_require_https', true)
-            ->andReturn(false);
-
-        WP_Mock::userFunction('is_ssl')
-            ->andReturn(true);
+        WpState::$options['integrity_require_https'] = false;
 
         $this->auditLogger->shouldReceive('getClientIp')->andReturn('127.0.0.1');
 
@@ -198,11 +180,12 @@ class RestControllerTest extends TestCase
         ]);
 
         // A rejected request still attaches the rate-limit response headers.
-        // add_filter is intercepted by WP_Mock itself, so it cannot be stubbed
-        // with userFunction; and any closure matches, because WP_Mock keys
-        // hooked callbacks by identity and normalises all closures alike.
-        WP_Mock::expectFilterAdded('rest_post_dispatch', function (): void {
-        });
+        // add_filter belongs to Brain Monkey, so this is its expectation,
+        // verified at teardown. The callback is anonymous, so it is matched
+        // by type rather than identity.
+        Filters\expectAdded('rest_post_dispatch')
+            ->once()
+            ->with(Mockery::type(Closure::class));
 
         $this->auditLogger->shouldReceive('log')->once();
 
@@ -221,12 +204,7 @@ class RestControllerTest extends TestCase
     {
         $request = $this->createMockRequest(['_route' => '/integrity/v1/members'], ['Authorization' => 'Bearer int_valid_key_12345678']);
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_require_https', true)
-            ->andReturn(false);
-
-        WP_Mock::userFunction('is_ssl')
-            ->andReturn(true);
+        WpState::$options['integrity_require_https'] = false;
 
         $this->auditLogger->shouldReceive('getClientIp')->andReturn('127.0.0.1');
 
@@ -259,12 +237,7 @@ class RestControllerTest extends TestCase
     {
         $request = $this->createMockRequest(['_route' => '/integrity/v1/groups'], ['Authorization' => 'Bearer int_valid_key_12345678']);
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_require_https', true)
-            ->andReturn(false);
-
-        WP_Mock::userFunction('is_ssl')
-            ->andReturn(true);
+        WpState::$options['integrity_require_https'] = false;
 
         $this->auditLogger->shouldReceive('getClientIp')->andReturn('127.0.0.1');
 
@@ -293,12 +266,7 @@ class RestControllerTest extends TestCase
     {
         $request = $this->createMockRequest(['_route' => '/integrity/v1/members/123/update'], ['Authorization' => 'Bearer int_valid_key_12345678']);
 
-        WP_Mock::userFunction('get_option')
-            ->with('integrity_require_https', true)
-            ->andReturn(false);
-
-        WP_Mock::userFunction('is_ssl')
-            ->andReturn(true);
+        WpState::$options['integrity_require_https'] = false;
 
         $this->auditLogger->shouldReceive('getClientIp')->andReturn('127.0.0.1');
 

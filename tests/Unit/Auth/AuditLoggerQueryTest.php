@@ -7,7 +7,6 @@ namespace Integrity\Tests\Unit\Auth;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
 use Mockery;
-use WP_Mock;
 
 /**
  * Covers AuditLogger's read/stats/clear query builders, which assemble
@@ -24,10 +23,9 @@ class AuditLoggerQueryTest extends TestCase
         parent::setUp();
         $this->logger = new AuditLogger();
 
-        WP_Mock::userFunction('esc_sql')->andReturnUsing(fn ($v) => $v)->byDefault();
-        WP_Mock::userFunction('wp_parse_args')->andReturnUsing(
-            fn ($args, $defaults) => array_merge($defaults, (array) $args)
-        )->byDefault();
+        // esc_sql() and wp_parse_args() are real functions in wp-mocks with
+        // the behaviour this class's query builders expect, so there is
+        // nothing left to stub here.
     }
 
     private function wpdb(): object
