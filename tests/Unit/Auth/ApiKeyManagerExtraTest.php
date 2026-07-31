@@ -8,7 +8,6 @@ use Integrity\Auth\ApiKeyManager;
 use Integrity\Tests\TestCase;
 use Mockery;
 use ReflectionMethod;
-use WP_Mock;
 
 /**
  * Covers ApiKeyManager's validation, IP/CIDR matching and CRUD paths beyond
@@ -25,17 +24,17 @@ class ApiKeyManagerExtraTest extends TestCase
     {
         parent::setUp();
         $this->manager = new ApiKeyManager();
-        WP_Mock::userFunction('esc_sql')->andReturnUsing(fn ($v) => $v)->byDefault();
-        WP_Mock::userFunction('current_time')->andReturn('2026-07-01 12:00:00')->byDefault();
-        WP_Mock::userFunction('sanitize_text_field')->andReturnUsing(fn ($v) => is_string($v) ? trim($v) : $v)->byDefault();
-        WP_Mock::userFunction('wp_json_encode')->andReturnUsing(fn ($v) => json_encode($v))->byDefault();
+
+        // esc_sql(), current_time(), sanitize_text_field() and wp_json_encode()
+        // are all real functions in wp-mocks, with the behaviour these tests
+        // used to spell out by hand.
     }
 
     private function ip(string $method): ReflectionMethod
     {
-        $m = new ReflectionMethod(ApiKeyManager::class, $method);
-        $m->setAccessible(true);
-        return $m;
+        // No setAccessible() call: it has been a no-op since PHP 8.1 — this
+        // plugin's floor — and is deprecated from 8.5.
+        return new ReflectionMethod(ApiKeyManager::class, $method);
     }
 
     // ─── ipInCidr / isIpAllowed ──────────────────────────────────────

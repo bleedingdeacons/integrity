@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit;
 
+use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Filters;
 use Closure;
 use Integrity\Admin\SettingsPage;
 use Integrity\Plugin;
@@ -13,7 +15,6 @@ use Mockery\MockInterface;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use Unity\Core\Interfaces\Container;
-use WP_Mock;
 
 /**
  * Unit tests for Plugin class
@@ -61,19 +62,17 @@ class PluginTest extends TestCase
      */
     public function init_registers_rest_api_init_action(): void
     {
-        WP_Mock::userFunction('is_admin')
-            ->andReturn(false);
-
-        // Two callbacks land on rest_api_init: the closure that resolves and
-        // registers RestController, and the security-header hook.
-        // Any closure will do: WP_Mock indexes hooked callbacks by identity
-        // and normalises every Closure to the same key, so a matcher object
-        // would never match but a throwaway closure does.
-        WP_Mock::expectActionAdded('rest_api_init', function (): void {
-        });
-        WP_Mock::expectActionAdded('rest_api_init', [Plugin::class, 'addSecurityHeaders']);
+        WpState::$isAdmin = false;
 
         Plugin::init($this->container);
+
+        // Two callbacks land on rest_api_init: the closure that resolves and
+        // registers RestController, and the security-header hook. Brain Monkey
+        // matches a hooked callback by identity, so the anonymous one can only
+        // be asserted as "something is hooked here"; the named one is checked
+        // exactly.
+        $this->assertActionAdded('rest_api_init');
+        $this->assertActionAdded('rest_api_init', [Plugin::class, 'addSecurityHeaders']);
 
         $this->assertSame($this->container, Plugin::getContainer());
     }
@@ -83,15 +82,7 @@ class PluginTest extends TestCase
      */
     public function init_registers_admin_hooks_when_is_admin(): void
     {
-        WP_Mock::userFunction('is_admin')
-            ->andReturn(true);
-
-        // Any closure will do: WP_Mock indexes hooked callbacks by identity
-        // and normalises every Closure to the same key, so a matcher object
-        // would never match but a throwaway closure does.
-        WP_Mock::expectActionAdded('rest_api_init', function (): void {
-        });
-        WP_Mock::expectActionAdded('rest_api_init', [Plugin::class, 'addSecurityHeaders']);
+        WpState::$isAdmin = true;
 
         $settingsPage = Mockery::mock(SettingsPage::class);
         $settingsPage->shouldReceive('init')->once();
@@ -111,15 +102,7 @@ class PluginTest extends TestCase
      */
     public function init_only_initializes_once(): void
     {
-        WP_Mock::userFunction('is_admin')
-            ->andReturn(false);
-
-        // Any closure will do: WP_Mock indexes hooked callbacks by identity
-        // and normalises every Closure to the same key, so a matcher object
-        // would never match but a throwaway closure does.
-        WP_Mock::expectActionAdded('rest_api_init', function (): void {
-        });
-        WP_Mock::expectActionAdded('rest_api_init', [Plugin::class, 'addSecurityHeaders']);
+        WpState::$isAdmin = false;
 
         Plugin::init($this->container);
 
@@ -139,22 +122,15 @@ class PluginTest extends TestCase
      */
     public function addSecurityHeaders_adds_filter(): void
     {
-        // add_filter cannot be stubbed with userFunction — WP_Mock intercepts
-        // the hook functions itself — so the registration is asserted through
-        // WP_Mock's own expectation, verified when it tears down. Priority 10
-        // and 3 arguments: rest_pre_serve_request passes $served, $result,
-        // $request.
-        WP_Mock::expectFilterAdded(
-            'rest_pre_serve_request',
-            function (): void {
-            },
-            10,
-            3
-        );
+        // add_filter is Brain Monkey's, not something to stub over, so the
+        // registration is asserted through its own expectation, verified at
+        // teardown. Priority 10 and 3 arguments: rest_pre_serve_request passes
+        // $served, $result, $request.
+        Filters\expectAdded('rest_pre_serve_request')
+            ->once()
+            ->with(Mockery::type(Closure::class), 10, 3);
 
         Plugin::addSecurityHeaders();
-
-        $this->addToAssertionCount(1);
     }
 
     /**
