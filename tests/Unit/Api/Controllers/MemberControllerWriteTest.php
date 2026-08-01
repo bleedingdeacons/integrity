@@ -21,6 +21,7 @@ use Unity\Members\Interfaces\MemberRepository;
 use Unity\Members\Interfaces\MemberRevisor;
 use Unity\Positions\Interfaces\PositionRepository;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
+use Unity\PrivacyPolicies\Interfaces\PrivacyPolicy;
 
 /**
  * Tests for MemberController's write handlers (create / update) beyond the
@@ -278,7 +279,7 @@ class MemberControllerWriteTest extends TestCase
     public function record_compliance_resolves_the_statement_from_a_valid_policy(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
-        $policy = Mockery::mock();
+        $policy = Mockery::mock(PrivacyPolicy::class);
         $policy->shouldReceive('getPolicy')->andReturn('The policy body');
         $this->policyRepo->shouldReceive('findById')->with(50)->andReturn($policy);
         $this->revisor->shouldReceive('revise')->andReturn($this->member());

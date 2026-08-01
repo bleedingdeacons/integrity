@@ -13,7 +13,9 @@ use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Groups\Interfaces\GroupViewFactory;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeeting;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingGroupAttendance;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingGroupAttendanceRepository;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendance;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendanceRepository;
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepository;
 use Unity\Members\Interfaces\Member;
@@ -130,7 +132,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->groupRepo->shouldReceive('findById')->with(10)->andReturn($group);
         $this->groupViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->groupAttendanceRepo->shouldReceive('existsForMeetingAndGroup')->with(1, 10)->andReturn(false);
-        $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock());
+        $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingGroupAttendance::class));
         $this->groupAttendanceRepo->shouldReceive('save')->andReturn(true);
         $this->repo->shouldReceive('save')->with($meeting)->andReturn(true);
 
@@ -181,7 +183,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->groupRepo->shouldReceive('findById')->with(10)->andReturn($group);
         $this->groupViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->groupAttendanceRepo->shouldReceive('existsForMeetingAndGroup')->andReturn(false);
-        $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock());
+        $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingGroupAttendance::class));
         $this->groupAttendanceRepo->shouldReceive('save')->andReturn(false);
 
         $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
@@ -198,7 +200,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->groupRepo->shouldReceive('findById')->with(10)->andReturn($group);
         $this->groupViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->groupAttendanceRepo->shouldReceive('existsForMeetingAndGroup')->andReturn(false);
-        $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock());
+        $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingGroupAttendance::class));
         $this->groupAttendanceRepo->shouldReceive('save')->andReturn(false);
 
         $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
@@ -215,7 +217,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->groupRepo->shouldReceive('findById')->with(10)->andReturn($group);
         $this->groupViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->groupAttendanceRepo->shouldReceive('existsForMeetingAndGroup')->andReturn(false);
-        $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock());
+        $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingGroupAttendance::class));
         $this->groupAttendanceRepo->shouldReceive('save')->andReturn(true);
         $this->repo->shouldReceive('save')->andReturn(false);
 
@@ -294,7 +296,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->memberRepo->shouldReceive('findById')->with(30)->andReturn($this->officer(5));
         $this->positionViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->officerAttendanceRepo->shouldReceive('existsForMeetingAndOfficer')->with(1, 5)->andReturn(false);
-        $this->officerAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock());
+        $this->officerAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingOfficerAttendance::class));
         $this->officerAttendanceRepo->shouldReceive('save')->andReturn(true);
         $this->repo->shouldReceive('save')->with($meeting)->andReturn(true);
 
@@ -349,7 +351,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->memberRepo->shouldReceive('findById')->with(30)->andReturn($this->officer(5));
         $this->positionViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->officerAttendanceRepo->shouldReceive('existsForMeetingAndOfficer')->andReturn(false);
-        $this->officerAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock());
+        $this->officerAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingOfficerAttendance::class));
         $this->officerAttendanceRepo->shouldReceive('save')->andReturn(false);
 
         $response = $this->controller->registerIntergroupMeetingOfficer($this->request());
