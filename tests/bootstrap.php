@@ -29,6 +29,38 @@ require_once dirname(__DIR__) . '/vendor/bleedingdeacons/wp-mocks/bootstrap.php'
 // Makes plugins_url()/plugin_dir_url() answer with Integrity's own path.
 WpState::$pluginSlug = 'integrity';
 
+// --- Unity ---------------------------------------------------------------
+// The API controllers type-hint Unity's Groups, Meetings, Members, Positions
+// and IntergroupMeetings contracts throughout. Load them from the sibling
+// checkout that CI already arranges (see the "Checkout Unity" step in
+// ci.yml), so the controllers are checked against the real interfaces.
+//
+// Until now nothing put Unity on this suite's classpath at all: the tests
+// mock its contracts by string name, and Mockery will happily generate a
+// double for a class that does not exist -- with no methods, and no signature
+// checking whatsoever. Unity could change any signature here and these tests
+// would stay green.
+$unitySrc = dirname(__DIR__, 2) . '/unity/src';
+
+if (!is_dir($unitySrc)) {
+    fwrite(STDERR, PHP_EOL . 'ERROR: Unity plugin source not found at ' . $unitySrc . PHP_EOL
+        . "Integrity is built on Unity's interfaces, so the Unity plugin must be" . PHP_EOL
+        . 'checked out as a sibling directory for this suite to run.' . PHP_EOL . PHP_EOL);
+    exit(1);
+}
+
+spl_autoload_register(static function (string $class) use ($unitySrc): void {
+    if (!str_starts_with($class, 'Unity' . chr(92))) {
+        return;
+    }
+
+    $file = $unitySrc . '/' . str_replace(chr(92), '/', substr($class, strlen('Unity' . chr(92)))) . '.php';
+
+    if (is_file($file)) {
+        require_once $file;
+    }
+});
+
 // Define WordPress constants that might be needed
 if (!defined('ABSPATH')) {
     define('ABSPATH', '/tmp/wordpress/');
