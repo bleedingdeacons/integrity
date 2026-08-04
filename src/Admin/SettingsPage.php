@@ -333,57 +333,12 @@ class SettingsPage
             exit;
         }
 
-        // Parse permissions
-        $permissions = [];
-        if (!empty($_POST['perm_groups'])) {
-            $permissions[] = 'groups:read';
-        }
-        if (!empty($_POST['perm_meetings'])) {
-            $permissions[] = 'meetings:read';
-        }
-        if (!empty($_POST['perm_positions'])) {
-            $permissions[] = 'positions:read';
-        }
-        if (!empty($_POST['perm_members'])) {
-            $permissions[] = 'members:read';
-        }
-        if (!empty($_POST['perm_members_write'])) {
-            $permissions[] = 'members:write';
-        }
-        if (!empty($_POST['perm_members_clear'])) {
-            $permissions[] = 'members:clear';
-            // members:clear is a modifier on members:read; ensure the base
-            // read permission is present so the key can actually hit the
-            // /members endpoints.
-            if (!in_array('members:read', $permissions, true)) {
-                $permissions[] = 'members:read';
-            }
-        }
-        if (!empty($_POST['perm_intergroup_meetings'])) {
-            $permissions[] = 'intergroup-meetings:read';
-        }
-        if (!empty($_POST['perm_intergroup_meetings_write'])) {
-            $permissions[] = 'intergroup-meetings:write';
-        }
-        if (!empty($_POST['perm_all'])) {
-            $permissions = ['*'];
-        }
-
-        if (empty($permissions)) {
-            $permissions = ['groups:read', 'meetings:read'];
-        }
+        $permissions = $this->parsePermissions();
 
         $rateLimit = !empty($_POST['rate_limit']) ? (int) $_POST['rate_limit'] : null;
         $expiresAt = !empty($_POST['expires_at']) ? sanitize_text_field($_POST['expires_at']) . ' 23:59:59' : null;
 
-        $ipWhitelist = null;
-        if (!empty($_POST['ip_whitelist'])) {
-            $ips = array_map('trim', explode("\n", sanitize_textarea_field($_POST['ip_whitelist'])));
-            $ips = array_filter($ips);
-            if (!empty($ips)) {
-                $ipWhitelist = $ips;
-            }
-        }
+        $ipWhitelist = $this->parseIpWhitelist();
 
         $result = $this->apiKeyManager->createKey($name, $permissions, $rateLimit, $expiresAt, $ipWhitelist);
 
@@ -394,6 +349,83 @@ class SettingsPage
             wp_redirect(add_query_arg('error', 'create_failed', admin_url('admin.php?page=' . self::MENU_SLUG)));
         }
         exit;
+    }
+
+    /**
+     * Map the create-key form's permission checkboxes onto scope strings.
+     *
+     * Extracted from handleCreateKey() so it can be tested: that method ends in
+     * wp_redirect() followed by exit, so it cannot run to completion in a test
+     * process, and this is the branchiest logic on the page.
+     *
+     * @return array<int, string> Never empty — a key with no boxes ticked gets
+     *                            the read-only default rather than no access.
+     */
+    private function parsePermissions(): array
+    {
+        $permissions = [];
+
+        foreach ([
+            'perm_groups'                    => 'groups:read',
+            'perm_meetings'                  => 'meetings:read',
+            'perm_positions'                 => 'positions:read',
+            'perm_members'                   => 'members:read',
+            'perm_members_write'             => 'members:write',
+            'perm_members_clear'             => 'members:clear',
+            'perm_intergroup_meetings'       => 'intergroup-meetings:read',
+            'perm_intergroup_meetings_write' => 'intergroup-meetings:write',
+        ] as $field => $scope) {
+            if (empty($_POST[$field])) {
+                continue;
+            }
+
+            $permissions[] = $scope;
+
+            // members:clear is a modifier on members:read; ensure the base read
+            // permission is present so the key can actually hit the /members
+            // endpoints. Added here rather than after the loop so the resulting
+            // order matches what this code produced before it was extracted.
+            if ($scope === 'members:clear' && !in_array('members:read', $permissions, true)) {
+                $permissions[] = 'members:read';
+            }
+        }
+
+        if (!empty($_POST['perm_all'])) {
+            return ['*'];
+        }
+
+        if (empty($permissions)) {
+            return ['groups:read', 'meetings:read'];
+        }
+
+        return $permissions;
+    }
+
+    /**
+     * Parse the newline-separated IP whitelist textarea.
+     *
+     * Extracted alongside parsePermissions(), and for the same reason.
+     *
+     * @return array<int, string>|null null when unrestricted — an empty or
+     *                                 whitespace-only box is not a whitelist
+     *                                 of nothing.
+     *
+     * One deliberate change from the inline original, not a pure extraction:
+     * array_values() is applied after array_filter(). Without it a blank line
+     * between two addresses left a gap in the keys, so the value serialised as
+     * a JSON object ({"0":"…","2":"…"}) rather than an array. Every consumer
+     * treats it as a list.
+     */
+    private function parseIpWhitelist(): ?array
+    {
+        if (empty($_POST['ip_whitelist'])) {
+            return null;
+        }
+
+        $ips = array_map('trim', explode("\n", sanitize_textarea_field($_POST['ip_whitelist'])));
+        $ips = array_values(array_filter($ips));
+
+        return $ips === [] ? null : $ips;
     }
 
     /**

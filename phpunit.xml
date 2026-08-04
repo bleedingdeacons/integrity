@@ -29,15 +29,18 @@
         <include>
             <directory suffix=".php">src</directory>
         </include>
-        <exclude>
-            <!--
-                Admin render glue: markup, no logic worth unit-testing, and it
-                only distorts the coverage denominator.
+        <!--
+            src/Admin is deliberately NOT excluded. It was, on the grounds that
+            it is "admin render glue: markup, no logic worth unit-testing" —
+            but Amber covers its whole src/Admin on this same tooling, so the
+            exclusion was habit rather than necessity, and it was hiding real
+            branches: the interval-clamping sanitize callback, the audit
+            filter/pagination parsing, and every capability guard.
 
-                Load-bearing: dropping this on the move from <coverage> to
-                <source> would silently shift the Coveralls number.
-            -->
-            <directory>src/Admin</directory>
-        </exclude>
+            The exclusion came out in the same commit that added
+            tests/Unit/Admin/SettingsPageTest.php, so the Coveralls number
+            moved up rather than down. Do not re-add it without deleting those
+            tests too.
+        -->
     </source>
 </phpunit>
