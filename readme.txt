@@ -13,7 +13,7 @@ Secure REST API bridge for Unity plugin - provides authenticated access to Group
 
 == Description ==
 
-Secure REST API bridge for the [Unity](https://github.com/thebleedingdeacons/unity) WordPress plugin suite. Integrity provides authenticated, rate-limited access to Groups, Meetings, Members, Positions, and Intergroup Meetings for external applications — with client libraries for both PHP and .NET.
+Secure REST API bridge for the [Unity](https://github.com/bleedingdeacons/unity) WordPress plugin suite. Integrity provides authenticated, rate-limited access to Groups, Meetings, Members, Positions, and Intergroup Meetings for external applications — with client libraries for both PHP and .NET.
 
 **Key features:**
 
