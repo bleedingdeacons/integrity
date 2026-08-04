@@ -9,6 +9,8 @@ use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
 use Mockery;
 use ReflectionClass;
+use Unity\Groups\Interfaces\Group;
+use Unity\Meetings\Interfaces\Meeting;
 
 /**
  * Tests for GroupController's group transformation.
@@ -49,7 +51,7 @@ class GroupControllerTest extends TestCase
      */
     public function transformGroup_returns_expected_fields(): void
     {
-        $group = Mockery::mock('Unity\Groups\Interfaces\Group');
+        $group = Mockery::mock(Group::class);
         $group->shouldReceive('getId')->andReturn(1);
         $group->shouldReceive('getTitle')->andReturn('Test Group');
         $group->shouldReceive('getEmail')->andReturn('test@example.com');
@@ -82,7 +84,7 @@ class GroupControllerTest extends TestCase
      */
     public function transformGroup_expands_meetings_when_requested(): void
     {
-        $meeting = Mockery::mock('Unity\Meetings\Interfaces\Meeting');
+        $meeting = Mockery::mock(Meeting::class);
         $meeting->shouldReceive('getId')->andReturn(100);
         $meeting->shouldReceive('getName')->andReturn('Morning');
         $meeting->shouldReceive('getSlug')->andReturn('morning');
@@ -101,7 +103,7 @@ class GroupControllerTest extends TestCase
         $meeting->shouldReceive('getMeta')->andReturn([]);
         $meeting->shouldReceive('getUpdated')->andReturn('2024-06-01 10:00:00');
 
-        $group = Mockery::mock('Unity\Groups\Interfaces\Group');
+        $group = Mockery::mock(Group::class);
         $group->shouldReceive('getId')->andReturn(1);
         $group->shouldReceive('getTitle')->andReturn('Test');
         $group->shouldReceive('getEmail')->andReturn('');
