@@ -9,7 +9,7 @@ declare(strict_types=1);
  * Requires at least: 6.0
  * Requires Plugins: unity, scrutiny
  * Requires PHP: 8.1
- * GitHub Plugin URI: https://github.com/thebleedingdeacons/integrity
+ * GitHub Plugin URI: https://github.com/bleedingdeacons/integrity
  * GitHub Branch: main
  * Author: The Bleeding Deacons
  * Author URI: https://github.com/bleedingdeacons/integrity
