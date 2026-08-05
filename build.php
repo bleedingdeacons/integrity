@@ -1,8 +1,6 @@
 #!/usr/bin/env php
 <?php
 
-declare(strict_types=1);
-
 /**
  * Build Script for Integrity WordPress Plugin
  *
@@ -23,6 +21,8 @@ declare(strict_types=1);
  *   --clean            Clean build directory before building
  *   --help             Show this help message
  */
+
+declare(strict_types=1);
 
 class PluginBuilder
 {
@@ -95,7 +95,7 @@ class PluginBuilder
             'sharp',
             'Integrity-cli',
             'csharp-client',
-            'client',
+            'client',
 
             // Dev artefacts that must never ship
             '.phpunit.result.cache',
@@ -450,8 +450,8 @@ class PluginBuilder
     {
         $files = [];
         $iterator = new RecursiveIteratorIterator(
-                new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
-                RecursiveIteratorIterator::SELF_FIRST
+            new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
         );
 
         foreach ($iterator as $file) {
