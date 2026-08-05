@@ -95,7 +95,7 @@ class PluginBuilder
             'sharp',
             'Integrity-cli',
             'csharp-client',
-            'client',
+            'client',
 
             // Dev artefacts that must never ship
             '.phpunit.result.cache',
