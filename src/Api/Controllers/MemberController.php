@@ -329,7 +329,6 @@ class MemberController
                 (int) $request->get_param('page'),
                 $perPage
             );
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: getMembers error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
@@ -380,7 +379,6 @@ class MemberController
                     $this->hasClearPermission($keyData)
                 )
             );
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: getMember error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
@@ -517,7 +515,6 @@ class MemberController
             return $this->successResponse(
                 $this->buildMemberResponse($container, $returnMember, $clear)
             );
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: updateMember error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
@@ -646,7 +643,6 @@ class MemberController
                 'success' => true,
                 'data' => $this->buildMemberResponse($container, $returnMember, $this->hasClearPermission($keyData)),
             ], 201);
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: createMember error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
@@ -918,7 +914,6 @@ class MemberController
             return $this->successResponse(
                 $this->buildMemberResponse($container, $returnMember, $this->hasClearPermission($keyData))
             );
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: recordCompliance error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 

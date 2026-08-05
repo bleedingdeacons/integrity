@@ -189,11 +189,11 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('insert')
             ->once()
             ->andReturn(1);
-        
+
         $wpdb->insert_id = 1;
 
         WpState::$options['integrity_default_rate_limit'] = 1000;
@@ -213,7 +213,7 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('insert')
             ->once()
             ->andReturn(false);
@@ -234,7 +234,7 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('update')
             ->once()
             ->with(
@@ -259,7 +259,7 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('update')
             ->once()
             ->andReturn(false);
@@ -277,7 +277,7 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('delete')
             ->once()
             ->with(
@@ -300,7 +300,7 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('delete')
             ->once()
             ->andReturn(false);
@@ -318,7 +318,7 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $mockKeys = [
             [
                 'id' => 1,
@@ -335,7 +335,7 @@ class ApiKeyManagerTest extends TestCase
                 'ip_whitelist' => null,
             ],
         ];
-        
+
         $wpdb->shouldReceive('get_results')
             ->once()
             ->andReturn($mockKeys);
@@ -355,7 +355,7 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $mockKey = [
             'id' => 1,
             'name' => 'Test Key',
@@ -370,11 +370,11 @@ class ApiKeyManagerTest extends TestCase
             'created_by' => 1,
             'ip_whitelist' => null,
         ];
-        
+
         $wpdb->shouldReceive('prepare')
             ->once()
             ->andReturn('prepared_query');
-        
+
         $wpdb->shouldReceive('get_row')
             ->once()
             ->andReturn($mockKey);
@@ -394,11 +394,11 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('prepare')
             ->once()
             ->andReturn('prepared_query');
-        
+
         $wpdb->shouldReceive('get_row')
             ->once()
             ->andReturn(null);
@@ -416,7 +416,7 @@ class ApiKeyManagerTest extends TestCase
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
-        
+
         $wpdb->shouldReceive('update')
             ->once()
             ->andReturn(1);

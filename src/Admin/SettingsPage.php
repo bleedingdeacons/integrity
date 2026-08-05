@@ -365,7 +365,8 @@ class SettingsPage
     {
         $permissions = [];
 
-        foreach ([
+        foreach (
+            [
             'perm_groups'                    => 'groups:read',
             'perm_meetings'                  => 'meetings:read',
             'perm_positions'                 => 'positions:read',
@@ -374,7 +375,8 @@ class SettingsPage
             'perm_members_clear'             => 'members:clear',
             'perm_intergroup_meetings'       => 'intergroup-meetings:read',
             'perm_intergroup_meetings_write' => 'intergroup-meetings:write',
-        ] as $field => $scope) {
+            ] as $field => $scope
+        ) {
             if (empty($_POST[$field])) {
                 continue;
             }

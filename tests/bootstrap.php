@@ -83,29 +83,35 @@ if (!defined('INTEGRITY_VERSION')) {
 //
 // WP_REST_Response is not part of the shared stubs, so it stays local.
 if (!class_exists('WP_REST_Response')) {
-    class WP_REST_Response {
+    class WP_REST_Response
+    {
         protected $data;
         protected $status;
         protected $headers = [];
 
-        public function __construct($data = null, $status = 200) {
+        public function __construct($data = null, $status = 200)
+        {
             $this->data = $data;
             $this->status = $status;
         }
 
-        public function get_data() {
+        public function get_data()
+        {
             return $this->data;
         }
 
-        public function get_status() {
+        public function get_status()
+        {
             return $this->status;
         }
 
-        public function header($name, $value) {
+        public function header($name, $value)
+        {
             $this->headers[$name] = $value;
         }
 
-        public function get_headers() {
+        public function get_headers()
+        {
             return $this->headers;
         }
     }

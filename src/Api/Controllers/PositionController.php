@@ -91,7 +91,6 @@ class PositionController
                 (int) $request->get_param('page'),
                 $perPage
             );
-
         } catch (\Exception $e) {
             $this->logRequest($keyData['api_key_id'], $request, null, 500, $startTime);
 
@@ -122,7 +121,6 @@ class PositionController
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 200, $startTime);
 
             return $this->successResponse($this->transformPosition($position));
-
         } catch (\Exception $e) {
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 500, $startTime);
 

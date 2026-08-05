@@ -314,7 +314,6 @@ class IntergroupMeetingController
                 (int) $request->get_param('page'),
                 $perPage
             );
-
         } catch (\Exception $e) {
             $this->logRequest($keyData['api_key_id'], $request, null, 500, $startTime);
 
@@ -362,7 +361,6 @@ class IntergroupMeetingController
             return $this->successResponse(
                 $this->transformIntergroupMeetingWithCache($intergroupMeeting, $memberCache, $officerAttendanceCache)
             );
-
         } catch (\Exception $e) {
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 500, $startTime);
 
@@ -492,7 +490,6 @@ class IntergroupMeetingController
                     'registered' => true,
                 ],
             ], 201);
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: registerIntergroupMeetingAttendee error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
@@ -554,7 +551,6 @@ class IntergroupMeetingController
                 'group_id' => $groupId,
                 'registered' => false,
             ]);
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: unregisterIntergroupMeetingAttendee error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
@@ -676,7 +672,6 @@ class IntergroupMeetingController
                     'registered' => true,
                 ],
             ], 201);
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: registerIntergroupMeetingOfficer error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 
@@ -756,7 +751,6 @@ class IntergroupMeetingController
                 'officer_id' => $officerId,
                 'registered' => false,
             ]);
-
         } catch (\Throwable $e) {
             \Integrity\Plugin::logError('Integrity: unregisterIntergroupMeetingOfficer error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
 

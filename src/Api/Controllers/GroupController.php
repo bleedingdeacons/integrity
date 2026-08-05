@@ -133,15 +133,14 @@ class GroupController
 
             // Log successful request
             $this->logRequest(
-                    $keyData['api_key_id'],
-                    $request,
-                    ['per_page' => $perPage, 'page' => $page],
-                    200,
-                    $startTime
+                $keyData['api_key_id'],
+                $request,
+                ['per_page' => $perPage, 'page' => $page],
+                200,
+                $startTime
             );
 
             return $this->paginatedResponse(array_values($data), $total, $page, $perPage);
-
         } catch (\Exception $e) {
             $this->logRequest($keyData['api_key_id'], $request, null, 500, $startTime);
 
@@ -176,7 +175,6 @@ class GroupController
             $expand = !empty($expandParam) ? array_filter(array_map('trim', explode(',', $expandParam))) : [];
 
             return $this->successResponse($this->transformGroup($group, $expand));
-
         } catch (\Exception $e) {
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 500, $startTime);
 

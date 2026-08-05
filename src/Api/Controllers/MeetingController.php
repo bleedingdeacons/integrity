@@ -181,7 +181,6 @@ class MeetingController
             );
 
             return $this->paginatedResponse(array_values($data), $total, $page, $perPage);
-
         } catch (\Exception $e) {
             $this->logRequest($keyData['api_key_id'], $request, null, 500, $startTime);
 
@@ -212,7 +211,6 @@ class MeetingController
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 200, $startTime);
 
             return $this->successResponse($this->transformMeeting($meeting));
-
         } catch (\Exception $e) {
             $this->logRequest($keyData['api_key_id'], $request, ['id' => $id], 500, $startTime);
 
