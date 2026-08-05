@@ -227,12 +227,14 @@ class MeetingControllerTest extends TestCase
         $meeting = $this->meeting();
         // Override getLocation to return the location.
         $meeting = Mockery::mock(Meeting::class);
-        foreach ([
+        foreach (
+            [
             'getId' => 1, 'getName' => 'M', 'getSlug' => 'm', 'getUrl' => '', 'getDay' => 1,
             'getDayOfWeek' => 'Mon', 'getTime' => '', 'getEndTime' => '', 'getTypes' => [],
             'getState' => '', 'isOnline' => false, 'getOnlineLink' => '', 'getOnlineNotes' => '',
             'getContacts' => [], 'getMeta' => [], 'getUpdated' => '',
-        ] as $method => $value) {
+            ] as $method => $value
+        ) {
             $meeting->shouldReceive($method)->andReturn($value);
         }
         $meeting->shouldReceive('getLocation')->andReturn($location);

@@ -30,15 +30,15 @@ abstract class TestCase extends WpMocksTestCase
     protected function createMockRequest(array $params = [], array $headers = []): object
     {
         $request = Mockery::mock('WP_REST_Request');
-        
+
         $request->shouldReceive('get_param')
             ->andReturnUsing(function ($key) use ($params) {
                 return $params[$key] ?? null;
             });
-        
+
         $request->shouldReceive('get_params')
             ->andReturn($params);
-        
+
         $request->shouldReceive('get_header')
             ->andReturnUsing(function ($key) use ($headers) {
                 return $headers[$key] ?? null;
@@ -54,18 +54,18 @@ abstract class TestCase extends WpMocksTestCase
                     $headers
                 );
             });
-        
+
         $request->shouldReceive('get_route')
             ->andReturn($params['_route'] ?? '/integrity/v1/test');
-        
+
         $request->shouldReceive('get_method')
             ->andReturn($params['_method'] ?? 'GET');
-        
+
         $request->shouldReceive('set_param')
             ->andReturnUsing(function ($key, $value) use (&$params) {
                 $params[$key] = $value;
             });
-        
+
         return $request;
     }
 

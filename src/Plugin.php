@@ -73,7 +73,6 @@ class Plugin
         add_action('rest_api_init', [self::class, 'addSecurityHeaders']);
 
         self::logDebug('Initialised', ['version' => defined('INTEGRITY_VERSION') ? INTEGRITY_VERSION : 'unknown']);
-
     }
 
     /**

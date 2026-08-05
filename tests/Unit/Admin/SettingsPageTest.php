@@ -76,7 +76,8 @@ final class SettingsPageTest extends TestCase
     {
         $this->page->init();
 
-        foreach ([
+        foreach (
+            [
             'admin_menu',
             'admin_init',
             'admin_post_integrity_create_key',
@@ -85,7 +86,8 @@ final class SettingsPageTest extends TestCase
             'admin_post_integrity_clear_logs',
             'admin_enqueue_scripts',
             'wp_ajax_integrity_audit_refresh_logs',
-        ] as $hook) {
+            ] as $hook
+        ) {
             $this->assertActionAdded($hook, false, 'expected ' . $hook . ' to be hooked');
         }
     }

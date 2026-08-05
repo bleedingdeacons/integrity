@@ -544,7 +544,8 @@ class RestController
     private function getRequiredPermission(string $endpoint): ?string
     {
         // Check registration endpoints before general intergroup-meetings (more specific first)
-        if (strpos($endpoint, '/intergroup-meetings') !== false
+        if (
+            strpos($endpoint, '/intergroup-meetings') !== false
             && (strpos($endpoint, '/register') !== false || strpos($endpoint, '/unregister') !== false)
         ) {
             return 'intergroup-meetings:write';
@@ -564,7 +565,8 @@ class RestController
         }
 
         if (strpos($endpoint, '/members') !== false) {
-            if (strpos($endpoint, '/update') !== false
+            if (
+                strpos($endpoint, '/update') !== false
                 || strpos($endpoint, '/create') !== false
                 || strpos($endpoint, '/compliance') !== false
             ) {

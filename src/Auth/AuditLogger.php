@@ -244,7 +244,8 @@ class AuditLogger
     {
         [$subnet, $mask] = explode('/', $cidr, 2);
 
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
+        if (
+            filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
             && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)
         ) {
             $ipLong = ip2long($ip);
@@ -254,7 +255,8 @@ class AuditLogger
             return ($ipLong & $maskLong) === ($subnetLong & $maskLong);
         }
 
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
+        if (
+            filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
             && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
         ) {
             $ipBin = inet_pton($ip);
