@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * Plugin Name: Integrity
  * Description: Secure REST API bridge for Unity plugin - provides authenticated access to Groups and Meetings for external applications.
@@ -16,6 +14,8 @@ declare(strict_types=1);
  * Contact: thebleedingdeacons@gmail.com
  * License: MIT (Modified)
  */
+
+declare(strict_types=1);
 
 // Prevent direct access
 if (!defined('ABSPATH')) {
@@ -70,14 +70,13 @@ add_action('unity/loaded', function ($container): void {
          * Use this hook for code that depends on Integrity being available.
          */
         do_action('integrity_loaded', \Integrity\Plugin::getContainer());
-
     } catch (\Exception $e) {
         function_exists('wp_log')
             ? wp_log('integrity')->error('Integrity Plugin Initialization Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
             : error_log('Integrity Plugin Initialization Error: ' . $e->getMessage());
 
         if (is_admin()) {
-            add_action('admin_notices', function() use ($e) {
+            add_action('admin_notices', function () use ($e) {
                 $message = sprintf(
                     '<strong>Integrity Plugin Error:</strong> %s',
                     esc_html($e->getMessage())
@@ -85,14 +84,13 @@ add_action('unity/loaded', function ($container): void {
                 echo '<div class="notice notice-error is-dismissible"><p>' . $message . '</p></div>';
             });
         }
-
     } catch (\Throwable $e) {
         function_exists('wp_log')
             ? wp_log('integrity')->critical('Integrity Plugin Fatal Error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()])
             : error_log('Integrity Plugin Fatal Error: ' . $e->getMessage());
 
         if (is_admin()) {
-            add_action('admin_notices', function() {
+            add_action('admin_notices', function () {
                 echo '<div class="notice notice-error is-dismissible"><p><strong>Integrity Plugin Fatal Error:</strong> Plugin failed to load. Check error logs.</p></div>';
             });
         }
@@ -102,7 +100,7 @@ add_action('unity/loaded', function ($container): void {
 // Show error if Unity is not active (check after plugins_loaded)
 add_action('plugins_loaded', function (): void {
     if (!class_exists('Unity\\Plugin')) {
-        add_action('admin_notices', function() {
+        add_action('admin_notices', function () {
             echo '<div class="notice notice-error"><p>';
             echo '<strong>' . esc_html__('Integrity', 'integrity') . ':</strong> ';
             echo esc_html__('This plugin requires the Unity plugin to be installed and activated.', 'integrity');
