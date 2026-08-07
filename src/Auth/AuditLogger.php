@@ -397,7 +397,11 @@ class AuditLogger
         global $wpdb;
         $tableName = $wpdb->prefix . 'integrity_audit_log';
 
-        $dateFrom = gmdate('Y-m-d H:i:s', strtotime("-{$days} days"));
+        // $days is an int so this always parses, but strtotime() is declared
+        // int|false and gmdate() will not take false — fall back to "now",
+        // which yields an empty window rather than an unbounded one.
+        $since = strtotime("-{$days} days");
+        $dateFrom = gmdate('Y-m-d H:i:s', $since === false ? time() : $since);
 
         $escapedTable = "`" . esc_sql($tableName) . "`";
 
