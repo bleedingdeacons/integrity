@@ -96,7 +96,10 @@ class ApiKeyManager
      * @param int|null $rateLimit Optional rate limit (requests per hour)
      * @param string|null $expiresAt Optional expiration date (Y-m-d H:i:s)
      * @param array<int, string>|null $ipWhitelist Optional array of allowed IP addresses/ranges
-     * @return array{success: bool, key?: string, id?: int, error?: string}
+     * @return array{success: true, key: string, id: int}|array{success: false, error: string}
+     *         A discriminated union, not a flat shape with optional keys: on
+     *         success the caller always gets key and id, on failure always
+     *         error. Written this way so checking 'success' narrows the rest.
      */
     public function createKey(
         string $name,
