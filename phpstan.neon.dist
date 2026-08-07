@@ -41,6 +41,5 @@ parameters:
     scanDirectories:
         - ../unity/src
         - ../sentinel/src
-    ignoreErrors:
-        - '#Function get_plugin_data not found#'
-        - '#Function dbDelta not found#'
+    # No ignoreErrors. Both entries silenced "Function get_plugin_data / dbDelta
+    # not found", which wordpress-stubs resolves; neither still matched.
