@@ -456,8 +456,12 @@ class RestController
                 $result->header($header, (string) $value);
             }
 
-            // Self-remove so this closure never fires again
-            remove_filter('rest_post_dispatch', $this->rateLimitFilter);
+            // Self-remove so this closure never fires again. Guarded the same
+            // way as the removal above: if the property is already null there
+            // is nothing registered to remove.
+            if ($this->rateLimitFilter !== null) {
+                remove_filter('rest_post_dispatch', $this->rateLimitFilter);
+            }
             $this->rateLimitFilter = null;
 
             return $result;

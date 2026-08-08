@@ -59,14 +59,17 @@ class Plugin
         self::registerServices($unityContainer);
         self::$initialized = true;
 
-        // Register REST API routes (must resolve the instance so hooks are registered)
+        // Register REST API routes (must resolve the instance so hooks are registered).
+        // Resolved through getContainer() rather than the property because this
+        // closure runs later, on rest_api_init — the accessor throws if the
+        // plugin was somehow never initialised.
         add_action('rest_api_init', function () {
-            self::$container->get(RestController::class)->register();
+            self::getContainer()->get(RestController::class)->register();
         });
 
         // Initialize admin
         if (is_admin()) {
-            self::$container->get(SettingsPage::class)->init();
+            $unityContainer->get(SettingsPage::class)->init();
         }
 
         // Add security headers

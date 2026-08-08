@@ -98,9 +98,18 @@ class Mask
             return '';
         }
 
-        // Count total digits to determine how many to mask
-        $digits = preg_replace('/[^0-9]/', '', $phone);
-        $totalDigits = strlen($digits);
+        // Count total digits to determine how many to mask. Counted with the
+        // same ctype_digit walk used below rather than preg_replace(), which
+        // returns null on a PCRE failure — coalescing that to '' would report
+        // zero digits and leave the whole number unmasked, which is the wrong
+        // direction for a masking helper to fail in.
+        $totalDigits = 0;
+        for ($i = 0, $len = strlen($phone); $i < $len; $i++) {
+            if (ctype_digit($phone[$i])) {
+                $totalDigits++;
+            }
+        }
+
         $visibleCount = min(4, $totalDigits);
         $hideCount = $totalDigits - $visibleCount;
 
