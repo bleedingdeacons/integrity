@@ -265,17 +265,49 @@ class ApiKeyManager
      */
     private function ipInCidr(string $ip, string $cidr): bool
     {
-        [$subnet, $mask] = explode('/', $cidr);
+        [$subnet, $mask] = array_pad(explode('/', $cidr, 2), 2, '');
+
+        // The prefix length has to be a plain integer in range before it is
+        // used as a shift distance. '10.0.0.0/' casts to 0, and 32 - 0 = 32
+        // is not a meaningful shift for a 32-bit mask — on a 64-bit build
+        // `-1 << 32` is -4294967296 rather than 0, so a /0 entry silently
+        // stopped matching instead of matching everything. Anything that is
+        // not a well-formed prefix is refused outright: a whitelist that
+        // cannot be parsed must not be read as permission.
+        if ($mask === '' || !ctype_digit($mask)) {
+            return false;
+        }
+
+        $maskBits = (int) $mask;
 
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            if ($maskBits > 32) {
+                return false;
+            }
+
             $ipLong = ip2long($ip);
             $subnetLong = ip2long($subnet);
-            $maskLong = -1 << (32 - (int)$mask);
+
+            if ($ipLong === false || $subnetLong === false) {
+                return false;
+            }
+
+            // Shifting by the full width is the undefined case; /0 means
+            // "every address", so say that directly.
+            if ($maskBits === 0) {
+                return true;
+            }
+
+            $maskLong = -1 << (32 - $maskBits);
 
             return ($ipLong & $maskLong) === ($subnetLong & $maskLong);
         }
 
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            if ($maskBits > 128) {
+                return false;
+            }
+
             $ipBin = inet_pton($ip);
             $subnetBin = inet_pton($subnet);
 
@@ -283,7 +315,13 @@ class ApiKeyManager
                 return false;
             }
 
-            $maskBits = (int)$mask;
+            // Both sides must be the same family, or the nibble walk below
+            // compares a 4-byte value against a 16-byte one. An IPv4 subnet
+            // paired with an IPv6 client is simply not a match.
+            if (strlen($ipBin) !== 16 || strlen($subnetBin) !== 16) {
+                return false;
+            }
+
             $ipHex = bin2hex($ipBin);
             $subnetHex = bin2hex($subnetBin);
 

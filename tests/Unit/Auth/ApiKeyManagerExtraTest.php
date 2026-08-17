@@ -58,6 +58,53 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertTrue($m->invoke($this->manager, '2001:db8:0:1::', '2001:db8:0:1::/60'));
     }
 
+    /**
+     * A /0 entry means "every address" and must say so.
+     *
+     * It used to compute `-1 << (32 - 0)`. Shifting by the full width is the
+     * undefined case, and on a 64-bit build gives -4294967296 rather than 0,
+     * so an admin writing 0.0.0.0/0 to mean "allow anything" got a whitelist
+     * that matched nothing and locked the key out.
+     *
+     * @test
+     */
+    public function ip_in_cidr_treats_a_zero_prefix_as_every_address(): void
+    {
+        $m = $this->ip('ipInCidr');
+        $this->assertTrue($m->invoke($this->manager, '8.8.8.8', '0.0.0.0/0'));
+        $this->assertTrue($m->invoke($this->manager, '10.0.0.1', '0.0.0.0/0'));
+    }
+
+    /**
+     * A prefix that is absent, empty or out of range is not permission.
+     *
+     * '10.0.0.0/' cast to 0 and took the shift path above. An oversized IPv6
+     * prefix walked past the end of the hex string and read an uninitialised
+     * offset.
+     *
+     * @test
+     * @dataProvider malformedCidrProvider
+     */
+    public function ip_in_cidr_refuses_a_malformed_prefix(string $ip, string $cidr): void
+    {
+        $this->assertFalse($this->ip('ipInCidr')->invoke($this->manager, $ip, $cidr));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function malformedCidrProvider(): array
+    {
+        return [
+            'empty prefix'      => ['10.0.0.1', '10.0.0.0/'],
+            'non-numeric'       => ['10.0.0.1', '10.0.0.0/abc'],
+            'negative'          => ['10.0.0.1', '10.0.0.0/-8'],
+            'ipv4 out of range' => ['10.0.0.1', '10.0.0.0/33'],
+            'ipv6 out of range' => ['2001:db8::1', '2001:db8::/200'],
+            'family mismatch'   => ['2001:db8::1', '10.0.0.0/24'],
+        ];
+    }
+
     /** @test */
     public function is_ip_allowed_handles_exact_and_cidr_entries(): void
     {
