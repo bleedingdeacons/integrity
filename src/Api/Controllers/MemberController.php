@@ -19,6 +19,7 @@ use Unity\Members\Interfaces\Member;
 use Unity\Members\Interfaces\MemberFactory;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Members\Interfaces\MemberRevisor;
+use Unity\Members\PreferredContact;
 use Unity\Plugin;
 use Unity\Positions\Interfaces\Position;
 use Unity\Positions\Interfaces\PositionRepository;
@@ -123,6 +124,25 @@ class MemberController
                 },
                 'sanitize_callback' => 'sanitize_text_field',
             ],
+            'landline_number' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen($param) <= 50;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'preferred_contact' => [
+                'required' => false,
+                // The two PreferredContact case values verbatim. Rejecting
+                // anything else here rather than coercing it means a client
+                // sending 'landline' or 'Home' is told so, instead of
+                // silently getting Mobile.
+                'validate_callback' => function ($param) {
+                    return is_string($param)
+                        && PreferredContact::tryFrom($param) !== null;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
             'show_anonymous_name' => [
                 'required' => false,
                 'validate_callback' => function ($param) {
@@ -211,6 +231,25 @@ class MemberController
                 'required' => false,
                 'validate_callback' => function ($param) {
                     return is_string($param) && strlen($param) <= 50;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'landline_number' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return is_string($param) && strlen($param) <= 50;
+                },
+                'sanitize_callback' => 'sanitize_text_field',
+            ],
+            'preferred_contact' => [
+                'required' => false,
+                // The two PreferredContact case values verbatim. Rejecting
+                // anything else here rather than coercing it means a client
+                // sending 'landline' or 'Home' is told so, instead of
+                // silently getting Mobile.
+                'validate_callback' => function ($param) {
+                    return is_string($param)
+                        && PreferredContact::tryFrom($param) !== null;
                 },
                 'sanitize_callback' => 'sanitize_text_field',
             ],
@@ -464,6 +503,17 @@ class MemberController
                 }
             }
 
+            // Resolve landline_number: a landline is personal data and is
+            // masked on the way out exactly as the mobile is, so it needs the
+            // same round-trip guard (see personal_email above).
+            $landlineNumber = $existingMember->getLandlineNumber();
+            if ($request->has_param('landline_number')) {
+                $submittedLandline = $request->get_param('landline_number');
+                if ($clear || !$this->isObscuredPhone($submittedLandline)) {
+                    $landlineNumber = $submittedLandline;
+                }
+            }
+
             // A partial update, expressed as one: name only the fields the
             // request actually supplied, and revise() carries the rest over.
             // A parameter left null means "leave it alone", so the fields this
@@ -493,7 +543,14 @@ class MemberController
                     ? $request->get_param('is_gsr')
                     : null,
                 personalEmail: $personalEmail,
-                mobileNumber: $mobileNumber
+                mobileNumber: $mobileNumber,
+                landlineNumber: $landlineNumber,
+                // Unity owns the "no landline means Mobile" rule, so a request
+                // asking for Landline while clearing the number is corrected
+                // there rather than second-guessed here.
+                preferredContact: $request->has_param('preferred_contact')
+                    ? PreferredContact::fromAcfValue($request->get_param('preferred_contact'))
+                    : null
             );
 
             // Save
@@ -539,6 +596,10 @@ class MemberController
             $anonymousName = $request->get_param('anonymous_name');
             $personalEmail = $request->get_param('personal_email') ?? '';
             $mobileNumber = $request->get_param('mobile_number') ?? '';
+            $landlineNumber = $request->get_param('landline_number') ?? '';
+            $preferredContact = PreferredContact::fromAcfValue(
+                $request->get_param('preferred_contact')
+            );
             $homeGroupId = $request->has_param('home_group_id')
                 ? (int) $request->get_param('home_group_id')
                 : 0;
@@ -612,6 +673,8 @@ class MemberController
                 meetingPO: null,
                 personalEmail: $personalEmail,
                 mobileNumber: $mobileNumber,
+                landlineNumber: $landlineNumber,
+                preferredContact: $preferredContact,
             );
 
             // Save ACF / meta fields
@@ -925,7 +988,8 @@ class MemberController
 
     /**
      * Determine whether the current API key is permitted to see member
-     * personal contact details (personal email, mobile number) in the clear.
+     * personal contact details (personal email, mobile and landline numbers)
+     * in the clear.
      *
      * Granted by the `members:clear` permission, or the wildcard `*`.
      * Defaults to no: without this permission, contact details are masked
@@ -950,7 +1014,7 @@ class MemberController
      *
      * @param \Psr\Container\ContainerInterface $container
      * @param Member $member
-     * @param bool $clear If true, return personal_email and mobile_number
+     * @param bool $clear If true, return personal_email and the two numbers
      *                    unmasked. Requires the `members:clear` permission
      *                    on the calling key; resolved by the caller.
      * @return array<string, mixed>
@@ -976,7 +1040,7 @@ class MemberController
      * @param array<int, Group> $groupCache
      * @param array<int, Position> $positionCache
      * @param array<int, Meeting> $meetingCache
-     * @param bool $clear If true, return personal_email and mobile_number
+     * @param bool $clear If true, return personal_email and the two numbers
      *                    unmasked. Defaults to false (masked), matching the
      *                    historical behaviour when no `members:clear`
      *                    permission is granted.
@@ -1039,6 +1103,14 @@ class MemberController
             'mobile_number' => $clear
                 ? $member->getMobileNumber()
                 : Mask::phone($member->getMobileNumber()),
+            'landline_number' => $clear
+                ? $member->getLandlineNumber()
+                : Mask::phone($member->getLandlineNumber()),
+            // Never masked: this names one of two options rather than a
+            // number, so it gives away nothing the two fields above are
+            // protecting — and a client that cannot read it cannot tell
+            // which of them to ring.
+            'preferred_contact' => $member->getPreferredContact()->value,
             'show_anonymous_name' => $member->showAnonymousName(),
             'show_member_profile' => $member->showMemberProfile(),
             'anonymous_profile' => $member->getAnonymousProfile(),

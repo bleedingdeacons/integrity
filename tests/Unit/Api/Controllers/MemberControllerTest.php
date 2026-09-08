@@ -18,6 +18,7 @@ use Unity\Members\Interfaces\Member;
 use Unity\Members\Interfaces\MemberFactory;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Members\Interfaces\MemberRevisor;
+use Unity\Members\PreferredContact;
 use Unity\Positions\Interfaces\PositionRepository;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 
@@ -105,7 +106,9 @@ class MemberControllerTest extends TestCase
     {
         $d = [
             'getId' => 1, 'getAnonymousName' => 'Anon', 'getPersonalEmail' => 'jane@example.com',
-            'getMobileNumber' => '07700 900000', 'showAnonymousName' => true, 'showMemberProfile' => false,
+            'getMobileNumber' => '07700 900000', 'getLandlineNumber' => '0117 496 0000',
+            'getPreferredContact' => PreferredContact::Mobile,
+            'showAnonymousName' => true, 'showMemberProfile' => false,
             'getAnonymousProfile' => '', 'getHomeGroup' => 0, 'isGSR' => false, 'getMeetingPO' => null,
             'getIntergroupPosition' => 0, 'getIntergroupPositionRotation' => '', 'isGdprAccepted' => false,
             'getGdprAcceptedAt' => '', 'getGdprAcceptanceVersion' => '', 'getGdprAcceptanceMethod' => '',
@@ -189,6 +192,57 @@ class MemberControllerTest extends TestCase
         ]));
 
         $this->assertSame('jane@example.com', $response->get_data()['data'][0]['personal_email']);
+    }
+
+    /**
+     * A landline is personal data, so it is masked on the way out exactly as
+     * the mobile is — and unmasked by the same permission.
+     *
+     * @test
+     */
+    public function get_members_masks_the_landline_without_the_clear_permission(): void
+    {
+        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
+        $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
+
+        $row = $this->controller->getMembers($this->request())->get_data()['data'][0];
+
+        $this->assertNotSame('0117 496 0000', $row['landline_number']);
+        $this->assertStringContainsString('*', $row['landline_number']);
+    }
+
+    /**
+     * @test
+     */
+    public function get_members_returns_the_landline_in_the_clear_with_permission(): void
+    {
+        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
+        $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
+
+        $response = $this->controller->getMembers($this->request([
+            '_integrity_key_data' => ['api_key_id' => 1, 'permissions' => ['members:clear']],
+        ]));
+
+        $this->assertSame('0117 496 0000', $response->get_data()['data'][0]['landline_number']);
+    }
+
+    /**
+     * The preferred contact names one of two options rather than a number, so
+     * it is never masked: a client that cannot read it cannot tell which of
+     * the two numbers to ring.
+     *
+     * @test
+     */
+    public function the_preferred_contact_is_returned_in_the_clear_without_permission(): void
+    {
+        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([
+            $this->member(['getPreferredContact' => PreferredContact::Landline]),
+        ]);
+        $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
+
+        $row = $this->controller->getMembers($this->request())->get_data()['data'][0];
+
+        $this->assertSame('Landline', $row['preferred_contact']);
     }
 
     /**
