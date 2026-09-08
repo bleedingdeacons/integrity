@@ -18,6 +18,7 @@ use Integrity\Api\Controllers\PositionController;
 use Integrity\Api\RestController;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\AuditLogger;
+use Integrity\Auth\PreAuthThrottle;
 use Integrity\Auth\RateLimiter;
 use Psr\Container\ContainerInterface;
 use RuntimeException;
@@ -99,6 +100,10 @@ class Plugin
             return new RateLimiter();
         });
 
+        $container->register(PreAuthThrottle::class, function () {
+            return new PreAuthThrottle();
+        });
+
         // ── Resource controllers ────────────────────────────────────────
 
         $container->register(GroupController::class, function (ContainerInterface $c) {
@@ -141,6 +146,7 @@ class Plugin
                 $c->get(ApiKeyManager::class),
                 $c->get(AuditLogger::class),
                 $c->get(RateLimiter::class),
+                $c->get(PreAuthThrottle::class),
                 $c->get(GroupController::class),
                 $c->get(MeetingController::class),
                 $c->get(PositionController::class),

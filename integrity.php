@@ -202,6 +202,28 @@ add_action('integrity/cleanup_cron', function (): void {
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table names cannot be parameterised with prepare(); esc_sql used as defence-in-depth
     $wpdb->query("DELETE FROM `" . esc_sql($rateLimitTable) . "` WHERE window_start < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 DAY)");
 
+    // Sweep *expired* pre-authentication throttle counters. WordPress
+    // expires a transient on read and wp_scheduled_delete clears stragglers,
+    // but a flood creates per-IP keys that are never read again, and this
+    // plugin is the reason they exist.
+    //
+    // Only rows whose timeout has already passed are removed: a live counter
+    // is a client's current budget, and dropping it mid-window would hand
+    // back a free allowance once a day. Both halves of each expired pair go,
+    // matched on the timeout row so the value row cannot outlive it.
+    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name from $wpdb->options; LIKE pattern built with esc_like()
+    $expiredKeys = $wpdb->get_col($wpdb->prepare(
+        "SELECT option_name FROM `" . esc_sql($wpdb->options) . "`
+         WHERE option_name LIKE %s AND option_value < %d",
+        $wpdb->esc_like('_transient_timeout_integrity_preauth_') . '%',
+        time()
+    ));
+
+    foreach ((array) $expiredKeys as $timeoutKey) {
+        // '_transient_timeout_<name>' → '<name>'
+        delete_transient(substr((string) $timeoutKey, strlen('_transient_timeout_')));
+    }
+
     // Clean old audit logs based on retention setting
     $retentionDays = (int) get_option('integrity_audit_log_retention_days', 90);
     $auditTable = $wpdb->prefix . 'integrity_audit_log';

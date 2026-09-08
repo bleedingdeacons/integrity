@@ -15,6 +15,7 @@ use Integrity\Api\Controllers\MeetingController;
 use Integrity\Api\Controllers\MemberController;
 use Integrity\Api\Controllers\PositionController;
 use Integrity\Auth\ApiKeyManager;
+use Integrity\Auth\PreAuthThrottle;
 use Integrity\Auth\RateLimiter;
 use Integrity\Auth\AuditLogger;
 use Integrity\Logger\HasLogger;
@@ -46,6 +47,7 @@ class RestController
     private ApiKeyManager $apiKeyManager;
     private AuditLogger $auditLogger;
     private RateLimiter $rateLimiter;
+    private PreAuthThrottle $preAuthThrottle;
 
     // Resource controllers
     private GroupController $groupController;
@@ -68,6 +70,7 @@ class RestController
         ApiKeyManager $apiKeyManager,
         AuditLogger $auditLogger,
         RateLimiter $rateLimiter,
+        PreAuthThrottle $preAuthThrottle,
         GroupController $groupController,
         MeetingController $meetingController,
         PositionController $positionController,
@@ -77,6 +80,7 @@ class RestController
         $this->apiKeyManager = $apiKeyManager;
         $this->auditLogger = $auditLogger;
         $this->rateLimiter = $rateLimiter;
+        $this->preAuthThrottle = $preAuthThrottle;
         $this->groupController = $groupController;
         $this->meetingController = $meetingController;
         $this->positionController = $positionController;
@@ -321,8 +325,38 @@ class RestController
 
         self::logDebug('Auth check started', $baseContext);
 
+        // Refuse a client that has already spent its pre-authentication
+        // budget. This sits ahead of every other rejection path on purpose.
+        //
+        // The per-key RateLimiter further down cannot cover any of them: it
+        // keys on an id that only a *successful* validation produces, so
+        // until this existed a caller with no credential had no limit at
+        // all. Two costs were unbounded as a result — validateKey() runs a
+        // deliberately fixed eight Argon2id verifies at 64 MiB each, and
+        // every rejection writes a row to the audit table.
+        //
+        // Placing the check first bounds both, for a bad key, a missing key
+        // and a plain-HTTP request alike. Nothing is logged to the audit
+        // table on this path: continuing to write a row per refusal would
+        // leave the table fillable even once the CPU cost is capped. The
+        // attempts that established the block are all logged below.
+        if ($this->preAuthThrottle->isBlocked($clientIp)) {
+            $retryAfter = $this->preAuthThrottle->retryAfter();
+            self::logNotice('Auth rejected: pre-authentication attempt limit exceeded', $baseContext + [
+                    'retry_after' => $retryAfter,
+                ]);
+            $this->attachRetryAfterFilter($retryAfter);
+
+            return new WP_Error(
+                'too_many_attempts',
+                'Too many failed authentication attempts. Try again later.',
+                ['status' => 429]
+            );
+        }
+
         // Require HTTPS in production
         if (get_option('integrity_require_https', true) && !is_ssl() && !(defined('WP_DEBUG') && WP_DEBUG)) {
+            $this->preAuthThrottle->penalise($clientIp);
             self::logWarning('Auth rejected: HTTPS required but request was not secure', $baseContext);
             $this->logFailedRequest($request, 403, $startTime);
             return new WP_Error(
@@ -340,6 +374,7 @@ class RestController
                     'has_authorization_header' => $request->get_header('Authorization') !== null,
                     'has_x_api_key_header'     => $request->get_header('X-API-Key') !== null,
                 ]);
+            $this->preAuthThrottle->penalise($clientIp);
             $this->logFailedRequest($request, 401, $startTime);
             return new WP_Error(
                 'missing_api_key',
@@ -358,6 +393,10 @@ class RestController
         $keyData = $this->apiKeyManager->validateKey($apiKey, $clientIp);
 
         if (!$keyData) {
+            // Charge the failure before returning, so a caller working
+            // through candidate keys exhausts the budget rather than the
+            // server's CPU.
+            $this->preAuthThrottle->penalise($clientIp);
             self::logWarning('Auth rejected: API key invalid, expired, or IP not allowlisted', $baseContext);
             $this->logFailedRequest($request, 401, $startTime);
             return new WP_Error(
@@ -459,6 +498,36 @@ class RestController
             // Self-remove so this closure never fires again. Guarded the same
             // way as the removal above: if the property is already null there
             // is nothing registered to remove.
+            if ($this->rateLimitFilter !== null) {
+                remove_filter('rest_post_dispatch', $this->rateLimitFilter);
+            }
+            $this->rateLimitFilter = null;
+
+            return $result;
+        };
+
+        add_filter('rest_post_dispatch', $this->rateLimitFilter);
+    }
+
+    /**
+     * Attach a Retry-After header to a pre-authentication refusal.
+     *
+     * Shares $this->rateLimitFilter with attachRateLimitFilter() rather than
+     * adding a second slot: a pre-auth refusal returns immediately, so the
+     * two can never both be registered in one request, and the one-shot
+     * removal bookkeeping stays in a single place.
+     *
+     * @param int $retryAfter Seconds until the throttle window closes
+     */
+    private function attachRetryAfterFilter(int $retryAfter): void
+    {
+        if ($this->rateLimitFilter !== null) {
+            remove_filter('rest_post_dispatch', $this->rateLimitFilter);
+        }
+
+        $this->rateLimitFilter = function (WP_REST_Response $result) use ($retryAfter): WP_REST_Response {
+            $result->header('Retry-After', (string) $retryAfter);
+
             if ($this->rateLimitFilter !== null) {
                 remove_filter('rest_post_dispatch', $this->rateLimitFilter);
             }
