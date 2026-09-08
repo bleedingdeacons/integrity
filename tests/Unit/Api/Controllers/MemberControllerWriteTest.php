@@ -19,6 +19,7 @@ use Unity\Members\Interfaces\Member;
 use Unity\Members\Interfaces\MemberFactory;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Members\Interfaces\MemberRevisor;
+use Unity\Members\PreferredContact;
 use Unity\Positions\Interfaces\PositionRepository;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicy;
@@ -100,7 +101,9 @@ class MemberControllerWriteTest extends TestCase
     {
         $d = [
             'getId' => 1, 'getAnonymousName' => 'Anon', 'getPersonalEmail' => 'jane@example.com',
-            'getMobileNumber' => '07700 900000', 'showAnonymousName' => true, 'showMemberProfile' => false,
+            'getMobileNumber' => '07700 900000', 'getLandlineNumber' => '0117 496 0000',
+            'getPreferredContact' => PreferredContact::Mobile,
+            'showAnonymousName' => true, 'showMemberProfile' => false,
             'getAnonymousProfile' => '', 'getHomeGroup' => 0, 'isGSR' => false, 'getMeetingPO' => null,
             'getIntergroupPosition' => 0, 'getIntergroupPositionRotation' => '', 'isGdprAccepted' => false,
             'getGdprAcceptedAt' => '', 'getGdprAcceptanceVersion' => '', 'getGdprAcceptanceMethod' => '',
@@ -171,6 +174,170 @@ class MemberControllerWriteTest extends TestCase
         $this->memberRepo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));
         $r = $this->controller->updateMember($this->request());
         $this->assertSame(500, $r->get_status());
+    }
+
+    // ─── landline and preferred contact ──────────────────────────────
+
+    /**
+     * Capture the arguments the controller hands to MemberRevisor::revise().
+     *
+     * @param mixed $captured Filled in by reference with the positional args
+     *                        after $base.
+     */
+    private function captureRevisedArgs(&$captured): void
+    {
+        $this->revisor->shouldReceive('revise')->andReturnUsing(
+            function (Member $base, ...$args) use (&$captured): Member {
+                $captured = $args;
+                return $base;
+            }
+        );
+    }
+
+    /** A key without members:clear, so masked values are what it saw. */
+    private function maskedKeyData(): array
+    {
+        return ['api_key_id' => 1, 'permissions' => ['members:write']];
+    }
+
+    /**
+     * The landline goes through the same round-trip guard as the mobile: a
+     * client that read a masked value and posted the whole record back must
+     * not overwrite the real number with the mask.
+     *
+     * @test
+     */
+    public function update_ignores_a_landline_submitted_in_its_masked_form(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+
+        $captured = null;
+        $this->captureRevisedArgs($captured);
+
+        $r = $this->controller->updateMember($this->request([
+            'landline_number' => '******0000',
+            '_integrity_key_data' => $this->maskedKeyData(),
+        ]));
+
+        $this->assertSame(200, $r->get_status());
+        // The stored value, not the mask, is what was handed to revise().
+        $this->assertContains('0117 496 0000', $captured);
+        $this->assertNotContains('******0000', $captured);
+    }
+
+    /**
+     * A key holding members:clear both reads and writes in the clear, so the
+     * guard above does not apply to it — the same exception the personal
+     * email has always had.
+     *
+     * @test
+     */
+    public function a_clear_key_may_write_a_landline_that_looks_masked(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+
+        $captured = null;
+        $this->captureRevisedArgs($captured);
+
+        $this->controller->updateMember($this->request(['landline_number' => '******0000']));
+
+        $this->assertContains('******0000', $captured);
+    }
+
+    /** @test */
+    public function update_accepts_a_real_landline(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+
+        $captured = null;
+        $this->captureRevisedArgs($captured);
+
+        $r = $this->controller->updateMember($this->request(['landline_number' => '0117 496 1111']));
+
+        $this->assertSame(200, $r->get_status());
+        $this->assertContains('0117 496 1111', $captured);
+    }
+
+    /**
+     * Not named in the request means "leave it alone", so revise() is handed
+     * null and Unity carries the stored preference over.
+     *
+     * @test
+     */
+    public function update_leaves_the_preferred_contact_alone_when_unnamed(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+
+        $captured = null;
+        $this->captureRevisedArgs($captured);
+
+        $this->controller->updateMember($this->request(['anonymous_name' => 'New Name']));
+
+        $this->assertNotContains(PreferredContact::Mobile, $captured);
+        $this->assertNotContains(PreferredContact::Landline, $captured);
+    }
+
+    /** @test */
+    public function update_passes_a_named_preferred_contact_through(): void
+    {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+
+        $captured = null;
+        $this->captureRevisedArgs($captured);
+
+        $this->controller->updateMember($this->request(['preferred_contact' => 'Landline']));
+
+        $this->assertContains(PreferredContact::Landline, $captured);
+    }
+
+    /**
+     * The schema rejects anything that is not one of the two case values, so
+     * a client sending 'landline' is told so rather than silently given
+     * Mobile.
+     *
+     * @test
+     * @dataProvider preferredContactValues
+     */
+    public function the_preferred_contact_schema_accepts_only_the_two_case_values(
+        mixed $value,
+        bool $expected
+    ): void {
+        foreach (['getUpdateMemberArgs', 'getCreateMemberArgs'] as $method) {
+            $validate = $this->controller->{$method}()['preferred_contact']['validate_callback'];
+
+            $this->assertSame($expected, (bool) $validate($value), $method . ' / ' . var_export($value, true));
+        }
+    }
+
+    /** @return array<string, array{0: mixed, 1: bool}> */
+    public static function preferredContactValues(): array
+    {
+        return [
+            'Mobile'        => ['Mobile', true],
+            'Landline'      => ['Landline', true],
+            'wrong case'    => ['landline', false],
+            'renamed'       => ['Home Phone', false],
+            'empty'         => ['', false],
+            'not a string'  => [42, false],
+        ];
+    }
+
+    /** @test */
+    public function the_landline_schema_matches_the_mobile_schema(): void
+    {
+        foreach (['getUpdateMemberArgs', 'getCreateMemberArgs'] as $method) {
+            $validate = $this->controller->{$method}()['landline_number']['validate_callback'];
+
+            $this->assertTrue($validate('0117 496 0000'), $method);
+            $this->assertTrue($validate(''), $method);
+            $this->assertFalse($validate(str_repeat('9', 51)), $method);
+            $this->assertFalse($validate(12345), $method);
+        }
     }
 
     // ─── createMember ────────────────────────────────────────────────
