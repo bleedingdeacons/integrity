@@ -354,8 +354,9 @@ class RestController
             );
         }
 
-        // Require HTTPS in production
-        if (get_option('integrity_require_https', true) && !is_ssl() && !(defined('WP_DEBUG') && WP_DEBUG)) {
+        // Require HTTPS in production. The escape hatch is a dedicated
+        // constant, deliberately not WP_DEBUG — see allowsInsecureTransport().
+        if (get_option('integrity_require_https', true) && !is_ssl() && !self::allowsInsecureTransport()) {
             $this->preAuthThrottle->penalise($clientIp);
             self::logWarning('Auth rejected: HTTPS required but request was not secure', $baseContext);
             $this->logFailedRequest($request, 403, $startTime);
@@ -469,6 +470,34 @@ class RestController
             ]);
 
         return true;
+    }
+
+    /**
+     * Whether this install permits API traffic over plain HTTP.
+     *
+     * <b>Why this is a constant of its own.</b> The condition here used to be
+     * `defined('WP_DEBUG') && WP_DEBUG`, which meant a debugging flag switched
+     * off a transport-security control. WP_DEBUG is routinely left on for a
+     * staging site and not rarely on a live one while something is being
+     * chased, and on any such install API keys travelled over plain HTTP with
+     * nothing in the admin saying so. The keys are long-lived and
+     * permission-bearing, so that is not a debugging concern.
+     *
+     * INTEGRITY_ALLOW_INSECURE_TRANSPORT makes weakening the control a
+     * deliberate edit to wp-config.php rather than a side effect of turning
+     * debugging on. It exists to be set on a laptop and nowhere else. Reach
+     * and Fellowship carry the same constant for the same reason.
+     *
+     * <b>Why not the admin setting.</b> `integrity_require_https` already
+     * turns the check off from the settings screen, and that stays the
+     * supported way for an administrator to make the decision on purpose.
+     * This is the local-development hatch, kept off the screen so nobody
+     * weakens transport security while clicking through options trying to
+     * make a request work.
+     */
+    private static function allowsInsecureTransport(): bool
+    {
+        return defined('INTEGRITY_ALLOW_INSECURE_TRANSPORT') && INTEGRITY_ALLOW_INSECURE_TRANSPORT;
     }
 
     /**

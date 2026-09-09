@@ -161,6 +161,95 @@ class RestControllerTest extends TestCase
         $this->assertEquals('invalid_api_key', $result->get_error_code());
     }
 
+    // ── Auth: transport ────────────────────────────────────────────────
+
+    /**
+     * @test
+     */
+    public function checkPermission_refuses_a_plain_http_request(): void
+    {
+        $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]);
+
+        WpState::$options['integrity_require_https'] = true;
+        WpState::$isSsl = false;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+        $this->auditLogger->shouldReceive('log')->once();
+        $this->apiKeyManager->shouldNotReceive('validateKey');
+
+        $result = $this->controller->checkPermission($request);
+
+        $this->assertInstanceOf('WP_Error', $result);
+        $this->assertEquals('https_required', $result->get_error_code());
+    }
+
+    /**
+     * The finding this replaced: `defined('WP_DEBUG') && WP_DEBUG` used to be
+     * part of the condition, so turning debugging on switched off a transport
+     * security control — on a staging box as a matter of course, and on a live
+     * one whenever something was being chased.
+     *
+     * In its own process because define() is permanent: setting WP_DEBUG here
+     * would leak into every test that ran afterwards.
+     *
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function wp_debug_no_longer_switches_off_the_https_requirement(): void
+    {
+        define('WP_DEBUG', true);
+
+        $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]);
+
+        WpState::$options['integrity_require_https'] = true;
+        WpState::$isSsl = false;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+        $this->auditLogger->shouldReceive('log')->once();
+        $this->apiKeyManager->shouldNotReceive('validateKey');
+
+        $result = $this->controller->checkPermission($request);
+
+        $this->assertInstanceOf('WP_Error', $result);
+        $this->assertEquals(
+            'https_required',
+            $result->get_error_code(),
+            'A debugging flag must not weaken transport security.'
+        );
+    }
+
+    /**
+     * The replacement hatch, for a laptop and nowhere else.
+     *
+     * Separate process for the same reason as above.
+     *
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function the_dedicated_constant_allows_plain_http(): void
+    {
+        define('INTEGRITY_ALLOW_INSECURE_TRANSPORT', true);
+
+        $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]);
+
+        WpState::$options['integrity_require_https'] = true;
+        WpState::$isSsl = false;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+        $this->auditLogger->shouldReceive('log')->once();
+
+        // Past the transport guard, the request goes on to fail authentication
+        // instead — which is the proof it got past it.
+        $this->apiKeyManager->shouldReceive('validateKey')->once()->andReturn(null);
+
+        $result = $this->controller->checkPermission($request);
+
+        $this->assertInstanceOf('WP_Error', $result);
+        $this->assertEquals('invalid_api_key', $result->get_error_code());
+    }
+
     // ── Auth: pre-authentication throttle ──────────────────────────────
 
     /**
