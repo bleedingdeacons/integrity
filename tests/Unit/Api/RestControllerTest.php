@@ -161,6 +161,94 @@ class RestControllerTest extends TestCase
         $this->assertEquals('invalid_api_key', $result->get_error_code());
     }
 
+    // ── Auth: expansion scopes ─────────────────────────────────────────
+
+    /**
+     * @test
+     */
+    public function expand_meetings_is_refused_on_a_groups_only_key(): void
+    {
+        // The finding: permissions keyed on the path alone, so a key issued
+        // with groups:read and deliberately without meetings:read could read
+        // meetings through /groups?expand=meetings.
+        $request = $this->createMockRequest(
+            ['expand' => 'meetings', '_route' => '/integrity/v1/groups'],
+            ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]
+        );
+
+        $result = $this->authorise($request, ['groups:read']);
+
+        $this->assertInstanceOf('WP_Error', $result);
+        $this->assertEquals('insufficient_permissions', $result->get_error_code());
+        $this->assertStringContainsString('meetings:read', $result->get_error_message());
+    }
+
+    /**
+     * @test
+     */
+    public function expand_meetings_is_allowed_when_the_key_holds_both_scopes(): void
+    {
+        $request = $this->createMockRequest(
+            ['expand' => 'meetings', '_route' => '/integrity/v1/groups'],
+            ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]
+        );
+
+        $this->assertTrue($this->authorise($request, ['groups:read', 'meetings:read']));
+    }
+
+    /**
+     * @test
+     */
+    public function groups_without_expand_still_needs_only_the_groups_scope(): void
+    {
+        // The fix must not tighten the ordinary case.
+        $request = $this->createMockRequest(
+            ['_route' => '/integrity/v1/groups'],
+            ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]
+        );
+
+        $this->assertTrue($this->authorise($request, ['groups:read']));
+    }
+
+    /**
+     * @test
+     */
+    public function a_wildcard_key_still_reaches_an_expansion(): void
+    {
+        $request = $this->createMockRequest(
+            ['expand' => 'meetings', '_route' => '/integrity/v1/groups'],
+            ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]
+        );
+
+        $this->assertTrue($this->authorise($request, ['*']));
+    }
+
+    /**
+     * Run checkPermission() for a key holding $permissions, with the
+     * throttle and rate limiter out of the way.
+     *
+     * @param array<int, string> $permissions
+     * @return true|\WP_Error
+     */
+    private function authorise(object $request, array $permissions)
+    {
+        WpState::$options['integrity_require_https'] = false;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+        $this->auditLogger->shouldReceive('log')->zeroOrMoreTimes();
+
+        $keyData = $this->createMockApiKeyData([
+            'permissions' => $permissions,
+            'rate_limit'  => 100,
+        ]);
+        $this->apiKeyManager->shouldReceive('validateKey')->andReturn($keyData);
+        $this->rateLimiter->shouldReceive('checkAndIncrement')
+            ->andReturn(['allowed' => true, 'remaining' => 99, 'reset' => time() + 3600]);
+        $this->rateLimiter->shouldReceive('getHeaders')->andReturn([]);
+
+        return $this->controller->checkPermission($request);
+    }
+
     // ── Auth: transport ────────────────────────────────────────────────
 
     /**

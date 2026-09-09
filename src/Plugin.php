@@ -16,6 +16,7 @@ use Integrity\Api\Controllers\MeetingController;
 use Integrity\Api\Controllers\MemberController;
 use Integrity\Api\Controllers\PositionController;
 use Integrity\Api\RestController;
+use Integrity\Api\ValidationDiagnostic;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\AuditLogger;
 use Integrity\Auth\PreAuthThrottle;
@@ -66,6 +67,8 @@ class Plugin
         // plugin was somehow never initialised.
         add_action('rest_api_init', function () {
             self::getContainer()->get(RestController::class)->register();
+            // Diagnostic only; hooks rest_request_before_callbacks.
+            self::getContainer()->get(ValidationDiagnostic::class)->register();
         });
 
         // Initialize admin
@@ -140,6 +143,10 @@ class Plugin
         });
 
         // ── REST Controller (router) ────────────────────────────────────
+
+        $container->register(ValidationDiagnostic::class, function (ContainerInterface $c) {
+            return new ValidationDiagnostic($c->get(AuditLogger::class));
+        });
 
         $container->register(RestController::class, function (ContainerInterface $c) {
             return new RestController(

@@ -102,6 +102,23 @@ class AuditLogger
     }
 
     /**
+     * Redact sensitive values from a parameter array for logging.
+     *
+     * The public face of {@see sanitizeParams()}, for callers outside this
+     * class that need the same treatment before writing parameters anywhere
+     * — the REST validation diagnostic in integrity.php is one. Exposed as
+     * its own method rather than by widening sanitizeParams() so the
+     * internal recursion stays an implementation detail.
+     *
+     * @param array<string, mixed> $params The parameters to redact
+     * @return array<string, mixed> Redacted parameters
+     */
+    public function redact(array $params): array
+    {
+        return $this->sanitizeParams($params);
+    }
+
+    /**
      * Sanitize request parameters to remove sensitive data
      *
      * @param array<string, mixed> $params The parameters to sanitize
@@ -110,8 +127,20 @@ class AuditLogger
     private function sanitizeParams(array $params): array
     {
         $sensitiveKeys = [
+            // Credentials.
             'password', 'secret', 'token', 'key', 'api_key',
-            'auth', 'credential', 'private', 'ssn', 'credit_card'
+            'auth', 'credential', 'private', 'ssn', 'credit_card',
+            // Personal data. These are the fields Scrutiny exists to
+            // obscure, and the list did not know about them: a 401, 403 or
+            // 429 on /members/create or /members/{id}/update writes
+            // $request->get_params() wholesale, so a real member's address
+            // and number sat in request_params for the whole 90-day
+            // retention window. A rate-limited integration is the everyday
+            // way to reach that, not an attack.
+            //
+            // Substrings, so 'email' covers personal_email and
+            // email_address, and 'phone' covers telephone.
+            'email', 'mobile', 'telephone', 'landline', 'phone',
         ];
 
         $sanitized = [];
