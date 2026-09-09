@@ -3,8 +3,8 @@ Contributors: thebleedingdeacons
 Tags: api, rest, authentication, security, unity
 Requires at least: 6.0
 Tested up to: 6.9
-Stable tag: 1.23.2
-Build date: 2026/09/09 02:02:40
+Stable tag: 1.23.3
+Build date: 2026/09/09 02:35:15
 Requires PHP: 8.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
