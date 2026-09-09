@@ -394,4 +394,82 @@ class AuditLoggerTest extends TestCase
 
         parent::tearDown();
     }
+
+    // ── Personal data redaction (F6) ───────────────────────────────────
+
+    /**
+     * @test
+     * @dataProvider personalDataKeys
+     */
+    public function redact_removes_personal_data(string $key): void
+    {
+        // The list knew about credentials but not about the two fields
+        // Scrutiny exists to obscure. logFailedRequest() passes
+        // $request->get_params() wholesale, so a 401/403/429 on
+        // /members/create wrote a real member's address and number into
+        // request_params for the whole retention window.
+        $out = (new AuditLogger())->redact([$key => 'sensitive-value']);
+
+        $this->assertSame('[REDACTED]', $out[$key], $key . ' must not be logged in the clear');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function personalDataKeys(): array
+    {
+        return [
+            'personal_email' => ['personal_email'],
+            'email'          => ['email'],
+            'email_address'  => ['email_address'],
+            'mobile_number'  => ['mobile_number'],
+            'mobile'         => ['mobile'],
+            'telephone'      => ['telephone'],
+            'landline'       => ['landline'],
+            'phone'          => ['phone'],
+            'home_phone'     => ['home_phone'],
+        ];
+    }
+
+    /**
+     * @test
+     */
+    public function redact_leaves_ordinary_parameters_alone(): void
+    {
+        $out = (new AuditLogger())->redact([
+            'page'     => 2,
+            'per_page' => 50,
+            'expand'   => 'meetings',
+            'title'    => 'Tuesday Group',
+        ]);
+
+        $this->assertSame(
+            ['page' => 2, 'per_page' => 50, 'expand' => 'meetings', 'title' => 'Tuesday Group'],
+            $out,
+            'Redaction must not eat the parameters that make a log entry useful.'
+        );
+    }
+
+    /**
+     * @test
+     */
+    public function redact_reaches_into_nested_parameters(): void
+    {
+        $out = (new AuditLogger())->redact([
+            'member' => ['name' => 'A Person', 'personal_email' => 'a@example.com'],
+        ]);
+
+        $this->assertSame('A Person', $out['member']['name']);
+        $this->assertSame('[REDACTED]', $out['member']['personal_email']);
+    }
+
+    /**
+     * @test
+     */
+    public function redact_still_removes_credentials(): void
+    {
+        $out = (new AuditLogger())->redact(['password' => 'p', 'api_key' => 'k', 'token' => 't']);
+
+        $this->assertSame(['password' => '[REDACTED]', 'api_key' => '[REDACTED]', 'token' => '[REDACTED]'], $out);
+    }
 }

@@ -44,6 +44,18 @@ class RestController
 
     private const NAMESPACE = 'integrity/v1';
 
+    /**
+     * The scope each `expand` value reaches, keyed by the value itself.
+     *
+     * An allow-list rather than a naming convention: an expansion whose name
+     * does not map to a scope contributes no requirement, so adding one here
+     * is what grants it reach. A new expansion that forgets this entry is
+     * simply unauthorised by its own name, never silently free.
+     */
+    private const EXPANSION_SCOPES = [
+        'meetings' => 'meetings:read',
+    ];
+
     private ApiKeyManager $apiKeyManager;
     private AuditLogger $auditLogger;
     private RateLimiter $rateLimiter;
@@ -438,10 +450,22 @@ class RestController
             return $response;
         }
 
-        // Check endpoint-specific permissions
-        $requiredPermission = $this->getRequiredPermission($route);
+        // Check endpoint-specific permissions. Every scope the request
+        // actually reaches, not just the one its path implies — see
+        // expansionPermissions().
+        $requiredPermissions = array_merge(
+            array_filter([$this->getRequiredPermission($route)]),
+            $this->expansionPermissions($request)
+        );
 
-        if ($requiredPermission && !in_array($requiredPermission, $keyData['permissions'], true) && !in_array('*', $keyData['permissions'], true)) {
+        foreach ($requiredPermissions as $requiredPermission) {
+            if (
+                in_array($requiredPermission, $keyData['permissions'], true)
+                || in_array('*', $keyData['permissions'], true)
+            ) {
+                continue;
+            }
+
             self::logWarning('Auth rejected: insufficient permissions for endpoint', $baseContext + [
                     'required_permission' => $requiredPermission,
                     'granted_permissions' => $keyData['permissions'],
@@ -453,6 +477,8 @@ class RestController
                 ['status' => 403]
             );
         }
+
+        $requiredPermission = $requiredPermissions[0] ?? null;
 
         // Store key data for use in controller callbacks (cast id to int for type safety)
         $keyData['api_key_id'] = $apiKeyId;
@@ -638,6 +664,40 @@ class RestController
         }
 
         return null;
+    }
+
+    /**
+     * Scopes required by this request's `expand` parameter.
+     *
+     * getRequiredPermission() keys entirely on the route path, and the query
+     * string was never consulted — so `/groups?expand=meetings` was
+     * authorised as `groups:read` while transformGroup() attached full
+     * meeting records to the response. A key issued with `groups:read` and
+     * deliberately *without* `meetings:read` could read meetings anyway.
+     *
+     * Small blast radius, both being read scopes over data the intergroup
+     * publishes. It is here because a permission model that does not hold
+     * where it claims to is worth less than one that says less.
+     *
+     * @return array<int, string> Scopes to require in addition to the route's own
+     */
+    private function expansionPermissions(WP_REST_Request $request): array
+    {
+        $expand = $request->get_param('expand');
+
+        if (!is_string($expand) || $expand === '') {
+            return [];
+        }
+
+        $scopes = [];
+        foreach (array_filter(array_map('trim', explode(',', $expand))) as $expansion) {
+            $scope = self::EXPANSION_SCOPES[$expansion] ?? null;
+            if ($scope !== null) {
+                $scopes[] = $scope;
+            }
+        }
+
+        return array_values(array_unique($scopes));
     }
 
     /**
