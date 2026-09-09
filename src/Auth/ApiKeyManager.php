@@ -19,6 +19,12 @@ class ApiKeyManager
     private const KEY_LENGTH = 32;
     private const PREFIX_LENGTH = 8;
 
+    /** Literal prefix every issued key carries. */
+    private const KEY_PREFIX = 'int_';
+
+    /** Total length of an issued key: 'int_' plus KEY_LENGTH bytes as hex. */
+    private const KEY_STRING_LENGTH = 4 + (self::KEY_LENGTH * 2);
+
     /**
      * Generate a new API key
      *
@@ -27,7 +33,7 @@ class ApiKeyManager
     public function generateKey(): array
     {
         $keyBytes = random_bytes(self::KEY_LENGTH);
-        $key = 'int_' . bin2hex($keyBytes);
+        $key = self::KEY_PREFIX . bin2hex($keyBytes);
 
         return [
             'key' => $key,
@@ -86,6 +92,28 @@ class ApiKeyManager
             $hash = $this->hashKey('timing-equalisation-placeholder');
         }
         return $hash;
+    }
+
+    /**
+     * Cheap structural check for the shape generateKey() emits.
+     *
+     * Every issued key is 'int_' followed by bin2hex(32 random bytes), so a
+     * string that is not exactly that cannot match any stored hash. Checking
+     * it costs a strlen and a regex, and lets validateKey() refuse junk
+     * before it touches the database or spends any Argon2id time.
+     *
+     * This leaks nothing an attacker does not already have: the key format is
+     * public, visible to any legitimate holder. The oracle that mattered —
+     * which *valid-format* prefixes exist — is untouched, because every
+     * well-formed candidate still runs the full fixed-cost verify loop.
+     *
+     * @param string $key The presented API key
+     * @return bool Whether the string could be an issued key
+     */
+    public function looksLikeKey(string $key): bool
+    {
+        return strlen($key) === self::KEY_STRING_LENGTH
+            && preg_match('/\A' . self::KEY_PREFIX . '[0-9a-f]{' . (self::KEY_LENGTH * 2) . '}\z/', $key) === 1;
     }
 
     /**
@@ -166,6 +194,14 @@ class ApiKeyManager
     public function validateKey(string $key, ?string $clientIp = null): ?array
     {
         global $wpdb;
+
+        // Refuse anything that is not shaped like an issued key before
+        // spending a query or any Argon2id time on it. See looksLikeKey():
+        // this is free, and it is the difference between a junk credential
+        // costing nine 64 MiB hashes and costing nothing.
+        if (!$this->looksLikeKey($key)) {
+            return null;
+        }
 
         $prefix = substr($key, 0, self::PREFIX_LENGTH);
         $tableName = $wpdb->prefix . 'integrity_api_keys';

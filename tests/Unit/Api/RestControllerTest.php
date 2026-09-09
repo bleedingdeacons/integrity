@@ -15,6 +15,7 @@ use Integrity\Api\Controllers\PositionController;
 use Integrity\Api\RestController;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\AuditLogger;
+use Integrity\Auth\PreAuthThrottle;
 use Integrity\Auth\RateLimiter;
 use Integrity\Tests\TestCase;
 use Mockery;
@@ -31,6 +32,7 @@ class RestControllerTest extends TestCase
     private ApiKeyManager|Mockery\MockInterface $apiKeyManager;
     private AuditLogger|Mockery\MockInterface $auditLogger;
     private RateLimiter|Mockery\MockInterface $rateLimiter;
+    private PreAuthThrottle|Mockery\MockInterface $preAuthThrottle;
     private GroupController|Mockery\MockInterface $groupController;
     private MeetingController|Mockery\MockInterface $meetingController;
     private PositionController|Mockery\MockInterface $positionController;
@@ -45,6 +47,14 @@ class RestControllerTest extends TestCase
         $this->apiKeyManager = Mockery::mock(ApiKeyManager::class);
         $this->auditLogger = Mockery::mock(AuditLogger::class);
         $this->rateLimiter = Mockery::mock(RateLimiter::class);
+        $this->preAuthThrottle = Mockery::mock(PreAuthThrottle::class);
+        // Default to "not throttled" so the existing auth-path tests exercise
+        // the same flow they were written for. The throttle's own behaviour
+        // is covered in PreAuthThrottleTest; the tests below that care about
+        // it override these defaults.
+        $this->preAuthThrottle->shouldReceive('isBlocked')->andReturn(false)->byDefault();
+        $this->preAuthThrottle->shouldReceive('penalise')->andReturnNull()->byDefault();
+        $this->preAuthThrottle->shouldReceive('retryAfter')->andReturn(900)->byDefault();
         $this->groupController = Mockery::mock(GroupController::class);
         $this->meetingController = Mockery::mock(MeetingController::class);
         $this->positionController = Mockery::mock(PositionController::class);
@@ -55,6 +65,7 @@ class RestControllerTest extends TestCase
             $this->apiKeyManager,
             $this->auditLogger,
             $this->rateLimiter,
+            $this->preAuthThrottle,
             $this->groupController,
             $this->meetingController,
             $this->positionController,
@@ -148,6 +159,137 @@ class RestControllerTest extends TestCase
 
         $this->assertInstanceOf('WP_Error', $result);
         $this->assertEquals('invalid_api_key', $result->get_error_code());
+    }
+
+    // ── Auth: pre-authentication throttle ──────────────────────────────
+
+    /**
+     * @test
+     */
+    public function checkPermission_refuses_a_throttled_client_before_validating_the_key(): void
+    {
+        $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]);
+
+        WpState::$options['integrity_require_https'] = false;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+        $this->preAuthThrottle->shouldReceive('isBlocked')->with('203.0.113.7')->andReturn(true);
+        $this->preAuthThrottle->shouldReceive('retryAfter')->andReturn(742);
+
+        // The point of the whole change: validateKey() runs eight Argon2id
+        // verifies, and a throttled caller must never reach it.
+        $this->apiKeyManager->shouldNotReceive('validateKey');
+
+        // Nor may a refusal write an audit row — otherwise a flood can still
+        // fill the audit table once its CPU cost is bounded.
+        $this->auditLogger->shouldNotReceive('log');
+
+        Filters\expectAdded('rest_post_dispatch')
+            ->once()
+            ->with(Mockery::type(Closure::class));
+
+        $result = $this->controller->checkPermission($request);
+
+        $this->assertInstanceOf('WP_Error', $result);
+        $this->assertEquals('too_many_attempts', $result->get_error_code());
+        $this->assertEquals(429, $result->get_error_data()['status']);
+    }
+
+    /**
+     * @test
+     */
+    public function checkPermission_charges_the_throttle_when_a_key_fails_to_validate(): void
+    {
+        $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('b', 64)]);
+
+        WpState::$options['integrity_require_https'] = false;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+        $this->apiKeyManager->shouldReceive('validateKey')->andReturn(null);
+        $this->auditLogger->shouldReceive('log')->once();
+
+        // Without this the budget is never spent and the throttle is inert.
+        $this->preAuthThrottle->shouldReceive('penalise')->once()->with('203.0.113.7');
+
+        $result = $this->controller->checkPermission($request);
+
+        $this->assertInstanceOf('WP_Error', $result);
+        $this->assertEquals('invalid_api_key', $result->get_error_code());
+    }
+
+    /**
+     * @test
+     */
+    public function checkPermission_does_not_charge_the_throttle_for_a_working_key(): void
+    {
+        $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('c', 64)]);
+
+        WpState::$options['integrity_require_https'] = false;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+
+        $keyData = $this->createMockApiKeyData([
+            'permissions' => ['*'],
+            'rate_limit'  => 100,
+        ]);
+        $this->apiKeyManager->shouldReceive('validateKey')->andReturn($keyData);
+        $this->rateLimiter->shouldReceive('checkAndIncrement')
+            ->andReturn(['allowed' => true, 'remaining' => 99, 'reset' => time() + 3600]);
+        $this->rateLimiter->shouldReceive('getHeaders')->andReturn([]);
+
+        // A caller with a working key must not accumulate a failure count.
+        $this->preAuthThrottle->shouldNotReceive('penalise');
+
+        $this->assertTrue($this->controller->checkPermission($request));
+    }
+
+    /**
+     * @test
+     */
+    public function checkPermission_charges_the_throttle_when_no_key_is_presented(): void
+    {
+        $request = $this->createMockRequest([], []);
+
+        WpState::$options['integrity_require_https'] = false;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+        $this->auditLogger->shouldReceive('log')->once();
+
+        // A keyless flood costs no Argon2id but still writes an audit row
+        // each time, so it has to consume the budget like any other failure.
+        $this->preAuthThrottle->shouldReceive('penalise')->once()->with('203.0.113.7');
+
+        $result = $this->controller->checkPermission($request);
+
+        $this->assertInstanceOf('WP_Error', $result);
+        $this->assertEquals('missing_api_key', $result->get_error_code());
+    }
+
+    /**
+     * @test
+     */
+    public function a_throttled_client_is_refused_before_the_https_check(): void
+    {
+        $request = $this->createMockRequest([], []);
+
+        // HTTPS required and this request is not secure: without the throttle
+        // sitting first, this path would write an audit row on every attempt.
+        WpState::$options['integrity_require_https'] = true;
+
+        $this->auditLogger->shouldReceive('getClientIp')->andReturn('203.0.113.7');
+        $this->preAuthThrottle->shouldReceive('isBlocked')->with('203.0.113.7')->andReturn(true);
+        $this->preAuthThrottle->shouldReceive('retryAfter')->andReturn(900);
+
+        $this->auditLogger->shouldNotReceive('log');
+
+        Filters\expectAdded('rest_post_dispatch')
+            ->once()
+            ->with(Mockery::type(Closure::class));
+
+        $result = $this->controller->checkPermission($request);
+
+        $this->assertInstanceOf('WP_Error', $result);
+        $this->assertEquals('too_many_attempts', $result->get_error_code());
     }
 
     // ── Auth: rate limited ─────────────────────────────────────────────

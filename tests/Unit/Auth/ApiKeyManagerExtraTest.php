@@ -137,6 +137,59 @@ class ApiKeyManagerExtraTest extends TestCase
         ], $overrides);
     }
 
+    /**
+     * @test
+     * @dataProvider malformedKeys
+     */
+    public function validate_key_refuses_a_malformed_key_without_touching_the_database(string $key): void
+    {
+        $wpdb = $this->wpdb();
+        // No get_results() expectation: reaching the query at all is the
+        // failure. A malformed key must cost neither a round-trip nor any
+        // Argon2id time.
+        $wpdb->shouldNotReceive('get_results');
+
+        $this->assertNull($this->manager->validateKey($key));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function malformedKeys(): array
+    {
+        return [
+            'empty'            => [''],
+            'wrong prefix'     => ['key_' . str_repeat('a', 64)],
+            'no prefix'        => [str_repeat('a', 68)],
+            'too short'        => ['int_' . str_repeat('a', 63)],
+            'too long'         => ['int_' . str_repeat('a', 65)],
+            'non-hex body'     => ['int_' . str_repeat('z', 64)],
+            'uppercase hex'    => ['int_' . str_repeat('A', 64)],
+            'sql-ish'          => ["int_' OR 1=1 -- " . str_repeat('a', 48)],
+            'newline injected' => ["int_
+" . str_repeat('a', 63)],
+        ];
+    }
+
+    /** @test */
+    public function looks_like_key_accepts_what_generate_key_emits(): void
+    {
+        $generated = $this->manager->generateKey();
+
+        $this->assertTrue($this->manager->looksLikeKey($generated['key']));
+    }
+
+    /** @test */
+    public function a_well_formed_but_unknown_key_still_runs_the_full_verify_loop(): void
+    {
+        // The structural gate must not become a shortcut for well-formed
+        // candidates: that is the timing oracle dummyHash() exists to close.
+        $wpdb = $this->wpdb();
+        $wpdb->shouldReceive('get_results')->once()->andReturn([]);
+
+        $this->assertNull($this->manager->validateKey('int_' . str_repeat('e', 64)));
+    }
+
     /** @test */
     public function validate_key_returns_the_row_on_a_match(): void
     {
