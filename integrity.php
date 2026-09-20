@@ -6,7 +6,7 @@
  * Version: 1.23.3
  * Requires at least: 6.0
  * Requires Plugins: unity, scrutiny
- * Requires PHP: 8.1
+ * Requires PHP: 8.4
  * GitHub Plugin URI: https://github.com/bleedingdeacons/integrity
  * GitHub Branch: main
  * Author: The Bleeding Deacons

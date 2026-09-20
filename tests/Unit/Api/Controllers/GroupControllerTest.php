@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\Test;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
@@ -46,9 +47,7 @@ class GroupControllerTest extends TestCase
         return $method->invoke($this->controller, $group, $expand);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function transformGroup_returns_expected_fields(): void
     {
         $group = Mockery::mock(Group::class);
@@ -79,9 +78,7 @@ class GroupControllerTest extends TestCase
         $this->assertArrayHasKey('updated', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function transformGroup_expands_meetings_when_requested(): void
     {
         $meeting = Mockery::mock(Meeting::class);

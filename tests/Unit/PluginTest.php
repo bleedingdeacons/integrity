@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit;
 
+use PHPUnit\Framework\Attributes\Test;
+use function Brain\Monkey\Filters\expectAdded;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Filters;
 use Closure;
 use Integrity\Admin\SettingsPage;
 use Integrity\Plugin;
@@ -57,9 +58,7 @@ class PluginTest extends TestCase
         parent::tearDown();
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function init_registers_rest_api_init_action(): void
     {
         WpState::$isAdmin = false;
@@ -77,9 +76,7 @@ class PluginTest extends TestCase
         $this->assertSame($this->container, Plugin::getContainer());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function init_registers_admin_hooks_when_is_admin(): void
     {
         WpState::$isAdmin = true;
@@ -97,9 +94,7 @@ class PluginTest extends TestCase
         $this->assertSame($this->container, Plugin::getContainer());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function init_only_initializes_once(): void
     {
         WpState::$isAdmin = false;
@@ -117,16 +112,14 @@ class PluginTest extends TestCase
         $this->assertSame($this->container, Plugin::getContainer());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function addSecurityHeaders_adds_filter(): void
     {
         // add_filter is Brain Monkey's, not something to stub over, so the
         // registration is asserted through its own expectation, verified at
         // teardown. Priority 10 and 3 arguments: rest_pre_serve_request passes
         // $served, $result, $request.
-        Filters\expectAdded('rest_pre_serve_request')
+        expectAdded('rest_pre_serve_request')
             ->once()
             ->with(Mockery::type(Closure::class), 10, 3);
 

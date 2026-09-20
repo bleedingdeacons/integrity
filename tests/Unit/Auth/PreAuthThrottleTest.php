@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
+use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Integrity\Auth\PreAuthThrottle;
 use Integrity\Tests\TestCase;
@@ -27,13 +28,13 @@ class PreAuthThrottleTest extends TestCase
         $this->throttle = new PreAuthThrottle();
     }
 
-    /** @test */
+    #[Test]
     public function a_fresh_client_is_not_blocked(): void
     {
         $this->assertFalse($this->throttle->isBlocked('203.0.113.7'));
     }
 
-    /** @test */
+    #[Test]
     public function isBlocked_is_read_only(): void
     {
         $this->throttle->isBlocked('203.0.113.7');
@@ -45,7 +46,7 @@ class PreAuthThrottleTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function a_client_is_blocked_once_the_budget_is_spent(): void
     {
         $ip = '203.0.113.7';
@@ -60,7 +61,7 @@ class PreAuthThrottleTest extends TestCase
         $this->assertTrue($this->throttle->isBlocked($ip));
     }
 
-    /** @test */
+    #[Test]
     public function the_budget_is_counted_per_client(): void
     {
         for ($i = 0; $i < 20; $i++) {
@@ -74,7 +75,7 @@ class PreAuthThrottleTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_counter_is_scoped_to_a_window(): void
     {
         $ip = '203.0.113.7';
@@ -92,7 +93,7 @@ class PreAuthThrottleTest extends TestCase
         $this->assertMatchesRegularExpression('/^integrity_preauth_[0-9a-f]{32}_\d+$/', $keys[0]);
     }
 
-    /** @test */
+    #[Test]
     public function retryAfter_is_within_the_window(): void
     {
         $retryAfter = $this->throttle->retryAfter();
@@ -101,7 +102,7 @@ class PreAuthThrottleTest extends TestCase
         $this->assertLessThanOrEqual(900, $retryAfter);
     }
 
-    /** @test */
+    #[Test]
     public function the_client_ip_is_not_stored_in_the_clear(): void
     {
         $ip = '203.0.113.7';

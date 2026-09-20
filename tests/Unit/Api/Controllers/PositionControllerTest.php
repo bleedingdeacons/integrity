@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\Attributes\Test;
+use Mockery\MockInterface;
 use Integrity\Api\Controllers\PositionController;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
@@ -14,15 +20,14 @@ use Unity\Positions\Interfaces\PositionRepository;
 
 /**
  * Tests for PositionController's REST handlers.
- *
- * @covers \Integrity\Api\Controllers\PositionController
- * @covers \Integrity\Api\Controllers\ControllerTrait
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
+#[CoversClass(\Integrity\Api\Controllers\PositionController::class)]
+#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
+#[PreserveGlobalState(false)]
+#[RunTestsInSeparateProcesses]
 class PositionControllerTest extends TestCase
 {
-    /** @var PositionRepository&\Mockery\MockInterface */
+    /** @var PositionRepository&MockInterface */
     private $repo;
 
     private PositionController $controller;
@@ -56,7 +61,7 @@ class PositionControllerTest extends TestCase
         ], $params));
     }
 
-    /** @return Position&\Mockery\MockInterface */
+    /** @return Position&MockInterface */
     private function position(int $id = 1, string $name = 'Chair')
     {
         $p = Mockery::mock(Position::class);
@@ -72,9 +77,7 @@ class PositionControllerTest extends TestCase
         return $p;
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_positions_returns_a_paginated_list(): void
     {
         $this->repo->shouldReceive('findAll')->once()->andReturn([$this->position(1), $this->position(2, 'Treasurer')]);
@@ -91,9 +94,7 @@ class PositionControllerTest extends TestCase
         $this->assertSame(2, $data['meta']['total']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_positions_returns_500_on_failure(): void
     {
         $this->repo->shouldReceive('findAll')->andThrow(new \RuntimeException('boom'));
@@ -101,9 +102,7 @@ class PositionControllerTest extends TestCase
         $this->assertSame(500, $this->controller->getPositions($this->request())->get_status());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_position_returns_a_single_position(): void
     {
         $this->repo->shouldReceive('findById')->once()->with(5)->andReturn($this->position(5, 'Sec'));
@@ -114,9 +113,7 @@ class PositionControllerTest extends TestCase
         $this->assertSame('Sec', $response->get_data()['data']['long_name']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_position_returns_404_when_missing(): void
     {
         $this->repo->shouldReceive('findById')->once()->with(9)->andReturn(null);
@@ -124,9 +121,7 @@ class PositionControllerTest extends TestCase
         $this->assertSame(404, $this->controller->getPosition($this->request(['id' => 9]))->get_status());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function batch_get_positions_maps_by_id_and_short_circuits(): void
     {
         $this->assertSame([], $this->controller->batchGetPositions($this->repo, []));

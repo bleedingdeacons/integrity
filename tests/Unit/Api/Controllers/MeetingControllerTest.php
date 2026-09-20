@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\Attributes\Test;
+use Unity\Locations\Interfaces\Location;
+use Mockery\MockInterface;
 use Integrity\Api\Controllers\MeetingController;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
@@ -18,15 +25,14 @@ use Unity\Meetings\Interfaces\MeetingRepository;
  * Unity is not autoloaded in this suite, so its interfaces are Mockery
  * string doubles and Unity\Plugin's static container accessor is an alias
  * mock. Each test runs in its own process so the alias does not leak.
- *
- * @covers \Integrity\Api\Controllers\MeetingController
- * @covers \Integrity\Api\Controllers\ControllerTrait
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
+#[CoversClass(\Integrity\Api\Controllers\MeetingController::class)]
+#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
+#[PreserveGlobalState(false)]
+#[RunTestsInSeparateProcesses]
 class MeetingControllerTest extends TestCase
 {
-    /** @var MeetingRepository&\Mockery\MockInterface */
+    /** @var MeetingRepository&MockInterface */
     private $repo;
 
     private MeetingController $controller;
@@ -63,7 +69,7 @@ class MeetingControllerTest extends TestCase
         ], $params));
     }
 
-    /** @return Meeting&\Mockery\MockInterface */
+    /** @return Meeting&MockInterface */
     private function meeting(int $id = 1, string $name = 'Morning')
     {
         $m = Mockery::mock(Meeting::class);
@@ -87,9 +93,7 @@ class MeetingControllerTest extends TestCase
         return $m;
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_returns_a_paginated_transformed_list(): void
     {
         $this->repo->shouldReceive('findAll')->once()->andReturn([$this->meeting(1), $this->meeting(2, 'Evening')]);
@@ -108,9 +112,7 @@ class MeetingControllerTest extends TestCase
         $this->assertSame(1, $data['meta']['page']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_filters_by_day(): void
     {
         $this->repo->shouldReceive('findByDay')->once()->with(3, Mockery::type('array'))->andReturn([$this->meeting()]);
@@ -122,9 +124,7 @@ class MeetingControllerTest extends TestCase
         $this->assertCount(1, $response->get_data()['data']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_filters_online_meetings(): void
     {
         // findOnline is called twice: once for the page, once for the count.
@@ -136,9 +136,7 @@ class MeetingControllerTest extends TestCase
         $this->assertSame(1, $response->get_data()['meta']['total']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_filters_in_person_meetings(): void
     {
         $this->repo->shouldReceive('findInPerson')->twice()->andReturn([$this->meeting(), $this->meeting(2)]);
@@ -148,9 +146,7 @@ class MeetingControllerTest extends TestCase
         $this->assertSame(2, $response->get_data()['meta']['total']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_returns_500_on_repository_failure(): void
     {
         $this->repo->shouldReceive('findAll')->andThrow(new \RuntimeException('boom'));
@@ -162,9 +158,7 @@ class MeetingControllerTest extends TestCase
         $this->assertSame('internal_error', $response->get_data()['error']['code']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meeting_returns_a_single_meeting(): void
     {
         $this->repo->shouldReceive('findById')->once()->with(5)->andReturn($this->meeting(5, 'Noon'));
@@ -176,9 +170,7 @@ class MeetingControllerTest extends TestCase
         $this->assertSame('Noon', $response->get_data()['data']['name']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meeting_returns_404_when_missing(): void
     {
         $this->repo->shouldReceive('findById')->once()->with(9)->andReturn(null);
@@ -189,9 +181,7 @@ class MeetingControllerTest extends TestCase
         $this->assertSame('not_found', $response->get_data()['error']['code']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function batch_get_meetings_maps_by_id_and_short_circuits_on_empty(): void
     {
         $this->assertSame([], $this->controller->batchGetMeetings($this->repo, []));
@@ -202,12 +192,10 @@ class MeetingControllerTest extends TestCase
         $this->assertSame([3, 4], array_keys($map));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function transform_includes_a_location_when_present(): void
     {
-        $location = Mockery::mock(\Unity\Locations\Interfaces\Location::class);
+        $location = Mockery::mock(Location::class);
         $location->shouldReceive('getId')->andReturn(11);
         $location->shouldReceive('getName')->andReturn('Hall');
         $location->shouldReceive('getAddress')->andReturn('1 St');

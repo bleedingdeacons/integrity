@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Logger;
 
-use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\Test;
+use BleedingDeacons\WpMocks\WpState;
+use function Brain\Monkey\Functions\expect;
+use function Brain\Monkey\Functions\when;
 use Integrity\Logger\HasLogger;
 use Integrity\Tests\TestCase;
 use ReflectionClass;
@@ -22,9 +26,8 @@ use ReflectionClass;
  *
  * The channel is memoised per using-class, so the static cache is reset around
  * each test.
- *
- * @covers \Integrity\Logger\HasLogger
  */
+#[CoversTrait(\Integrity\Logger\HasLogger::class)]
 class HasLoggerTest extends TestCase
 {
     protected function setUp(): void
@@ -39,14 +42,14 @@ class HasLoggerTest extends TestCase
         parent::tearDown();
     }
 
-    /** @test */
+    #[Test]
     public function log_resolves_the_channel_once_and_memoises_it(): void
     {
         $channel = new \Sentinel_Log_Channel();
 
         // logChannel() derives the name from the class basename via
         // sanitize_key(); wp_log() is called once and the result cached.
-        Functions\expect('wp_log')->once()->with('integrityloggerhost')->andReturn($channel);
+        expect('wp_log')->once()->with('integrityloggerhost')->andReturn($channel);
 
         $first  = IntegrityLoggerHost::log();
         $second = IntegrityLoggerHost::log();
@@ -55,11 +58,11 @@ class HasLoggerTest extends TestCase
         $this->assertSame($channel, $second, 'channel must be memoised, not re-resolved');
     }
 
-    /** @test */
+    #[Test]
     public function every_level_forwards_to_the_channel(): void
     {
         $channel = new \Sentinel_Log_Channel();
-        Functions\expect('wp_log')->andReturn($channel);
+        expect('wp_log')->andReturn($channel);
 
         IntegrityLoggerHost::logEmergency('m', ['k' => 'v']);
         IntegrityLoggerHost::logAlert('m');
@@ -76,12 +79,12 @@ class HasLoggerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function every_level_is_a_safe_noop_without_a_channel(): void
     {
         // The logger mu-plugin is not deployed: wp_log() answers with nothing,
         // and every forwarder has to fall through its null-safe call.
-        Functions\when('wp_log')->justReturn(null);
+        when('wp_log')->justReturn(null);
 
         $this->assertNull(IntegrityLoggerHost::log());
 
@@ -94,7 +97,7 @@ class HasLoggerTest extends TestCase
         IntegrityLoggerHost::logInfo('m');
         IntegrityLoggerHost::logDebug('m');
 
-        $this->assertSame([], \BleedingDeacons\WpMocks\WpState::$logs, 'nothing was logged');
+        $this->assertSame([], WpState::$logs, 'nothing was logged');
     }
 
     /**

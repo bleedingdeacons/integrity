@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\Attributes\Test;
+use BleedingDeacons\WpMocks\WpState;
+use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendance;
+use Mockery\MockInterface;
 use Integrity\Api\Controllers\IntergroupMeetingController;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
@@ -16,19 +24,18 @@ use Unity\Members\Interfaces\MemberRepository;
 
 /**
  * Tests for IntergroupMeetingController's read handlers and transform.
- *
- * @covers \Integrity\Api\Controllers\IntergroupMeetingController
- * @covers \Integrity\Api\Controllers\ControllerTrait
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
+#[CoversClass(\Integrity\Api\Controllers\IntergroupMeetingController::class)]
+#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
+#[PreserveGlobalState(false)]
+#[RunTestsInSeparateProcesses]
 class IntergroupMeetingControllerReadTest extends TestCase
 {
-    /** @var IntergroupMeetingRepository&\Mockery\MockInterface */
+    /** @var IntergroupMeetingRepository&MockInterface */
     private $repo;
-    /** @var MemberRepository&\Mockery\MockInterface */
+    /** @var MemberRepository&MockInterface */
     private $memberRepo;
-    /** @var IntergroupMeetingOfficerAttendanceRepository&\Mockery\MockInterface */
+    /** @var IntergroupMeetingOfficerAttendanceRepository&MockInterface */
     private $officerRepo;
 
     private IntergroupMeetingController $controller;
@@ -67,7 +74,7 @@ class IntergroupMeetingControllerReadTest extends TestCase
         ], $params));
     }
 
-    /** @return IntergroupMeeting&\Mockery\MockInterface */
+    /** @return IntergroupMeeting&MockInterface */
     private function meeting(int $id = 1, array $groups = [], array $officers = [])
     {
         $m = Mockery::mock(IntergroupMeeting::class);
@@ -80,9 +87,7 @@ class IntergroupMeetingControllerReadTest extends TestCase
         return $m;
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_returns_a_paginated_list_with_no_attendees(): void
     {
         $this->repo->shouldReceive('findAll')->once()->andReturn([$this->meeting(1)]);
@@ -99,14 +104,12 @@ class IntergroupMeetingControllerReadTest extends TestCase
         $this->assertSame(1, $response->get_data()['meta']['total']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_resolves_group_names_and_officer_records(): void
     {
-        \BleedingDeacons\WpMocks\WpState::addPost(10, ['post_title' => 'Group Ten']);
+        WpState::addPost(10, ['post_title' => 'Group Ten']);
 
-        $officerRecord = Mockery::mock(\Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendance::class);
+        $officerRecord = Mockery::mock(IntergroupMeetingOfficerAttendance::class);
         $officerRecord->shouldReceive('getOfficerId')->andReturn(7);
         $officerRecord->shouldReceive('getOfficerName')->andReturn('Carol C.');
         $officerRecord->shouldReceive('getPositionName')->andReturn('Chair');
@@ -125,9 +128,7 @@ class IntergroupMeetingControllerReadTest extends TestCase
         $this->assertSame('Chair', $data['officers_attending'][0]['position_name']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_applies_date_filters(): void
     {
         $this->repo->shouldReceive('findAll')->once()->andReturn([]);
@@ -142,9 +143,7 @@ class IntergroupMeetingControllerReadTest extends TestCase
         $this->assertSame(0, $response->get_data()['meta']['total']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meetings_returns_500_on_failure(): void
     {
         $this->repo->shouldReceive('findAll')->andThrow(new \RuntimeException('boom'));
@@ -152,9 +151,7 @@ class IntergroupMeetingControllerReadTest extends TestCase
         $this->assertSame(500, $this->controller->getIntergroupMeetings($this->request())->get_status());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meeting_returns_a_single_meeting(): void
     {
         $this->repo->shouldReceive('findById')->once()->with(5)->andReturn($this->meeting(5));
@@ -166,9 +163,7 @@ class IntergroupMeetingControllerReadTest extends TestCase
         $this->assertSame(5, $response->get_data()['data']['id']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_meeting_returns_404_when_missing(): void
     {
         $this->repo->shouldReceive('findById')->once()->with(9)->andReturn(null);

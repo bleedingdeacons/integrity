@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Mockery\MockInterface;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Api\Controllers\MeetingController;
 use Integrity\Api\Controllers\MemberController;
@@ -12,7 +19,6 @@ use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
 use Mockery;
 use Unity\Core\Interfaces\Container;
-use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Meetings\Interfaces\MeetingRepository;
 use Unity\Members\Interfaces\Member;
@@ -28,12 +34,11 @@ use Unity\PrivacyPolicies\Interfaces\PrivacyPolicy;
  * Tests for MemberController's write handlers (create / update) beyond the
  * happy path covered by MemberControllerTest: the validation, not-found,
  * save-failure and exception branches.
- *
- * @covers \Integrity\Api\Controllers\MemberController
- * @covers \Integrity\Api\Controllers\ControllerTrait
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
+#[CoversClass(\Integrity\Api\Controllers\MemberController::class)]
+#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
+#[PreserveGlobalState(false)]
+#[RunTestsInSeparateProcesses]
 class MemberControllerWriteTest extends TestCase
 {
     private $memberRepo;
@@ -96,7 +101,7 @@ class MemberControllerWriteTest extends TestCase
         return $request;
     }
 
-    /** @return Member&\Mockery\MockInterface */
+    /** @return Member&MockInterface */
     private function member()
     {
         $d = [
@@ -117,8 +122,7 @@ class MemberControllerWriteTest extends TestCase
     }
 
     // ─── updateMember ────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function update_returns_404_when_member_missing(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn(null);
@@ -126,7 +130,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(404, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function update_returns_422_for_an_invalid_home_group(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -136,7 +140,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(422, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function update_returns_422_for_an_invalid_intergroup_position(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -146,7 +150,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(422, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function update_returns_500_when_save_fails(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -157,7 +161,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(500, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function update_happy_path_returns_200(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -168,7 +172,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(200, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function update_returns_500_on_exception(): void
     {
         $this->memberRepo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));
@@ -204,9 +208,8 @@ class MemberControllerWriteTest extends TestCase
      * The landline goes through the same round-trip guard as the mobile: a
      * client that read a masked value and posted the whole record back must
      * not overwrite the real number with the mask.
-     *
-     * @test
      */
+    #[Test]
     public function update_ignores_a_landline_submitted_in_its_masked_form(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -230,9 +233,8 @@ class MemberControllerWriteTest extends TestCase
      * A key holding members:clear both reads and writes in the clear, so the
      * guard above does not apply to it — the same exception the personal
      * email has always had.
-     *
-     * @test
      */
+    #[Test]
     public function a_clear_key_may_write_a_landline_that_looks_masked(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -246,7 +248,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertContains('******0000', $captured);
     }
 
-    /** @test */
+    #[Test]
     public function update_accepts_a_real_landline(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -264,9 +266,8 @@ class MemberControllerWriteTest extends TestCase
     /**
      * Not named in the request means "leave it alone", so revise() is handed
      * null and Unity carries the stored preference over.
-     *
-     * @test
      */
+    #[Test]
     public function update_leaves_the_preferred_contact_alone_when_unnamed(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -281,7 +282,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertNotContains(PreferredContact::Landline, $captured);
     }
 
-    /** @test */
+    #[Test]
     public function update_passes_a_named_preferred_contact_through(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -299,10 +300,9 @@ class MemberControllerWriteTest extends TestCase
      * The schema rejects anything that is not one of the two case values, so
      * a client sending 'landline' is told so rather than silently given
      * Mobile.
-     *
-     * @test
-     * @dataProvider preferredContactValues
      */
+    #[DataProvider('preferredContactValues')]
+    #[Test]
     public function the_preferred_contact_schema_accepts_only_the_two_case_values(
         mixed $value,
         bool $expected
@@ -327,7 +327,7 @@ class MemberControllerWriteTest extends TestCase
         ];
     }
 
-    /** @test */
+    #[Test]
     public function the_landline_schema_matches_the_mobile_schema(): void
     {
         foreach (['getUpdateMemberArgs', 'getCreateMemberArgs'] as $method) {
@@ -341,8 +341,7 @@ class MemberControllerWriteTest extends TestCase
     }
 
     // ─── createMember ────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function create_returns_422_for_an_invalid_intergroup_position(): void
     {
         $this->positionRepo->shouldReceive('findAll')->andReturn([]);
@@ -350,7 +349,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(422, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function create_returns_500_when_the_repository_create_fails(): void
     {
         $this->memberRepo->shouldReceive('create')->andReturn(0);
@@ -358,7 +357,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(500, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function create_returns_500_and_cleans_up_when_save_fails(): void
     {
         $this->memberRepo->shouldReceive('create')->andReturn(123);
@@ -369,7 +368,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(500, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function create_happy_path_returns_201(): void
     {
         $this->memberRepo->shouldReceive('create')->andReturn(123);
@@ -381,7 +380,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertContains($r->get_status(), [200, 201]);
     }
 
-    /** @test */
+    #[Test]
     public function create_returns_500_on_exception(): void
     {
         $this->memberRepo->shouldReceive('create')->andThrow(new \RuntimeException('boom'));
@@ -390,8 +389,7 @@ class MemberControllerWriteTest extends TestCase
     }
 
     // ─── getMembers (filters + exception) ─────────────────────────────
-
-    /** @test */
+    #[Test]
     public function get_members_applies_search_and_home_group_filters(): void
     {
         $this->memberRepo->shouldReceive('findAll')->andReturn([$this->member()]);
@@ -405,7 +403,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(200, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function get_members_returns_500_on_exception(): void
     {
         $this->memberRepo->shouldReceive('findAll')->andThrow(new \RuntimeException('boom'));
@@ -423,7 +421,7 @@ class MemberControllerWriteTest extends TestCase
         ], $params));
     }
 
-    /** @test */
+    #[Test]
     public function record_compliance_returns_404_when_member_missing(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn(null);
@@ -431,7 +429,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(404, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function record_compliance_accepts_with_an_empty_statement_when_no_policy(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -442,7 +440,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(200, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function record_compliance_resolves_the_statement_from_a_valid_policy(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -456,7 +454,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(200, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function record_compliance_returns_422_for_an_unknown_policy(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -466,7 +464,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(422, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function record_compliance_records_a_revocation(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -477,7 +475,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(200, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function record_compliance_returns_500_when_save_fails(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member());
@@ -488,7 +486,7 @@ class MemberControllerWriteTest extends TestCase
         $this->assertSame(500, $r->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function record_compliance_returns_500_on_exception(): void
     {
         $this->memberRepo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));

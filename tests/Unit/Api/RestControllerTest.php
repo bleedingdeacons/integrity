@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api;
 
+use Mockery\MockInterface;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use PHPUnit\Framework\Attributes\DataProvider;
+use function Brain\Monkey\Filters\expectAdded;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Filters;
 use Closure;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Api\Controllers\IntergroupMeetingController;
@@ -29,15 +34,15 @@ use Mockery;
  */
 class RestControllerTest extends TestCase
 {
-    private ApiKeyManager|Mockery\MockInterface $apiKeyManager;
-    private AuditLogger|Mockery\MockInterface $auditLogger;
-    private RateLimiter|Mockery\MockInterface $rateLimiter;
-    private PreAuthThrottle|Mockery\MockInterface $preAuthThrottle;
-    private GroupController|Mockery\MockInterface $groupController;
-    private MeetingController|Mockery\MockInterface $meetingController;
-    private PositionController|Mockery\MockInterface $positionController;
-    private MemberController|Mockery\MockInterface $memberController;
-    private IntergroupMeetingController|Mockery\MockInterface $intergroupMeetingController;
+    private ApiKeyManager|MockInterface $apiKeyManager;
+    private AuditLogger|MockInterface $auditLogger;
+    private RateLimiter|MockInterface $rateLimiter;
+    private PreAuthThrottle|MockInterface $preAuthThrottle;
+    private GroupController|MockInterface $groupController;
+    private MeetingController|MockInterface $meetingController;
+    private PositionController|MockInterface $positionController;
+    private MemberController|MockInterface $memberController;
+    private IntergroupMeetingController|MockInterface $intergroupMeetingController;
     private RestController $controller;
 
     protected function setUp(): void
@@ -75,10 +80,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Route registration ─────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function register_registers_all_expected_routes(): void
     {
         // Controller mocks must return args arrays when register() wires routes
@@ -115,10 +117,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: missing key ──────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_returns_error_when_no_api_key(): void
     {
         $request = $this->createMockRequest();
@@ -138,10 +137,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: invalid key ──────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_returns_error_when_key_is_invalid(): void
     {
         $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_invalid_key']);
@@ -162,10 +158,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: expansion scopes ─────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function expand_meetings_is_refused_on_a_groups_only_key(): void
     {
         // The finding: permissions keyed on the path alone, so a key issued
@@ -183,9 +176,7 @@ class RestControllerTest extends TestCase
         $this->assertStringContainsString('meetings:read', $result->get_error_message());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function expand_meetings_is_allowed_when_the_key_holds_both_scopes(): void
     {
         $request = $this->createMockRequest(
@@ -196,9 +187,7 @@ class RestControllerTest extends TestCase
         $this->assertTrue($this->authorise($request, ['groups:read', 'meetings:read']));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function groups_without_expand_still_needs_only_the_groups_scope(): void
     {
         // The fix must not tighten the ordinary case.
@@ -210,9 +199,7 @@ class RestControllerTest extends TestCase
         $this->assertTrue($this->authorise($request, ['groups:read']));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function a_wildcard_key_still_reaches_an_expansion(): void
     {
         $request = $this->createMockRequest(
@@ -250,10 +237,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: transport ────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_refuses_a_plain_http_request(): void
     {
         $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]);
@@ -279,11 +263,10 @@ class RestControllerTest extends TestCase
      *
      * In its own process because define() is permanent: setting WP_DEBUG here
      * would leak into every test that ran afterwards.
-     *
-     * @test
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
      */
+    #[PreserveGlobalState(false)]
+    #[Test]
+    #[RunInSeparateProcess]
     public function wp_debug_no_longer_switches_off_the_https_requirement(): void
     {
         define('WP_DEBUG', true);
@@ -311,11 +294,10 @@ class RestControllerTest extends TestCase
      * The replacement hatch, for a laptop and nowhere else.
      *
      * Separate process for the same reason as above.
-     *
-     * @test
-     * @runInSeparateProcess
-     * @preserveGlobalState disabled
      */
+    #[PreserveGlobalState(false)]
+    #[Test]
+    #[RunInSeparateProcess]
     public function the_dedicated_constant_allows_plain_http(): void
     {
         define('INTEGRITY_ALLOW_INSECURE_TRANSPORT', true);
@@ -339,10 +321,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: pre-authentication throttle ──────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_refuses_a_throttled_client_before_validating_the_key(): void
     {
         $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('a', 64)]);
@@ -361,7 +340,7 @@ class RestControllerTest extends TestCase
         // fill the audit table once its CPU cost is bounded.
         $this->auditLogger->shouldNotReceive('log');
 
-        Filters\expectAdded('rest_post_dispatch')
+        expectAdded('rest_post_dispatch')
             ->once()
             ->with(Mockery::type(Closure::class));
 
@@ -372,9 +351,7 @@ class RestControllerTest extends TestCase
         $this->assertEquals(429, $result->get_error_data()['status']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_charges_the_throttle_when_a_key_fails_to_validate(): void
     {
         $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('b', 64)]);
@@ -394,9 +371,7 @@ class RestControllerTest extends TestCase
         $this->assertEquals('invalid_api_key', $result->get_error_code());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_does_not_charge_the_throttle_for_a_working_key(): void
     {
         $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_' . str_repeat('c', 64)]);
@@ -420,9 +395,7 @@ class RestControllerTest extends TestCase
         $this->assertTrue($this->controller->checkPermission($request));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_charges_the_throttle_when_no_key_is_presented(): void
     {
         $request = $this->createMockRequest([], []);
@@ -442,9 +415,7 @@ class RestControllerTest extends TestCase
         $this->assertEquals('missing_api_key', $result->get_error_code());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function a_throttled_client_is_refused_before_the_https_check(): void
     {
         $request = $this->createMockRequest([], []);
@@ -459,7 +430,7 @@ class RestControllerTest extends TestCase
 
         $this->auditLogger->shouldNotReceive('log');
 
-        Filters\expectAdded('rest_post_dispatch')
+        expectAdded('rest_post_dispatch')
             ->once()
             ->with(Mockery::type(Closure::class));
 
@@ -470,10 +441,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: rate limited ─────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_returns_error_when_rate_limited(): void
     {
         $request = $this->createMockRequest([], ['Authorization' => 'Bearer int_valid_key_12345678']);
@@ -502,7 +470,7 @@ class RestControllerTest extends TestCase
         // add_filter belongs to Brain Monkey, so this is its expectation,
         // verified at teardown. The callback is anonymous, so it is matched
         // by type rather than identity.
-        Filters\expectAdded('rest_post_dispatch')
+        expectAdded('rest_post_dispatch')
             ->once()
             ->with(Mockery::type(Closure::class));
 
@@ -515,10 +483,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: insufficient permissions ─────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_returns_error_when_permission_missing(): void
     {
         $request = $this->createMockRequest(['_route' => '/integrity/v1/members'], ['Authorization' => 'Bearer int_valid_key_12345678']);
@@ -548,10 +513,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: success ──────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_returns_true_on_valid_request(): void
     {
         $request = $this->createMockRequest(['_route' => '/integrity/v1/groups'], ['Authorization' => 'Bearer int_valid_key_12345678']);
@@ -577,10 +539,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Auth: wildcard permission ──────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function checkPermission_allows_wildcard_permission(): void
     {
         $request = $this->createMockRequest(['_route' => '/integrity/v1/members/123/update'], ['Authorization' => 'Bearer int_valid_key_12345678']);
@@ -606,11 +565,8 @@ class RestControllerTest extends TestCase
     }
 
     // ── Permission mapping ─────────────────────────────────────────────
-
-    /**
-     * @test
-     * @dataProvider endpointPermissionProvider
-     */
+    #[DataProvider('endpointPermissionProvider')]
+    #[Test]
     public function getRequiredPermission_returns_correct_permission(string $endpoint, ?string $expected): void
     {
         // No setAccessible() call: a no-op since PHP 8.1 (this plugin's
@@ -642,10 +598,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Health check ───────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function healthCheck_returns_correct_structure(): void
     {
         $request = $this->createMockRequest();
@@ -661,9 +614,7 @@ class RestControllerTest extends TestCase
         $this->assertArrayHasKey('unity_available', $data);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function healthCheck_timestamp_is_iso_format(): void
     {
         $request = $this->createMockRequest();
@@ -677,9 +628,7 @@ class RestControllerTest extends TestCase
         );
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function healthCheck_returns_version(): void
     {
         $request = $this->createMockRequest();
@@ -691,10 +640,7 @@ class RestControllerTest extends TestCase
     }
 
     // ── Error response structure ───────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function error_responses_never_contain_debug_field(): void
     {
         // Verify the error response template used throughout the controller

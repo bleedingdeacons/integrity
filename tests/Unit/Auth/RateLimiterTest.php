@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
+use PHPUnit\Framework\Attributes\Test;
 use Integrity\Auth\RateLimiter;
 use Integrity\Tests\TestCase;
 use Mockery;
@@ -13,9 +14,7 @@ use Mockery;
  */
 class RateLimiterTest extends TestCase
 {
-    /**
-     * @test
-     */
+    #[Test]
     public function checkAndIncrement_returns_allowed_when_under_limit(): void
     {
         global $wpdb;
@@ -43,9 +42,7 @@ class RateLimiterTest extends TestCase
         $this->assertArrayHasKey('reset', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkAndIncrement_returns_not_allowed_when_over_limit(): void
     {
         global $wpdb;
@@ -71,9 +68,7 @@ class RateLimiterTest extends TestCase
         $this->assertEquals(0, $result['remaining']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkAndIncrement_returns_allowed_for_first_request_in_window(): void
     {
         global $wpdb;
@@ -99,9 +94,7 @@ class RateLimiterTest extends TestCase
         $this->assertEquals(999, $result['remaining']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkAndIncrement_returns_not_allowed_when_exceeding_limit(): void
     {
         global $wpdb;
@@ -127,9 +120,7 @@ class RateLimiterTest extends TestCase
         $this->assertEquals(0, $result['remaining']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkAndIncrement_allows_request_at_exact_limit_boundary(): void
     {
         global $wpdb;
@@ -155,9 +146,7 @@ class RateLimiterTest extends TestCase
         $this->assertEquals(0, $result['remaining']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkAndIncrement_with_zero_limit_always_denied(): void
     {
         global $wpdb;
@@ -182,9 +171,7 @@ class RateLimiterTest extends TestCase
         $this->assertFalse($result['allowed']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkLimit_returns_allowed_when_under_limit(): void
     {
         global $wpdb;
@@ -207,9 +194,7 @@ class RateLimiterTest extends TestCase
         $this->assertArrayHasKey('reset', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkLimit_returns_not_allowed_when_at_limit(): void
     {
         global $wpdb;
@@ -231,9 +216,7 @@ class RateLimiterTest extends TestCase
         $this->assertEquals(0, $result['remaining']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkLimit_returns_full_limit_for_new_window(): void
     {
         global $wpdb;
@@ -255,9 +238,7 @@ class RateLimiterTest extends TestCase
         $this->assertEquals(1000, $result['remaining']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function checkLimit_reset_time_is_in_future(): void
     {
         global $wpdb;
@@ -278,9 +259,7 @@ class RateLimiterTest extends TestCase
         $this->assertGreaterThan(time(), $result['reset']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getHeaders_returns_correct_header_format(): void
     {
         $rateLimiter = new RateLimiter();
@@ -296,9 +275,7 @@ class RateLimiterTest extends TestCase
         $this->assertEquals(1704067200, $headers['X-RateLimit-Reset']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getHeaders_remaining_never_negative(): void
     {
         $rateLimiter = new RateLimiter();

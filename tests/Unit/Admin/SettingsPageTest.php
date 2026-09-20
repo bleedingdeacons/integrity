@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Admin;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\Exceptions\JsonResponseException;
 use BleedingDeacons\WpMocks\Exceptions\WpDieException;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Integrity\Admin\SettingsPage;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Auth\AuditLogger;
@@ -38,9 +41,8 @@ use ReflectionMethod;
  *     guards are covered; the branchy logic behind them is reached through
  *     reflection on getAuditPageData(), the same approach Amber documents for
  *     its own redirect-and-exit handlers.
- *
- * @covers \Integrity\Admin\SettingsPage
  */
+#[CoversClass(\Integrity\Admin\SettingsPage::class)]
 final class SettingsPageTest extends TestCase
 {
     private $keys;
@@ -70,8 +72,7 @@ final class SettingsPageTest extends TestCase
     }
 
     // ── registration ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function init_registers_every_admin_hook(): void
     {
         $this->page->init();
@@ -92,7 +93,7 @@ final class SettingsPageTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function add_menu_page_registers_the_top_level_and_three_submenus(): void
     {
         $this->page->addMenuPage();
@@ -106,11 +107,11 @@ final class SettingsPageTest extends TestCase
         $this->assertCount(4, WpState::$menus);
     }
 
-    /** @test */
+    #[Test]
     public function register_settings_registers_the_whole_settings_group(): void
     {
         $registered = [];
-        Functions\when('register_setting')->alias(
+        when('register_setting')->alias(
             static function (string $group, string $name, $args = []) use (&$registered): void {
                 $registered[$name] = ['group' => $group, 'args' => $args];
             }
@@ -137,16 +138,15 @@ final class SettingsPageTest extends TestCase
      * sanitize callback clamping the value into 5..3600 seconds, so a hand-typed
      * 1 cannot hammer admin-ajax and a huge value cannot disable refresh by
      * accident.
-     *
-     * @test
-     * @dataProvider refreshIntervals
      */
+    #[DataProvider('refreshIntervals')]
+    #[Test]
     public function refresh_interval_is_clamped_between_five_seconds_and_an_hour(
         mixed $input,
         int $expected
     ): void {
         $callback = null;
-        Functions\when('register_setting')->alias(
+        when('register_setting')->alias(
             static function (string $group, string $name, $args = []) use (&$callback): void {
                 if ($name === 'integrity_audit_auto_refresh_interval') {
                     $callback = $args['sanitize_callback'] ?? null;
@@ -175,8 +175,7 @@ final class SettingsPageTest extends TestCase
     }
 
     // ── asset enqueuing ───────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function assets_are_not_enqueued_outside_the_plugin_screens(): void
     {
         $this->page->enqueueAssets('edit.php');
@@ -184,7 +183,7 @@ final class SettingsPageTest extends TestCase
         $this->assertSame([], WpState::$enqueued);
     }
 
-    /** @test */
+    #[Test]
     public function the_stylesheet_is_enqueued_on_a_plugin_screen(): void
     {
         $this->page->enqueueAssets('toplevel_page_integrity-settings');
@@ -198,9 +197,8 @@ final class SettingsPageTest extends TestCase
     /**
      * The audit script is gated on the hook suffix add_submenu_page() returned,
      * so it only loads once addMenuPage() has run and only on that screen.
-     *
-     * @test
      */
+    #[Test]
     public function the_audit_script_is_enqueued_and_localised_only_on_the_audit_screen(): void
     {
         $this->page->addMenuPage();
@@ -220,14 +218,12 @@ final class SettingsPageTest extends TestCase
     }
 
     // ── capability guards ─────────────────────────────────────────────
-
     /**
      * Every screen and every action re-checks the capability rather than
      * trusting the menu to have hidden itself.
-     *
-     * @test
-     * @dataProvider guardedMethods
      */
+    #[DataProvider('guardedMethods')]
+    #[Test]
     public function every_entry_point_refuses_a_user_without_the_capability(string $method): void
     {
         WpState::$userCan = false;
@@ -251,8 +247,7 @@ final class SettingsPageTest extends TestCase
     }
 
     // ── AJAX refresh ──────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function ajax_refresh_rejects_a_user_without_the_capability(): void
     {
         WpState::$userCan = false;
@@ -277,16 +272,16 @@ final class SettingsPageTest extends TestCase
     private function stubFormHelpers(): void
     {
         foreach (['settings_fields', 'do_settings_sections'] as $fn) {
-            Functions\when($fn)->justReturn(null);
+            when($fn)->justReturn(null);
         }
-        Functions\when('submit_button')->alias(static function (): void {
+        when('submit_button')->alias(static function (): void {
             echo '<button type="submit">Save</button>';
         });
         // admin-keys.php resolves the creating user for the "created by" column.
-        Functions\when('get_user_by')->justReturn(false);
+        when('get_user_by')->justReturn(false);
     }
 
-    /** @test */
+    #[Test]
     public function the_keys_screen_renders_the_keys_it_is_given(): void
     {
         $this->keys->shouldReceive('getAllKeys')->once()->andReturn([
@@ -319,9 +314,8 @@ final class SettingsPageTest extends TestCase
     /**
      * A freshly created key is handed over once through a transient, then
      * deleted so a refresh cannot show the secret again.
-     *
-     * @test
      */
+    #[Test]
     public function a_newly_created_key_is_shown_once_and_the_transient_cleared(): void
     {
         WpState::$transients['integrity_new_key_1'] = 'itg_secret_value';
@@ -341,7 +335,7 @@ final class SettingsPageTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function the_settings_screen_renders(): void
     {
         ob_start();
@@ -354,7 +348,7 @@ final class SettingsPageTest extends TestCase
         $this->assertNotSame('', trim($html), 'the settings screen should render markup');
     }
 
-    /** @test */
+    #[Test]
     public function the_audit_screen_renders_with_its_data_in_scope(): void
     {
         $this->audit->shouldReceive('getLogs')->once()->andReturn(['logs' => [], 'total' => 0]);
@@ -375,9 +369,8 @@ final class SettingsPageTest extends TestCase
     /**
      * The AJAX refresh re-renders the same partial the page uses and returns it
      * as JSON, so the script can swap innerHTML without a reload.
-     *
-     * @test
      */
+    #[Test]
     public function ajax_refresh_returns_the_rendered_partial_as_json(): void
     {
         $this->audit->shouldReceive('getLogs')->once()->andReturn(['logs' => [], 'total' => 0]);
@@ -395,8 +388,7 @@ final class SettingsPageTest extends TestCase
     }
 
     // ── audit page data (reflection: the live callers exit) ───────────
-
-    /** @test */
+    #[Test]
     public function audit_data_defaults_to_the_first_page_with_no_filters(): void
     {
         $this->audit->shouldReceive('getLogs')->once()
@@ -420,9 +412,8 @@ final class SettingsPageTest extends TestCase
      * Filters arrive from $_REQUEST — query string on a page load, serialized
      * form fields on an AJAX refresh — and empty strings must mean "unset"
      * rather than a filter on the empty value.
-     *
-     * @test
      */
+    #[Test]
     public function blank_filter_fields_are_treated_as_absent(): void
     {
         $_REQUEST = [
@@ -446,7 +437,7 @@ final class SettingsPageTest extends TestCase
         $this->assertNull($data['filters']['ip_address']);
     }
 
-    /** @test */
+    #[Test]
     public function populated_filters_are_typed_and_passed_through(): void
     {
         $_REQUEST = [
@@ -471,7 +462,7 @@ final class SettingsPageTest extends TestCase
         $this->assertSame('2026-01-31', $data['filters']['date_to']);
     }
 
-    /** @test */
+    #[Test]
     public function a_negative_or_zero_page_is_clamped_to_the_first_page(): void
     {
         $_REQUEST = ['paged' => '-5'];
@@ -488,10 +479,9 @@ final class SettingsPageTest extends TestCase
     /**
      * 50 rows per page, so 101 rows is three pages — the boundary that decides
      * whether the last partial page gets a link.
-     *
-     * @test
-     * @dataProvider totals
      */
+    #[DataProvider('totals')]
+    #[Test]
     public function total_pages_rounds_up(int $total, int $expected): void
     {
         $this->audit->shouldReceive('getLogs')->once()->andReturn(['logs' => [], 'total' => $total]);
@@ -518,9 +508,8 @@ final class SettingsPageTest extends TestCase
      * Pagination links inside the partial are built from this, and it has to
      * point at the audit screen rather than admin-ajax.php — otherwise links
      * rendered during an AJAX refresh would navigate to the AJAX endpoint.
-     *
-     * @test
      */
+    #[Test]
     public function the_pagination_base_url_points_at_the_audit_screen(): void
     {
         $this->audit->shouldReceive('getLogs')->once()->andReturn(['logs' => [], 'total' => 0]);
@@ -551,11 +540,11 @@ final class SettingsPageTest extends TestCase
     }
 
     /**
-     * @test
-     * @dataProvider permissionForms
      * @param array<string, mixed> $post
      * @param array<int, string>   $expected
      */
+    #[DataProvider('permissionForms')]
+    #[Test]
     public function the_permission_checkboxes_map_onto_scopes(array $post, array $expected): void
     {
         $this->assertSame($expected, $this->permissionsFor($post));
@@ -613,10 +602,10 @@ final class SettingsPageTest extends TestCase
     }
 
     /**
-     * @test
-     * @dataProvider whitelists
      * @param array<int, string>|null $expected
      */
+    #[DataProvider('whitelists')]
+    #[Test]
     public function the_ip_whitelist_textarea_is_parsed_into_a_list(mixed $raw, ?array $expected): void
     {
         $_POST = $raw === null ? [] : ['ip_whitelist' => $raw];
@@ -645,11 +634,10 @@ final class SettingsPageTest extends TestCase
     }
 
     // ── nonce field ───────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function the_nonce_field_is_built_for_the_shared_admin_action(): void
     {
-        Functions\when('wp_nonce_field')->alias(
+        when('wp_nonce_field')->alias(
             static fn (string $action, string $name, bool $referer, bool $echo): string
                 => "field:{$action}:{$name}:" . ($echo ? 'echo' : 'return')
         );
