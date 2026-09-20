@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Unity\Groups\Interfaces\Group;
+use Unity\Positions\Interfaces\Position;
+use PHPUnit\Framework\Attributes\Test;
+use Mockery\MockInterface;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Api\Controllers\MeetingController;
 use Integrity\Api\Controllers\MemberController;
@@ -24,27 +32,26 @@ use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 
 /**
  * Tests for MemberController's REST handlers.
- *
- * @covers \Integrity\Api\Controllers\MemberController
- * @covers \Integrity\Api\Controllers\ControllerTrait
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
+#[CoversClass(\Integrity\Api\Controllers\MemberController::class)]
+#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
+#[PreserveGlobalState(false)]
+#[RunTestsInSeparateProcesses]
 class MemberControllerTest extends TestCase
 {
-    /** @var MemberRepository&\Mockery\MockInterface */
+    /** @var MemberRepository&MockInterface */
     private $memberRepo;
-    /** @var GroupRepository&\Mockery\MockInterface */
+    /** @var GroupRepository&MockInterface */
     private $groupRepo;
-    /** @var PositionRepository&\Mockery\MockInterface */
+    /** @var PositionRepository&MockInterface */
     private $positionRepo;
-    /** @var MeetingRepository&\Mockery\MockInterface */
+    /** @var MeetingRepository&MockInterface */
     private $meetingRepo;
-    /** @var MemberRevisor&\Mockery\MockInterface */
+    /** @var MemberRevisor&MockInterface */
     private $revisor;
-    /** @var MemberFactory&\Mockery\MockInterface */
+    /** @var MemberFactory&MockInterface */
     private $factory;
-    /** @var PrivacyPolicyRepository&\Mockery\MockInterface */
+    /** @var PrivacyPolicyRepository&MockInterface */
     private $policyRepo;
 
     private MemberController $controller;
@@ -101,7 +108,7 @@ class MemberControllerTest extends TestCase
         return $request;
     }
 
-    /** @return Member&\Mockery\MockInterface */
+    /** @return Member&MockInterface */
     private function member(array $o = [])
     {
         $d = [
@@ -123,7 +130,7 @@ class MemberControllerTest extends TestCase
 
     private function group(int $id, string $title): object
     {
-        $g = Mockery::mock(\Unity\Groups\Interfaces\Group::class);
+        $g = Mockery::mock(Group::class);
         $g->shouldReceive('getId')->andReturn($id);
         $g->shouldReceive('getTitle')->andReturn($title);
         $g->shouldReceive('isValid')->andReturn(true);
@@ -132,17 +139,14 @@ class MemberControllerTest extends TestCase
 
     private function position(int $id, string $name): object
     {
-        $p = Mockery::mock(\Unity\Positions\Interfaces\Position::class);
+        $p = Mockery::mock(Position::class);
         $p->shouldReceive('getId')->andReturn($id);
         $p->shouldReceive('getLongName')->andReturn($name);
         return $p;
     }
 
     // ─── getMembers ─────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function get_members_masks_contact_details_without_clear_permission(): void
     {
         $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
@@ -158,9 +162,7 @@ class MemberControllerTest extends TestCase
         $this->assertSame(1, $response->get_data()['meta']['total']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_members_resolves_related_group_and_position_names(): void
     {
         $member = $this->member(['getHomeGroup' => 5, 'getIntergroupPosition' => 7]);
@@ -179,9 +181,7 @@ class MemberControllerTest extends TestCase
         $this->assertSame('Chair', $data['intergroup_position_name']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_members_returns_clear_contact_details_with_permission(): void
     {
         $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
@@ -197,9 +197,8 @@ class MemberControllerTest extends TestCase
     /**
      * A landline is personal data, so it is masked on the way out exactly as
      * the mobile is — and unmasked by the same permission.
-     *
-     * @test
      */
+    #[Test]
     public function get_members_masks_the_landline_without_the_clear_permission(): void
     {
         $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
@@ -211,9 +210,7 @@ class MemberControllerTest extends TestCase
         $this->assertStringContainsString('*', $row['landline_number']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_members_returns_the_landline_in_the_clear_with_permission(): void
     {
         $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
@@ -230,9 +227,8 @@ class MemberControllerTest extends TestCase
      * The preferred contact names one of two options rather than a number, so
      * it is never masked: a client that cannot read it cannot tell which of
      * the two numbers to ring.
-     *
-     * @test
      */
+    #[Test]
     public function the_preferred_contact_is_returned_in_the_clear_without_permission(): void
     {
         $this->memberRepo->shouldReceive('findAll')->once()->andReturn([
@@ -245,9 +241,7 @@ class MemberControllerTest extends TestCase
         $this->assertSame('Landline', $row['preferred_contact']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_members_returns_500_on_failure(): void
     {
         $this->memberRepo->shouldReceive('findAll')->andThrow(new \RuntimeException('boom'));
@@ -258,10 +252,7 @@ class MemberControllerTest extends TestCase
     }
 
     // ─── getMember ──────────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function get_member_returns_a_single_member(): void
     {
         $this->memberRepo->shouldReceive('findById')->once()->with(1)->andReturn($this->member());
@@ -272,9 +263,7 @@ class MemberControllerTest extends TestCase
         $this->assertSame(1, $response->get_data()['data']['id']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_member_returns_404_when_missing(): void
     {
         $this->memberRepo->shouldReceive('findById')->once()->with(9)->andReturn(null);
@@ -285,10 +274,7 @@ class MemberControllerTest extends TestCase
     }
 
     // ─── createMember ───────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function create_member_inserts_and_returns_201(): void
     {
         $this->memberRepo->shouldReceive('create')->once()->with('New Person')->andReturn(42);
@@ -303,9 +289,7 @@ class MemberControllerTest extends TestCase
         $this->assertSame(42, $response->get_data()['data']['id']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function create_member_rejects_an_unknown_home_group(): void
     {
         $this->groupRepo->shouldReceive('findById')->once()->with(99)->andReturn(null);
@@ -320,10 +304,7 @@ class MemberControllerTest extends TestCase
     }
 
     // ─── updateMember ───────────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function update_member_saves_and_returns_the_updated_member(): void
     {
         $existing = $this->member();
@@ -340,9 +321,7 @@ class MemberControllerTest extends TestCase
         $this->assertTrue($response->get_data()['success']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function update_member_returns_404_for_a_missing_member(): void
     {
         $this->memberRepo->shouldReceive('findById')->once()->with(9)->andReturn(null);
@@ -353,10 +332,7 @@ class MemberControllerTest extends TestCase
     }
 
     // ─── recordCompliance ───────────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function record_compliance_records_an_acceptance(): void
     {
         $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member(), $this->member(['isGdprAccepted' => true]));
@@ -373,9 +349,7 @@ class MemberControllerTest extends TestCase
         $this->assertTrue($response->get_data()['data']['gdpr_compliance']['accepted']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function record_compliance_returns_404_for_a_missing_member(): void
     {
         $this->memberRepo->shouldReceive('findById')->once()->with(9)->andReturn(null);

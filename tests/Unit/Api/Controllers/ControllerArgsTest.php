@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Api\Controllers\IntergroupMeetingController;
 use Integrity\Api\Controllers\MeetingController;
@@ -20,16 +22,15 @@ use ReflectionClass;
  * request-contract logic. This drives each of those closures across a spread
  * of representative inputs so both branches run, covering the argument layer
  * without a live REST dispatch.
- *
- * @covers \Integrity\Api\Controllers\MemberController
- * @covers \Integrity\Api\Controllers\IntergroupMeetingController
- * @covers \Integrity\Api\Controllers\MeetingController
- * @covers \Integrity\Api\Controllers\GroupController
- * @covers \Integrity\Api\Controllers\PositionController
  */
+#[CoversClass(\Integrity\Api\Controllers\MemberController::class)]
+#[CoversClass(\Integrity\Api\Controllers\IntergroupMeetingController::class)]
+#[CoversClass(\Integrity\Api\Controllers\MeetingController::class)]
+#[CoversClass(\Integrity\Api\Controllers\GroupController::class)]
+#[CoversClass(\Integrity\Api\Controllers\PositionController::class)]
 class ControllerArgsTest extends TestCase
 {
-    /** @test */
+    #[Test]
     public function every_argument_callback_closure_runs_on_a_spread_of_inputs(): void
     {
         $auditLogger = Mockery::mock(AuditLogger::class);

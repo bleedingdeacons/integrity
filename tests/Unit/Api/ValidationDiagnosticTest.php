@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api;
 
+use Mockery\MockInterface;
+use PHPUnit\Framework\Attributes\Test;
 use Integrity\Api\ValidationDiagnostic;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
@@ -20,7 +22,7 @@ use Mockery;
  */
 final class ValidationDiagnosticTest extends TestCase
 {
-    private AuditLogger|Mockery\MockInterface $auditLogger;
+    private AuditLogger|MockInterface $auditLogger;
     private ValidationDiagnostic $diagnostic;
 
     protected function setUp(): void
@@ -31,7 +33,7 @@ final class ValidationDiagnosticTest extends TestCase
         $this->diagnostic  = new ValidationDiagnostic($this->auditLogger);
     }
 
-    /** @test */
+    #[Test]
     public function it_hooks_the_filter_that_actually_carries_the_validation_error(): void
     {
         $this->diagnostic->register();
@@ -39,7 +41,7 @@ final class ValidationDiagnosticTest extends TestCase
         $this->assertFilterAdded('rest_request_before_callbacks');
     }
 
-    /** @test */
+    #[Test]
     public function it_redacts_the_parameters_before_logging_them(): void
     {
         $request = $this->createMockRequest([
@@ -61,7 +63,7 @@ final class ValidationDiagnosticTest extends TestCase
         $this->assertSame('rest_invalid_param', $result->get_error_code());
     }
 
-    /** @test */
+    #[Test]
     public function it_ignores_a_successful_response(): void
     {
         $this->auditLogger->shouldNotReceive('redact');
@@ -70,7 +72,7 @@ final class ValidationDiagnosticTest extends TestCase
         $this->assertSame($response, $this->diagnostic->handle($response, null, null));
     }
 
-    /** @test */
+    #[Test]
     public function it_ignores_routes_belonging_to_other_plugins(): void
     {
         $request = $this->createMockRequest(['_route' => '/wp/v2/posts']);
@@ -80,7 +82,7 @@ final class ValidationDiagnosticTest extends TestCase
         $this->diagnostic->handle($this->validationError(), null, $request);
     }
 
-    /** @test */
+    #[Test]
     public function it_ignores_an_authentication_refusal(): void
     {
         // Integrity's own auth path already audits its 401s and 403s; logging
@@ -93,7 +95,7 @@ final class ValidationDiagnosticTest extends TestCase
         $this->diagnostic->handle($unauthorised, null, $request);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_whatever_it_was_given_on_every_path(): void
     {
         // A filter that is only an observer must never alter the response.

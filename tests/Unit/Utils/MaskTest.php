@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Utils;
 
+use PHPUnit\Framework\Attributes\Test;
 use Integrity\Tests\TestCase;
 use Integrity\Utils\Mask;
 
@@ -13,10 +14,7 @@ use Integrity\Utils\Mask;
 class MaskTest extends TestCase
 {
     // ─── Email masking ────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function email_masks_standard_address(): void
     {
         $result = Mask::email('john@example.com');
@@ -28,25 +26,19 @@ class MaskTest extends TestCase
         $this->assertStringContainsString('__', $result); // sentinel for isObscuredEmail()
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function email_returns_empty_for_empty_input(): void
     {
         $this->assertSame('', Mask::email(''));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function email_returns_input_without_at_sign(): void
     {
         $this->assertSame('notanemail', Mask::email('notanemail'));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function email_handles_short_local_part(): void
     {
         $result = Mask::email('a@b.co');
@@ -56,9 +48,7 @@ class MaskTest extends TestCase
         $this->assertStringContainsString('__', $result); // minimum 2 underscores
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function email_handles_subdomain(): void
     {
         $result = Mask::email('user@mail.example.co.uk');
@@ -68,9 +58,7 @@ class MaskTest extends TestCase
         $this->assertStringContainsString('@', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function email_preserves_structure(): void
     {
         $result = Mask::email('longuser@longdomain.org');
@@ -81,9 +69,7 @@ class MaskTest extends TestCase
         $this->assertStringEndsWith('.org', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function email_output_matches_obscured_sentinel_shape(): void
     {
         // ControllerTrait::isObscuredEmail uses an anchored regex that matches
@@ -95,10 +81,7 @@ class MaskTest extends TestCase
     }
 
     // ─── Phone masking ────────────────────────────────────
-
-    /**
-     * @test
-     */
+    #[Test]
     public function phone_masks_standard_number(): void
     {
         $result = Mask::phone('(555) 867-5309');
@@ -112,17 +95,13 @@ class MaskTest extends TestCase
         $this->assertStringContainsString('-', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function phone_returns_empty_for_empty_input(): void
     {
         $this->assertSame('', Mask::phone(''));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function phone_masks_plain_digits(): void
     {
         $result = Mask::phone('5551234567');
@@ -130,9 +109,7 @@ class MaskTest extends TestCase
         $this->assertSame('******4567', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function phone_handles_short_number(): void
     {
         // 4 or fewer digits — all visible
@@ -140,9 +117,7 @@ class MaskTest extends TestCase
         $this->assertSame('123', Mask::phone('123'));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function phone_handles_international_format(): void
     {
         $result = Mask::phone('+44 7700 900123');
@@ -155,9 +130,7 @@ class MaskTest extends TestCase
         $this->assertStringContainsString('**', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function phone_output_matches_obscured_sentinel_shape(): void
     {
         // ControllerTrait::isObscuredPhone uses an anchored regex that matches
@@ -168,9 +141,7 @@ class MaskTest extends TestCase
         $this->assertMatchesRegularExpression('/^[^\d]*\*+[^\d*]*\d{0,4}$/', $masked);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function phone_preserves_formatting_characters(): void
     {
         $result = Mask::phone('(555) 123-4567');

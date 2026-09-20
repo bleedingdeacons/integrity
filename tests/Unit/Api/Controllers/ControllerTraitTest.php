@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
 use Integrity\Api\Controllers\ControllerTrait;
 use Integrity\Tests\TestCase;
 
@@ -42,11 +44,8 @@ class ControllerTraitTest extends TestCase
     }
 
     // ── Timestamp formatting ──────────────────────────────────────────
-
-    /**
-     * @test
-     * @dataProvider timestampProvider
-     */
+    #[DataProvider('timestampProvider')]
+    #[Test]
     public function formatUpdatedTimestamp_returns_iso_format(string $input, string $expected): void
     {
         $this->assertSame($expected, $this->subject()->formatUpdatedTimestamp($input));
@@ -62,11 +61,8 @@ class ControllerTraitTest extends TestCase
     }
 
     // ── Email ─────────────────────────────────────────────────────────
-
-    /**
-     * @test
-     * @dataProvider emailProvider
-     */
+    #[DataProvider('emailProvider')]
+    #[Test]
     public function isObscuredEmail_detects_mask_shape(string $input, bool $expected): void
     {
         $this->assertSame($expected, $this->subject()->isObscuredEmail($input));
@@ -100,11 +96,8 @@ class ControllerTraitTest extends TestCase
     }
 
     // ── Phone ─────────────────────────────────────────────────────────
-
-    /**
-     * @test
-     * @dataProvider phoneProvider
-     */
+    #[DataProvider('phoneProvider')]
+    #[Test]
     public function isObscuredPhone_detects_mask_shape(string $input, bool $expected): void
     {
         $this->assertSame($expected, $this->subject()->isObscuredPhone($input));

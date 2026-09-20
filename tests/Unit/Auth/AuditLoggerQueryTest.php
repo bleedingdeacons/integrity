@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
 use Mockery;
@@ -11,9 +13,8 @@ use Mockery;
 /**
  * Covers AuditLogger's read/stats/clear query builders, which assemble
  * filtered SQL over the audit-log table. A mocked $wpdb captures the calls.
- *
- * @covers \Integrity\Auth\AuditLogger
  */
+#[CoversClass(\Integrity\Auth\AuditLogger::class)]
 class AuditLoggerQueryTest extends TestCase
 {
     private AuditLogger $logger;
@@ -39,7 +40,7 @@ class AuditLoggerQueryTest extends TestCase
         return $wpdb;
     }
 
-    /** @test */
+    #[Test]
     public function get_logs_builds_a_filtered_query_and_decodes_params(): void
     {
         $wpdb = $this->wpdb();
@@ -67,7 +68,7 @@ class AuditLoggerQueryTest extends TestCase
         $this->assertNull($result['logs'][1]['request_params']);
     }
 
-    /** @test */
+    #[Test]
     public function get_stats_aggregates_the_dashboard_counts(): void
     {
         $wpdb = $this->wpdb();
@@ -82,7 +83,7 @@ class AuditLoggerQueryTest extends TestCase
         $this->assertArrayHasKey('top_ips', $stats);
     }
 
-    /** @test */
+    #[Test]
     public function clear_logs_truncates_when_no_filters(): void
     {
         $wpdb = $this->wpdb();
@@ -91,7 +92,7 @@ class AuditLoggerQueryTest extends TestCase
         $this->assertSame(7, $this->logger->clearLogs());
     }
 
-    /** @test */
+    #[Test]
     public function clear_logs_deletes_with_filters(): void
     {
         $wpdb = $this->wpdb();

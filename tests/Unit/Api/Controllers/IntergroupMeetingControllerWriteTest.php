@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\Attributes\Test;
+use Mockery\MockInterface;
 use Integrity\Api\Controllers\IntergroupMeetingController;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
@@ -28,12 +34,11 @@ use Unity\Positions\Interfaces\PositionViewFactory;
  * its happy path plus the not-found / conflict / save-failure / exception
  * branches, with the Unity repositories and factories supplied by a mocked
  * container.
- *
- * @covers \Integrity\Api\Controllers\IntergroupMeetingController
- * @covers \Integrity\Api\Controllers\ControllerTrait
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
+#[CoversClass(\Integrity\Api\Controllers\IntergroupMeetingController::class)]
+#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
+#[PreserveGlobalState(false)]
+#[RunTestsInSeparateProcesses]
 class IntergroupMeetingControllerWriteTest extends TestCase
 {
     private $repo;
@@ -105,7 +110,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         ], $params));
     }
 
-    /** @return IntergroupMeeting&\Mockery\MockInterface */
+    /** @return IntergroupMeeting&MockInterface */
     private function meeting()
     {
         $m = Mockery::mock(IntergroupMeeting::class);
@@ -121,8 +126,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
     }
 
     // ─── register attendee ───────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function register_attendee_happy_path_returns_201(): void
     {
         $meeting = $this->meeting();
@@ -141,7 +145,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(201, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_attendee_returns_404_when_meeting_missing(): void
     {
         $this->repo->shouldReceive('findById')->with(1)->andReturn(null);
@@ -150,7 +154,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(404, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_attendee_returns_404_when_group_missing(): void
     {
         $this->repo->shouldReceive('findById')->with(1)->andReturn($this->meeting());
@@ -160,7 +164,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(404, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_attendee_returns_409_when_already_registered(): void
     {
         $this->repo->shouldReceive('findById')->with(1)->andReturn($this->meeting());
@@ -174,7 +178,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(409, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_attendee_returns_500_when_attendance_save_fails(): void
     {
         $this->repo->shouldReceive('findById')->with(1)->andReturn($this->meeting());
@@ -190,7 +194,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(500, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_attendee_returns_409_on_duplicate_entry_race(): void
     {
         $GLOBALS['wpdb']->last_error = 'Duplicate entry for key';
@@ -207,7 +211,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(409, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_attendee_returns_500_when_meeting_save_fails(): void
     {
         $meeting = $this->meeting();
@@ -225,7 +229,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(500, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_attendee_returns_500_on_unexpected_exception(): void
     {
         $this->repo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));
@@ -235,8 +239,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
     }
 
     // ─── unregister attendee ─────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function unregister_attendee_happy_path_returns_200(): void
     {
         $meeting = $this->meeting();
@@ -248,7 +251,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(200, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function unregister_attendee_returns_404_when_meeting_missing(): void
     {
         $this->repo->shouldReceive('findById')->andReturn(null);
@@ -256,7 +259,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(404, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function unregister_attendee_returns_404_when_not_registered(): void
     {
         $meeting = $this->meeting();
@@ -267,7 +270,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(404, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function unregister_attendee_returns_500_when_save_fails(): void
     {
         $meeting = $this->meeting();
@@ -279,8 +282,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
     }
 
     // ─── register officer ────────────────────────────────────────────
-
-    /** @return Member&\Mockery\MockInterface */
+    /** @return Member&MockInterface */
     private function officer(int $positionId = 5)
     {
         $m = Mockery::mock(Member::class);
@@ -288,7 +290,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         return $m;
     }
 
-    /** @test */
+    #[Test]
     public function register_officer_happy_path_returns_201(): void
     {
         $meeting = $this->meeting();
@@ -304,7 +306,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(201, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_officer_returns_404_when_meeting_missing(): void
     {
         $this->repo->shouldReceive('findById')->andReturn(null);
@@ -312,7 +314,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(404, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_officer_returns_404_when_officer_missing(): void
     {
         $this->repo->shouldReceive('findById')->andReturn($this->meeting());
@@ -322,7 +324,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(404, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_officer_returns_422_without_an_intergroup_position(): void
     {
         $this->repo->shouldReceive('findById')->andReturn($this->meeting());
@@ -332,7 +334,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(422, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_officer_returns_409_when_already_registered(): void
     {
         $this->repo->shouldReceive('findById')->andReturn($this->meeting());
@@ -344,7 +346,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(409, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_officer_returns_500_when_attendance_save_fails(): void
     {
         $this->repo->shouldReceive('findById')->andReturn($this->meeting());
@@ -358,7 +360,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(500, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function register_officer_returns_500_on_exception(): void
     {
         $this->repo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));
@@ -367,8 +369,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
     }
 
     // ─── unregister officer ──────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function unregister_officer_returns_404_when_meeting_missing(): void
     {
         $this->repo->shouldReceive('findById')->andReturn(null);
@@ -376,7 +377,7 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->assertSame(404, $response->get_status());
     }
 
-    /** @test */
+    #[Test]
     public function unregister_officer_returns_500_on_exception(): void
     {
         $this->repo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));

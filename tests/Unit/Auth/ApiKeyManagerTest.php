@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
+use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Tests\TestCase;
@@ -29,9 +30,7 @@ class ApiKeyManagerTest extends TestCase
         $this->apiKeyManager = new ApiKeyManager();
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function generateKey_returns_array_with_required_keys(): void
     {
         $result = $this->apiKeyManager->generateKey();
@@ -42,9 +41,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertArrayHasKey('prefix', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function generateKey_creates_key_with_int_prefix(): void
     {
         $result = $this->apiKeyManager->generateKey();
@@ -52,9 +49,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertStringStartsWith('int_', $result['key']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function generateKey_creates_key_of_expected_length(): void
     {
         $result = $this->apiKeyManager->generateKey();
@@ -63,9 +58,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertEquals(68, strlen($result['key']));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function generateKey_creates_unique_keys(): void
     {
         $keys = [];
@@ -78,9 +71,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertEquals(count($keys), count(array_unique($keys)));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function generateKey_prefix_is_first_8_chars(): void
     {
         $result = $this->apiKeyManager->generateKey();
@@ -88,9 +79,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertEquals(substr($result['key'], 0, 8), $result['prefix']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function hashKey_returns_non_empty_string(): void
     {
         $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
@@ -99,9 +88,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertNotEmpty($hash);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function hashKey_returns_different_hash_for_different_keys(): void
     {
         $hash1 = $this->apiKeyManager->hashKey('int_test_key_12345');
@@ -110,9 +97,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertNotEquals($hash1, $hash2);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function hashKey_uses_argon2id(): void
     {
         $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
@@ -121,9 +106,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertStringStartsWith('$argon2id$', $hash);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function verifyKey_returns_true_for_valid_key(): void
     {
         $key = 'int_test_key_12345';
@@ -132,9 +115,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertTrue($this->apiKeyManager->verifyKey($key, $hash));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function verifyKey_returns_false_for_invalid_key(): void
     {
         $key = 'int_test_key_12345';
@@ -143,9 +124,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertFalse($this->apiKeyManager->verifyKey('int_wrong_key', $hash));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function verifyKey_returns_false_for_empty_key(): void
     {
         $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
@@ -153,9 +132,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertFalse($this->apiKeyManager->verifyKey('', $hash));
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function verifyKey_is_timing_safe(): void
     {
         $key = 'int_test_key_12345';
@@ -181,9 +158,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertLessThan(2.0, $ratio, 'Timing difference too large, possible timing attack vulnerability');
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function createKey_with_valid_data_calls_wpdb_insert(): void
     {
         global $wpdb;
@@ -205,9 +180,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertArrayHasKey('id', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function createKey_returns_error_on_database_failure(): void
     {
         global $wpdb;
@@ -226,9 +199,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertArrayHasKey('error', $result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function revokeKey_updates_is_active_to_zero(): void
     {
         global $wpdb;
@@ -251,9 +222,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertTrue($result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function revokeKey_returns_false_on_failure(): void
     {
         global $wpdb;
@@ -269,9 +238,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertFalse($result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function deleteKey_removes_record_from_database(): void
     {
         global $wpdb;
@@ -292,9 +259,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertTrue($result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function deleteKey_returns_false_on_failure(): void
     {
         global $wpdb;
@@ -310,9 +275,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertFalse($result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getAllKeys_returns_array(): void
     {
         global $wpdb;
@@ -347,9 +310,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertEquals(['groups:read'], $result[0]['permissions']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getKey_returns_key_data_when_found(): void
     {
         global $wpdb;
@@ -386,9 +347,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertEquals(['groups:read', 'meetings:read'], $result['permissions']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getKey_returns_null_when_not_found(): void
     {
         global $wpdb;
@@ -408,9 +367,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertNull($result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function updateKey_updates_specified_fields(): void
     {
         global $wpdb;
@@ -429,9 +386,7 @@ class ApiKeyManagerTest extends TestCase
         $this->assertTrue($result);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function updateKey_returns_false_when_no_data_provided(): void
     {
         $result = $this->apiKeyManager->updateKey(1, []);

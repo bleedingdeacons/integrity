@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
+use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\WpState;
-use Brain\Monkey\Functions;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
 use Mockery;
@@ -29,9 +31,7 @@ class AuditLoggerTest extends TestCase
         $this->auditLogger = new AuditLogger();
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function log_inserts_record_when_enabled(): void
     {
         global $wpdb;
@@ -65,9 +65,7 @@ class AuditLoggerTest extends TestCase
         $this->assertTrue(true);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function log_does_not_insert_when_disabled(): void
     {
         global $wpdb;
@@ -91,9 +89,7 @@ class AuditLoggerTest extends TestCase
         $this->assertTrue(true);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function log_sanitizes_sensitive_params(): void
     {
         global $wpdb;
@@ -108,7 +104,7 @@ class AuditLoggerTest extends TestCase
         // The redaction happens before encoding, so intercept the encoder to
         // see the array as the logger built it.
         $capturedParams = null;
-        Functions\when('wp_json_encode')->alias(
+        when('wp_json_encode')->alias(
             static function ($data) use (&$capturedParams) {
                 $capturedParams = $data;
 
@@ -141,9 +137,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals('normal_data', $capturedParams['data']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getClientIp_returns_remote_addr_when_no_trusted_proxies(): void
     {
         $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
@@ -159,9 +153,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals('10.0.0.1', $ip);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getClientIp_reads_proxy_header_when_remote_addr_is_trusted(): void
     {
         $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
@@ -176,9 +168,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals('203.0.113.50', $ip);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getClientIp_reads_cloudflare_header_when_configured(): void
     {
         $_SERVER['REMOTE_ADDR'] = '172.70.100.5';
@@ -193,9 +183,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals('198.51.100.25', $ip);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getClientIp_ignores_proxy_header_when_remote_addr_not_trusted(): void
     {
         $_SERVER['REMOTE_ADDR'] = '192.168.1.100';
@@ -211,9 +199,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals('192.168.1.100', $ip);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getClientIp_supports_cidr_trusted_proxies(): void
     {
         $_SERVER['REMOTE_ADDR'] = '10.0.5.42';
@@ -228,9 +214,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals('203.0.113.99', $ip);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getClientIp_validates_ip_format(): void
     {
         $_SERVER['REMOTE_ADDR'] = 'invalid-ip';
@@ -243,9 +227,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals('0.0.0.0', $ip);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getClientIp_falls_back_to_remote_addr_when_proxy_header_empty(): void
     {
         $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
@@ -261,9 +243,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals('10.0.0.1', $ip);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getLogs_returns_paginated_results(): void
     {
         global $wpdb;
@@ -307,9 +287,7 @@ class AuditLoggerTest extends TestCase
         $this->assertCount(1, $result['logs']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getLogs_decodes_json_params(): void
     {
         global $wpdb;
@@ -347,9 +325,7 @@ class AuditLoggerTest extends TestCase
         $this->assertEquals(42, $result['logs'][0]['request_params']['num']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function getStats_returns_expected_metrics(): void
     {
         global $wpdb;
@@ -396,11 +372,8 @@ class AuditLoggerTest extends TestCase
     }
 
     // ── Personal data redaction (F6) ───────────────────────────────────
-
-    /**
-     * @test
-     * @dataProvider personalDataKeys
-     */
+    #[DataProvider('personalDataKeys')]
+    #[Test]
     public function redact_removes_personal_data(string $key): void
     {
         // The list knew about credentials but not about the two fields
@@ -431,9 +404,7 @@ class AuditLoggerTest extends TestCase
         ];
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function redact_leaves_ordinary_parameters_alone(): void
     {
         $out = (new AuditLogger())->redact([
@@ -450,9 +421,7 @@ class AuditLoggerTest extends TestCase
         );
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function redact_reaches_into_nested_parameters(): void
     {
         $out = (new AuditLogger())->redact([
@@ -463,9 +432,7 @@ class AuditLoggerTest extends TestCase
         $this->assertSame('[REDACTED]', $out['member']['personal_email']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function redact_still_removes_credentials(): void
     {
         $out = (new AuditLogger())->redact(['password' => 'p', 'api_key' => 'k', 'token' => 't']);

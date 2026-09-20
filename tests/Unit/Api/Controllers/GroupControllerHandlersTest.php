@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversTrait;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\Attributes\Test;
+use Mockery\MockInterface;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Auth\AuditLogger;
 use Integrity\Tests\TestCase;
@@ -15,15 +21,14 @@ use Unity\Groups\Interfaces\GroupRepository;
 /**
  * Tests for GroupController's REST handlers (transformGroup is covered
  * separately in GroupControllerTest).
- *
- * @covers \Integrity\Api\Controllers\GroupController
- * @covers \Integrity\Api\Controllers\ControllerTrait
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
+#[CoversClass(\Integrity\Api\Controllers\GroupController::class)]
+#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
+#[PreserveGlobalState(false)]
+#[RunTestsInSeparateProcesses]
 class GroupControllerHandlersTest extends TestCase
 {
-    /** @var GroupRepository&\Mockery\MockInterface */
+    /** @var GroupRepository&MockInterface */
     private $repo;
 
     private GroupController $controller;
@@ -59,7 +64,7 @@ class GroupControllerHandlersTest extends TestCase
         ], $params));
     }
 
-    /** @return Group&\Mockery\MockInterface */
+    /** @return Group&MockInterface */
     private function group(int $id = 1, string $title = 'Tuesday Group')
     {
         $g = Mockery::mock(Group::class);
@@ -83,9 +88,7 @@ class GroupControllerHandlersTest extends TestCase
         return $g;
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_groups_returns_a_paginated_list(): void
     {
         $this->repo->shouldReceive('findAll')->once()->andReturn([$this->group(1), $this->group(2, 'Thursday')]);
@@ -101,9 +104,7 @@ class GroupControllerHandlersTest extends TestCase
         $this->assertSame(2, $data['meta']['total']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_groups_filters_by_district(): void
     {
         $this->repo->shouldReceive('findAll')->once()->andReturn([$this->group()]);
@@ -115,9 +116,7 @@ class GroupControllerHandlersTest extends TestCase
         $this->assertSame(1, $response->get_data()['meta']['total']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_groups_returns_500_on_failure(): void
     {
         $this->repo->shouldReceive('findAll')->andThrow(new \RuntimeException('boom'));
@@ -125,9 +124,7 @@ class GroupControllerHandlersTest extends TestCase
         $this->assertSame(500, $this->controller->getGroups($this->request())->get_status());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_group_returns_a_single_group(): void
     {
         $this->repo->shouldReceive('findById')->once()->with(5)->andReturn($this->group(5, 'Friday'));
@@ -138,9 +135,7 @@ class GroupControllerHandlersTest extends TestCase
         $this->assertSame('Friday', $response->get_data()['data']['title']);
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function get_group_returns_404_when_missing(): void
     {
         $this->repo->shouldReceive('findById')->once()->with(9)->andReturn(null);
@@ -148,9 +143,7 @@ class GroupControllerHandlersTest extends TestCase
         $this->assertSame(404, $this->controller->getGroup($this->request(['id' => 9]))->get_status());
     }
 
-    /**
-     * @test
-     */
+    #[Test]
     public function batch_get_groups_maps_by_id_and_short_circuits(): void
     {
         $this->assertSame([], $this->controller->batchGetGroups($this->repo, []));

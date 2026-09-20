@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Integrity\Auth\ApiKeyManager;
 use Integrity\Tests\TestCase;
 use Mockery;
@@ -13,9 +16,8 @@ use ReflectionMethod;
  * Covers ApiKeyManager's validation, IP/CIDR matching and CRUD paths beyond
  * the key-generation basics in ApiKeyManagerTest. A mocked $wpdb stands in for
  * the database.
- *
- * @covers \Integrity\Auth\ApiKeyManager
  */
+#[CoversClass(\Integrity\Auth\ApiKeyManager::class)]
 class ApiKeyManagerExtraTest extends TestCase
 {
     private ApiKeyManager $manager;
@@ -38,8 +40,7 @@ class ApiKeyManagerExtraTest extends TestCase
     }
 
     // ─── ipInCidr / isIpAllowed ──────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function ip_in_cidr_matches_ipv4_ranges(): void
     {
         $m = $this->ip('ipInCidr');
@@ -48,7 +49,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertFalse($m->invoke($this->manager, 'not-an-ip', '192.168.1.0/24'));
     }
 
-    /** @test */
+    #[Test]
     public function ip_in_cidr_matches_ipv6_ranges(): void
     {
         $m = $this->ip('ipInCidr');
@@ -65,9 +66,8 @@ class ApiKeyManagerExtraTest extends TestCase
      * undefined case, and on a 64-bit build gives -4294967296 rather than 0,
      * so an admin writing 0.0.0.0/0 to mean "allow anything" got a whitelist
      * that matched nothing and locked the key out.
-     *
-     * @test
      */
+    #[Test]
     public function ip_in_cidr_treats_a_zero_prefix_as_every_address(): void
     {
         $m = $this->ip('ipInCidr');
@@ -81,10 +81,9 @@ class ApiKeyManagerExtraTest extends TestCase
      * '10.0.0.0/' cast to 0 and took the shift path above. An oversized IPv6
      * prefix walked past the end of the hex string and read an uninitialised
      * offset.
-     *
-     * @test
-     * @dataProvider malformedCidrProvider
      */
+    #[DataProvider('malformedCidrProvider')]
+    #[Test]
     public function ip_in_cidr_refuses_a_malformed_prefix(string $ip, string $cidr): void
     {
         $this->assertFalse($this->ip('ipInCidr')->invoke($this->manager, $ip, $cidr));
@@ -105,7 +104,7 @@ class ApiKeyManagerExtraTest extends TestCase
         ];
     }
 
-    /** @test */
+    #[Test]
     public function is_ip_allowed_handles_exact_and_cidr_entries(): void
     {
         $m = $this->ip('isIpAllowed');
@@ -137,10 +136,8 @@ class ApiKeyManagerExtraTest extends TestCase
         ], $overrides);
     }
 
-    /**
-     * @test
-     * @dataProvider malformedKeys
-     */
+    #[DataProvider('malformedKeys')]
+    #[Test]
     public function validate_key_refuses_a_malformed_key_without_touching_the_database(string $key): void
     {
         $wpdb = $this->wpdb();
@@ -171,7 +168,7 @@ class ApiKeyManagerExtraTest extends TestCase
         ];
     }
 
-    /** @test */
+    #[Test]
     public function looks_like_key_accepts_what_generate_key_emits(): void
     {
         $generated = $this->manager->generateKey();
@@ -179,7 +176,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertTrue($this->manager->looksLikeKey($generated['key']));
     }
 
-    /** @test */
+    #[Test]
     public function a_well_formed_but_unknown_key_still_runs_the_full_verify_loop(): void
     {
         // The structural gate must not become a shortcut for well-formed
@@ -190,7 +187,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertNull($this->manager->validateKey('int_' . str_repeat('e', 64)));
     }
 
-    /** @test */
+    #[Test]
     public function validate_key_returns_the_row_on_a_match(): void
     {
         $key = 'int_' . str_repeat('a', 64);
@@ -203,7 +200,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertSame(['members:read'], $result['permissions']);
     }
 
-    /** @test */
+    #[Test]
     public function validate_key_returns_null_when_no_row_matches(): void
     {
         $key = 'int_' . str_repeat('b', 64);
@@ -213,7 +210,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertNull($this->manager->validateKey($key));
     }
 
-    /** @test */
+    #[Test]
     public function validate_key_returns_null_for_an_expired_key(): void
     {
         $key = 'int_' . str_repeat('c', 64);
@@ -225,7 +222,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertNull($this->manager->validateKey($key));
     }
 
-    /** @test */
+    #[Test]
     public function validate_key_returns_null_when_the_client_ip_is_not_whitelisted(): void
     {
         $key = 'int_' . str_repeat('d', 64);
@@ -238,8 +235,7 @@ class ApiKeyManagerExtraTest extends TestCase
     }
 
     // ─── CRUD ────────────────────────────────────────────────────────
-
-    /** @test */
+    #[Test]
     public function revoke_key_reports_success_from_wpdb_update(): void
     {
         $wpdb = $this->wpdb();
@@ -251,7 +247,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertFalse($this->manager->revokeKey(5));
     }
 
-    /** @test */
+    #[Test]
     public function delete_key_reports_success_from_wpdb_delete(): void
     {
         $wpdb = $this->wpdb();
@@ -259,7 +255,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertTrue($this->manager->deleteKey(5));
     }
 
-    /** @test */
+    #[Test]
     public function get_all_keys_decodes_json_columns(): void
     {
         $wpdb = $this->wpdb();
@@ -274,7 +270,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertNull($keys[1]['ip_whitelist']);
     }
 
-    /** @test */
+    #[Test]
     public function get_key_returns_a_decoded_row_or_null(): void
     {
         $wpdb = $this->wpdb();
@@ -286,7 +282,7 @@ class ApiKeyManagerExtraTest extends TestCase
         $this->assertNull($this->manager->getKey(2));
     }
 
-    /** @test */
+    #[Test]
     public function update_key_maps_every_supported_field(): void
     {
         $wpdb = $this->wpdb();
@@ -302,7 +298,7 @@ class ApiKeyManagerExtraTest extends TestCase
         ]));
     }
 
-    /** @test */
+    #[Test]
     public function update_key_returns_false_with_no_recognised_fields(): void
     {
         $this->wpdb();
