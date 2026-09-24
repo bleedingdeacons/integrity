@@ -10,7 +10,6 @@ use Closure;
 use Integrity\Admin\SettingsPage;
 use Integrity\Plugin;
 use Mockery;
-use Psr\Container\ContainerInterface;
 use ReflectionClass;
 use Unity\Core\Interfaces\Container;
 
@@ -40,11 +39,10 @@ function resetIntegrityPluginStatics(): void
 beforeEach(function () {
     resetIntegrityPluginStatics();
 
-    // Unity is not autoloadable from this plugin's test run, so Mockery
-    // invents the Container type. PSR-11 has to be named explicitly or
-    // the double will not satisfy Plugin::$container's ContainerInterface
-    // type — Unity's Container extends it, but the invented one does not.
-    $this->container = Mockery::mock(Container::class, ContainerInterface::class);
+    // tests/bootstrap.php autoloads Unity from the sibling checkout, so this
+    // doubles the real Container — which extends PSR-11's ContainerInterface,
+    // and so satisfies Plugin::$container's type on its own.
+    $this->container = Mockery::mock(Container::class);
 
     // registerServices() registers a service per controller and auth
     // class. The exact set is Plugin's business, not this test's, so
@@ -97,7 +95,7 @@ it('only initialises once', function () {
 
     // A second init must be a no-op, so the container it is handed should
     // never be touched — and the first one must still be in place.
-    $secondContainer = Mockery::mock(Container::class, ContainerInterface::class);
+    $secondContainer = Mockery::mock(Container::class);
     $secondContainer->shouldNotReceive('register');
     $secondContainer->shouldNotReceive('get');
 
