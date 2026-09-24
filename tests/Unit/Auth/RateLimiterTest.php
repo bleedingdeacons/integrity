@@ -4,19 +4,15 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
-use PHPUnit\Framework\Attributes\Test;
 use Integrity\Auth\RateLimiter;
-use Integrity\Tests\TestCase;
 use Mockery;
 
-/**
+/*
  * Unit tests for RateLimiter
  */
-class RateLimiterTest extends TestCase
-{
-    #[Test]
-    public function checkAndIncrement_returns_allowed_when_under_limit(): void
-    {
+
+describe('checkAndIncrement', function () {
+    it('returns allowed when under the limit', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -37,14 +33,12 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkAndIncrement(1, 1000);
 
-        $this->assertTrue($result['allowed']);
-        $this->assertEquals(949, $result['remaining']);
-        $this->assertArrayHasKey('reset', $result);
-    }
+        expect($result['allowed'])->toBeTrue()
+            ->and($result['remaining'])->toEqual(949)
+            ->and($result)->toHaveKey('reset');
+    });
 
-    #[Test]
-    public function checkAndIncrement_returns_not_allowed_when_over_limit(): void
-    {
+    it('returns not allowed when over the limit', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -64,13 +58,11 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkAndIncrement(1, 1000);
 
-        $this->assertFalse($result['allowed']);
-        $this->assertEquals(0, $result['remaining']);
-    }
+        expect($result['allowed'])->toBeFalse()
+            ->and($result['remaining'])->toEqual(0);
+    });
 
-    #[Test]
-    public function checkAndIncrement_returns_allowed_for_first_request_in_window(): void
-    {
+    it('returns allowed for the first request in a window', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -90,13 +82,11 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkAndIncrement(1, 1000);
 
-        $this->assertTrue($result['allowed']);
-        $this->assertEquals(999, $result['remaining']);
-    }
+        expect($result['allowed'])->toBeTrue()
+            ->and($result['remaining'])->toEqual(999);
+    });
 
-    #[Test]
-    public function checkAndIncrement_returns_not_allowed_when_exceeding_limit(): void
-    {
+    it('returns not allowed when exceeding the limit', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -116,13 +106,11 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkAndIncrement(1, 1000);
 
-        $this->assertFalse($result['allowed']);
-        $this->assertEquals(0, $result['remaining']);
-    }
+        expect($result['allowed'])->toBeFalse()
+            ->and($result['remaining'])->toEqual(0);
+    });
 
-    #[Test]
-    public function checkAndIncrement_allows_request_at_exact_limit_boundary(): void
-    {
+    it('allows a request at the exact limit boundary', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -142,13 +130,11 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkAndIncrement(1, 1000);
 
-        $this->assertTrue($result['allowed']);
-        $this->assertEquals(0, $result['remaining']);
-    }
+        expect($result['allowed'])->toBeTrue()
+            ->and($result['remaining'])->toEqual(0);
+    });
 
-    #[Test]
-    public function checkAndIncrement_with_zero_limit_always_denied(): void
-    {
+    it('always denies with a zero limit', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -168,12 +154,12 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkAndIncrement(1, 0);
 
-        $this->assertFalse($result['allowed']);
-    }
+        expect($result['allowed'])->toBeFalse();
+    });
+});
 
-    #[Test]
-    public function checkLimit_returns_allowed_when_under_limit(): void
-    {
+describe('checkLimit', function () {
+    it('returns allowed when under the limit', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -189,14 +175,12 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkLimit(1, 1000);
 
-        $this->assertTrue($result['allowed']);
-        $this->assertEquals(950, $result['remaining']);
-        $this->assertArrayHasKey('reset', $result);
-    }
+        expect($result['allowed'])->toBeTrue()
+            ->and($result['remaining'])->toEqual(950)
+            ->and($result)->toHaveKey('reset');
+    });
 
-    #[Test]
-    public function checkLimit_returns_not_allowed_when_at_limit(): void
-    {
+    it('returns not allowed when at the limit', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -212,13 +196,11 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkLimit(1, 1000);
 
-        $this->assertFalse($result['allowed']);
-        $this->assertEquals(0, $result['remaining']);
-    }
+        expect($result['allowed'])->toBeFalse()
+            ->and($result['remaining'])->toEqual(0);
+    });
 
-    #[Test]
-    public function checkLimit_returns_full_limit_for_new_window(): void
-    {
+    it('returns the full limit for a new window', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -234,13 +216,11 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkLimit(1, 1000);
 
-        $this->assertTrue($result['allowed']);
-        $this->assertEquals(1000, $result['remaining']);
-    }
+        expect($result['allowed'])->toBeTrue()
+            ->and($result['remaining'])->toEqual(1000);
+    });
 
-    #[Test]
-    public function checkLimit_reset_time_is_in_future(): void
-    {
+    it('puts the reset time in the future', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -256,31 +236,26 @@ class RateLimiterTest extends TestCase
         $rateLimiter = new RateLimiter();
         $result = $rateLimiter->checkLimit(1, 1000);
 
-        $this->assertGreaterThan(time(), $result['reset']);
-    }
+        expect($result['reset'])->toBeGreaterThan(time());
+    });
+});
 
-    #[Test]
-    public function getHeaders_returns_correct_header_format(): void
-    {
+describe('getHeaders', function () {
+    it('returns the correct header format', function () {
         $rateLimiter = new RateLimiter();
         $headers = $rateLimiter->getHeaders(1000, 500, 1704067200);
 
-        $this->assertIsArray($headers);
-        $this->assertArrayHasKey('X-RateLimit-Limit', $headers);
-        $this->assertArrayHasKey('X-RateLimit-Remaining', $headers);
-        $this->assertArrayHasKey('X-RateLimit-Reset', $headers);
+        expect($headers)
+            ->toBeArray()
+            ->toHaveKey('X-RateLimit-Limit', 1000)
+            ->toHaveKey('X-RateLimit-Remaining', 500)
+            ->toHaveKey('X-RateLimit-Reset', 1704067200);
+    });
 
-        $this->assertEquals(1000, $headers['X-RateLimit-Limit']);
-        $this->assertEquals(500, $headers['X-RateLimit-Remaining']);
-        $this->assertEquals(1704067200, $headers['X-RateLimit-Reset']);
-    }
-
-    #[Test]
-    public function getHeaders_remaining_never_negative(): void
-    {
+    it('never returns a negative remaining count', function () {
         $rateLimiter = new RateLimiter();
         $headers = $rateLimiter->getHeaders(1000, -50, 1704067200);
 
-        $this->assertEquals(0, $headers['X-RateLimit-Remaining']);
-    }
-}
+        expect($headers['X-RateLimit-Remaining'])->toEqual(0);
+    });
+});

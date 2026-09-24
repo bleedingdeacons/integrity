@@ -4,63 +4,49 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
-use PHPUnit\Framework\Attributes\Test;
 use BleedingDeacons\WpMocks\WpState;
 use Integrity\Auth\ApiKeyManager;
-use Integrity\Tests\TestCase;
 use Mockery;
 
-/**
+/*
  * Unit tests for ApiKeyManager
  *
  * sanitize_text_field(), wp_json_encode(), current_time() and
  * get_current_user_id() are real functions in wp-mocks, so only the options
  * these paths read still need seeding.
  */
-class ApiKeyManagerTest extends TestCase
-{
-    private ApiKeyManager $apiKeyManager;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+beforeEach(function () {
+    // ApiKeyManager's methods were static when these tests were written
+    // and are instance methods now; it takes no constructor arguments.
+    $this->apiKeyManager = new ApiKeyManager();
+});
 
-        // ApiKeyManager's methods were static when these tests were written
-        // and are instance methods now; it takes no constructor arguments.
-        $this->apiKeyManager = new ApiKeyManager();
-    }
-
-    #[Test]
-    public function generateKey_returns_array_with_required_keys(): void
-    {
+describe('generateKey', function () {
+    it('returns an array with the required keys', function () {
         $result = $this->apiKeyManager->generateKey();
 
-        $this->assertIsArray($result);
-        $this->assertArrayHasKey('key', $result);
-        $this->assertArrayHasKey('hash', $result);
-        $this->assertArrayHasKey('prefix', $result);
-    }
+        expect($result)
+            ->toBeArray()
+            ->toHaveKey('key')
+            ->toHaveKey('hash')
+            ->toHaveKey('prefix');
+    });
 
-    #[Test]
-    public function generateKey_creates_key_with_int_prefix(): void
-    {
+    it('creates a key with the int_ prefix', function () {
         $result = $this->apiKeyManager->generateKey();
 
-        $this->assertStringStartsWith('int_', $result['key']);
-    }
+        expect($result['key'])->toStartWith('int_');
+    });
 
-    #[Test]
-    public function generateKey_creates_key_of_expected_length(): void
-    {
+    it('creates a key of the expected length', function () {
         $result = $this->apiKeyManager->generateKey();
 
         // int_ (4) + 64 hex chars (32 bytes) = 68 characters
-        $this->assertEquals(68, strlen($result['key']));
-    }
+        expect(strlen($result['key']))->toEqual(68);
+    });
 
-    #[Test]
-    public function generateKey_creates_unique_keys(): void
-    {
+    it('creates unique keys', function () {
         $keys = [];
         for ($i = 0; $i < 100; $i++) {
             $result = $this->apiKeyManager->generateKey();
@@ -68,73 +54,62 @@ class ApiKeyManagerTest extends TestCase
         }
 
         // All keys should be unique
-        $this->assertEquals(count($keys), count(array_unique($keys)));
-    }
+        expect(count(array_unique($keys)))->toEqual(count($keys));
+    });
 
-    #[Test]
-    public function generateKey_prefix_is_first_8_chars(): void
-    {
+    it('uses the first 8 characters as the prefix', function () {
         $result = $this->apiKeyManager->generateKey();
 
-        $this->assertEquals(substr($result['key'], 0, 8), $result['prefix']);
-    }
+        expect($result['prefix'])->toEqual(substr($result['key'], 0, 8));
+    });
+});
 
-    #[Test]
-    public function hashKey_returns_non_empty_string(): void
-    {
+describe('hashKey', function () {
+    it('returns a non-empty string', function () {
         $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
 
-        $this->assertIsString($hash);
-        $this->assertNotEmpty($hash);
-    }
+        expect($hash)
+            ->toBeString()
+            ->not->toBeEmpty();
+    });
 
-    #[Test]
-    public function hashKey_returns_different_hash_for_different_keys(): void
-    {
+    it('returns a different hash for different keys', function () {
         $hash1 = $this->apiKeyManager->hashKey('int_test_key_12345');
         $hash2 = $this->apiKeyManager->hashKey('int_test_key_67890');
 
-        $this->assertNotEquals($hash1, $hash2);
-    }
+        expect($hash2)->not->toEqual($hash1);
+    });
 
-    #[Test]
-    public function hashKey_uses_argon2id(): void
-    {
+    it('uses argon2id', function () {
         $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
 
         // Argon2id hashes start with $argon2id$
-        $this->assertStringStartsWith('$argon2id$', $hash);
-    }
+        expect($hash)->toStartWith('$argon2id$');
+    });
+});
 
-    #[Test]
-    public function verifyKey_returns_true_for_valid_key(): void
-    {
+describe('verifyKey', function () {
+    it('returns true for a valid key', function () {
         $key = 'int_test_key_12345';
         $hash = $this->apiKeyManager->hashKey($key);
 
-        $this->assertTrue($this->apiKeyManager->verifyKey($key, $hash));
-    }
+        expect($this->apiKeyManager->verifyKey($key, $hash))->toBeTrue();
+    });
 
-    #[Test]
-    public function verifyKey_returns_false_for_invalid_key(): void
-    {
+    it('returns false for an invalid key', function () {
         $key = 'int_test_key_12345';
         $hash = $this->apiKeyManager->hashKey($key);
 
-        $this->assertFalse($this->apiKeyManager->verifyKey('int_wrong_key', $hash));
-    }
+        expect($this->apiKeyManager->verifyKey('int_wrong_key', $hash))->toBeFalse();
+    });
 
-    #[Test]
-    public function verifyKey_returns_false_for_empty_key(): void
-    {
+    it('returns false for an empty key', function () {
         $hash = $this->apiKeyManager->hashKey('int_test_key_12345');
 
-        $this->assertFalse($this->apiKeyManager->verifyKey('', $hash));
-    }
+        expect($this->apiKeyManager->verifyKey('', $hash))->toBeFalse();
+    });
 
-    #[Test]
-    public function verifyKey_is_timing_safe(): void
-    {
+    it('is timing-safe', function () {
         $key = 'int_test_key_12345';
         $hash = $this->apiKeyManager->hashKey($key);
 
@@ -155,12 +130,12 @@ class ApiKeyManagerTest extends TestCase
         // Times should be similar (within 50% of each other)
         // This is a basic timing attack check
         $ratio = max($correctTime, $wrongTime) / min($correctTime, $wrongTime);
-        $this->assertLessThan(2.0, $ratio, 'Timing difference too large, possible timing attack vulnerability');
-    }
+        expect($ratio)->toBeLessThan(2.0, 'Timing difference too large, possible timing attack vulnerability');
+    });
+});
 
-    #[Test]
-    public function createKey_with_valid_data_calls_wpdb_insert(): void
-    {
+describe('createKey', function () {
+    it('calls wpdb insert with valid data', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -175,14 +150,12 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->createKey('Test Key', ['groups:read']);
 
-        $this->assertTrue($result['success']);
-        $this->assertArrayHasKey('key', $result);
-        $this->assertArrayHasKey('id', $result);
-    }
+        expect($result['success'])->toBeTrue()
+            ->and($result)->toHaveKey('key')
+            ->and($result)->toHaveKey('id');
+    });
 
-    #[Test]
-    public function createKey_returns_error_on_database_failure(): void
-    {
+    it('returns an error on database failure', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -195,13 +168,13 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->createKey('Test Key', ['groups:read']);
 
-        $this->assertFalse($result['success']);
-        $this->assertArrayHasKey('error', $result);
-    }
+        expect($result['success'])->toBeFalse()
+            ->and($result)->toHaveKey('error');
+    });
+});
 
-    #[Test]
-    public function revokeKey_updates_is_active_to_zero(): void
-    {
+describe('revokeKey', function () {
+    it('updates is_active to zero', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -219,12 +192,10 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->revokeKey(123);
 
-        $this->assertTrue($result);
-    }
+        expect($result)->toBeTrue();
+    });
 
-    #[Test]
-    public function revokeKey_returns_false_on_failure(): void
-    {
+    it('returns false on failure', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -235,12 +206,12 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->revokeKey(123);
 
-        $this->assertFalse($result);
-    }
+        expect($result)->toBeFalse();
+    });
+});
 
-    #[Test]
-    public function deleteKey_removes_record_from_database(): void
-    {
+describe('deleteKey', function () {
+    it('removes the record from the database', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -256,12 +227,10 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->deleteKey(456);
 
-        $this->assertTrue($result);
-    }
+        expect($result)->toBeTrue();
+    });
 
-    #[Test]
-    public function deleteKey_returns_false_on_failure(): void
-    {
+    it('returns false on failure', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -272,12 +241,12 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->deleteKey(456);
 
-        $this->assertFalse($result);
-    }
+        expect($result)->toBeFalse();
+    });
+});
 
-    #[Test]
-    public function getAllKeys_returns_array(): void
-    {
+describe('getAllKeys', function () {
+    it('returns an array', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -305,14 +274,15 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->getAllKeys();
 
-        $this->assertIsArray($result);
-        $this->assertCount(1, $result);
-        $this->assertEquals(['groups:read'], $result[0]['permissions']);
-    }
+        expect($result)
+            ->toBeArray()
+            ->toHaveCount(1)
+            ->and($result[0]['permissions'])->toEqual(['groups:read']);
+    });
+});
 
-    #[Test]
-    public function getKey_returns_key_data_when_found(): void
-    {
+describe('getKey', function () {
+    it('returns the key data when found', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -342,14 +312,13 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->getKey(1);
 
-        $this->assertIsArray($result);
-        $this->assertEquals(1, $result['id']);
-        $this->assertEquals(['groups:read', 'meetings:read'], $result['permissions']);
-    }
+        expect($result)
+            ->toBeArray()
+            ->toHaveKey('id', 1)
+            ->and($result['permissions'])->toEqual(['groups:read', 'meetings:read']);
+    });
 
-    #[Test]
-    public function getKey_returns_null_when_not_found(): void
-    {
+    it('returns null when not found', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -364,12 +333,12 @@ class ApiKeyManagerTest extends TestCase
 
         $result = $this->apiKeyManager->getKey(999);
 
-        $this->assertNull($result);
-    }
+        expect($result)->toBeNull();
+    });
+});
 
-    #[Test]
-    public function updateKey_updates_specified_fields(): void
-    {
+describe('updateKey', function () {
+    it('updates the specified fields', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -383,14 +352,12 @@ class ApiKeyManagerTest extends TestCase
             'rate_limit' => 2000,
         ]);
 
-        $this->assertTrue($result);
-    }
+        expect($result)->toBeTrue();
+    });
 
-    #[Test]
-    public function updateKey_returns_false_when_no_data_provided(): void
-    {
+    it('returns false when no data is provided', function () {
         $result = $this->apiKeyManager->updateKey(1, []);
 
-        $this->assertFalse($result);
-    }
-}
+        expect($result)->toBeFalse();
+    });
+});

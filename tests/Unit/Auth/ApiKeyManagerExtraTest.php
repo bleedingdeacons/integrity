@@ -4,60 +4,70 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Integrity\Auth\ApiKeyManager;
-use Integrity\Tests\TestCase;
 use Mockery;
 use ReflectionMethod;
 
-/**
+/*
  * Covers ApiKeyManager's validation, IP/CIDR matching and CRUD paths beyond
  * the key-generation basics in ApiKeyManagerTest. A mocked $wpdb stands in for
  * the database.
  */
-#[CoversClass(\Integrity\Auth\ApiKeyManager::class)]
-class ApiKeyManagerExtraTest extends TestCase
+
+covers(ApiKeyManager::class);
+
+function apiKeyExtraMethod(string $method): ReflectionMethod
 {
-    private ApiKeyManager $manager;
+    // No setAccessible() call: it has been a no-op since PHP 8.1 — this
+    // plugin's floor — and is deprecated from 8.5.
+    return new ReflectionMethod(ApiKeyManager::class, $method);
+}
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->manager = new ApiKeyManager();
+function apiKeyExtraWpdb(): object
+{
+    $wpdb = Mockery::mock('wpdb');
+    $wpdb->prefix = 'wp_';
+    $wpdb->shouldReceive('prepare')->andReturnUsing(fn ($q) => $q)->byDefault();
+    $GLOBALS['wpdb'] = $wpdb;
+    return $wpdb;
+}
 
-        // esc_sql(), current_time(), sanitize_text_field() and wp_json_encode()
-        // are all real functions in wp-mocks, with the behaviour these tests
-        // used to spell out by hand.
-    }
+function apiKeyExtraRow(ApiKeyManager $manager, string $key, array $overrides = []): array
+{
+    return array_merge([
+        'id' => 1,
+        'api_key_hash' => $manager->hashKey($key),
+        'expires_at' => null,
+        'ip_whitelist' => null,
+        'request_count' => 4,
+        'permissions' => json_encode(['members:read']),
+    ], $overrides);
+}
 
-    private function ip(string $method): ReflectionMethod
-    {
-        // No setAccessible() call: it has been a no-op since PHP 8.1 — this
-        // plugin's floor — and is deprecated from 8.5.
-        return new ReflectionMethod(ApiKeyManager::class, $method);
-    }
+beforeEach(function () {
+    $this->manager = new ApiKeyManager();
 
-    // ─── ipInCidr / isIpAllowed ──────────────────────────────────────
-    #[Test]
-    public function ip_in_cidr_matches_ipv4_ranges(): void
-    {
-        $m = $this->ip('ipInCidr');
-        $this->assertTrue($m->invoke($this->manager, '192.168.1.5', '192.168.1.0/24'));
-        $this->assertFalse($m->invoke($this->manager, '10.0.0.1', '192.168.1.0/24'));
-        $this->assertFalse($m->invoke($this->manager, 'not-an-ip', '192.168.1.0/24'));
-    }
+    // esc_sql(), current_time(), sanitize_text_field() and wp_json_encode()
+    // are all real functions in wp-mocks, with the behaviour these tests
+    // used to spell out by hand.
+});
 
-    #[Test]
-    public function ip_in_cidr_matches_ipv6_ranges(): void
-    {
-        $m = $this->ip('ipInCidr');
-        $this->assertTrue($m->invoke($this->manager, '2001:db8::1', '2001:db8::/32'));
-        $this->assertFalse($m->invoke($this->manager, '2001:dead::1', '2001:db8::/32'));
-        // Non-nibble-aligned prefix exercises the remainder-bits branch.
-        $this->assertTrue($m->invoke($this->manager, '2001:db8:0:1::', '2001:db8:0:1::/60'));
-    }
+// ─── ipInCidr / isIpAllowed ──────────────────────────────────────
+describe('ipInCidr / isIpAllowed', function () {
+    it('matches IPv4 ranges', function () {
+        $m = apiKeyExtraMethod('ipInCidr');
+        expect($m->invoke($this->manager, '192.168.1.5', '192.168.1.0/24'))->toBeTrue()
+            ->and($m->invoke($this->manager, '10.0.0.1', '192.168.1.0/24'))->toBeFalse()
+            ->and($m->invoke($this->manager, 'not-an-ip', '192.168.1.0/24'))->toBeFalse();
+    });
+
+    it('matches IPv6 ranges', function () {
+        $m = apiKeyExtraMethod('ipInCidr');
+        expect($m->invoke($this->manager, '2001:db8::1', '2001:db8::/32'))->toBeTrue()
+            ->and($m->invoke($this->manager, '2001:dead::1', '2001:db8::/32'))->toBeFalse()
+            // Non-nibble-aligned prefix exercises the remainder-bits branch.
+            ->and($m->invoke($this->manager, '2001:db8:0:1::', '2001:db8:0:1::/60'))->toBeTrue();
+    });
 
     /**
      * A /0 entry means "every address" and must say so.
@@ -67,13 +77,11 @@ class ApiKeyManagerExtraTest extends TestCase
      * so an admin writing 0.0.0.0/0 to mean "allow anything" got a whitelist
      * that matched nothing and locked the key out.
      */
-    #[Test]
-    public function ip_in_cidr_treats_a_zero_prefix_as_every_address(): void
-    {
-        $m = $this->ip('ipInCidr');
-        $this->assertTrue($m->invoke($this->manager, '8.8.8.8', '0.0.0.0/0'));
-        $this->assertTrue($m->invoke($this->manager, '10.0.0.1', '0.0.0.0/0'));
-    }
+    it('treats a zero prefix as every address', function () {
+        $m = apiKeyExtraMethod('ipInCidr');
+        expect($m->invoke($this->manager, '8.8.8.8', '0.0.0.0/0'))->toBeTrue()
+            ->and($m->invoke($this->manager, '10.0.0.1', '0.0.0.0/0'))->toBeTrue();
+    });
 
     /**
      * A prefix that is absent, empty or out of range is not permission.
@@ -82,226 +90,159 @@ class ApiKeyManagerExtraTest extends TestCase
      * prefix walked past the end of the hex string and read an uninitialised
      * offset.
      */
-    #[DataProvider('malformedCidrProvider')]
-    #[Test]
-    public function ip_in_cidr_refuses_a_malformed_prefix(string $ip, string $cidr): void
-    {
-        $this->assertFalse($this->ip('ipInCidr')->invoke($this->manager, $ip, $cidr));
-    }
+    it('refuses a malformed prefix', function (string $ip, string $cidr) {
+        expect(apiKeyExtraMethod('ipInCidr')->invoke($this->manager, $ip, $cidr))->toBeFalse();
+    })->with([
+        'empty prefix'      => ['10.0.0.1', '10.0.0.0/'],
+        'non-numeric'       => ['10.0.0.1', '10.0.0.0/abc'],
+        'negative'          => ['10.0.0.1', '10.0.0.0/-8'],
+        'ipv4 out of range' => ['10.0.0.1', '10.0.0.0/33'],
+        'ipv6 out of range' => ['2001:db8::1', '2001:db8::/200'],
+        'family mismatch'   => ['2001:db8::1', '10.0.0.0/24'],
+    ]);
 
-    /**
-     * @return array<string, array{0: string, 1: string}>
-     */
-    public static function malformedCidrProvider(): array
-    {
-        return [
-            'empty prefix'      => ['10.0.0.1', '10.0.0.0/'],
-            'non-numeric'       => ['10.0.0.1', '10.0.0.0/abc'],
-            'negative'          => ['10.0.0.1', '10.0.0.0/-8'],
-            'ipv4 out of range' => ['10.0.0.1', '10.0.0.0/33'],
-            'ipv6 out of range' => ['2001:db8::1', '2001:db8::/200'],
-            'family mismatch'   => ['2001:db8::1', '10.0.0.0/24'],
-        ];
-    }
+    it('handles exact and CIDR entries in isIpAllowed', function () {
+        $m = apiKeyExtraMethod('isIpAllowed');
+        expect($m->invoke($this->manager, '10.0.0.7', ['10.0.0.7']))->toBeTrue()
+            ->and($m->invoke($this->manager, '192.168.1.9', ['192.168.1.0/24']))->toBeTrue()
+            ->and($m->invoke($this->manager, '8.8.8.8', ['10.0.0.7', '192.168.1.0/24']))->toBeFalse();
+    });
+});
 
-    #[Test]
-    public function is_ip_allowed_handles_exact_and_cidr_entries(): void
-    {
-        $m = $this->ip('isIpAllowed');
-        $this->assertTrue($m->invoke($this->manager, '10.0.0.7', ['10.0.0.7']));
-        $this->assertTrue($m->invoke($this->manager, '192.168.1.9', ['192.168.1.0/24']));
-        $this->assertFalse($m->invoke($this->manager, '8.8.8.8', ['10.0.0.7', '192.168.1.0/24']));
-    }
-
-    // ─── validateKey ─────────────────────────────────────────────────
-
-    private function wpdb(): object
-    {
-        $wpdb = Mockery::mock('wpdb');
-        $wpdb->prefix = 'wp_';
-        $wpdb->shouldReceive('prepare')->andReturnUsing(fn ($q) => $q)->byDefault();
-        $GLOBALS['wpdb'] = $wpdb;
-        return $wpdb;
-    }
-
-    private function keyRow(string $key, array $overrides = []): array
-    {
-        return array_merge([
-            'id' => 1,
-            'api_key_hash' => $this->manager->hashKey($key),
-            'expires_at' => null,
-            'ip_whitelist' => null,
-            'request_count' => 4,
-            'permissions' => json_encode(['members:read']),
-        ], $overrides);
-    }
-
-    #[DataProvider('malformedKeys')]
-    #[Test]
-    public function validate_key_refuses_a_malformed_key_without_touching_the_database(string $key): void
-    {
-        $wpdb = $this->wpdb();
+// ─── validateKey ─────────────────────────────────────────────────
+describe('validateKey', function () {
+    it('refuses a malformed key without touching the database', function (string $key) {
+        $wpdb = apiKeyExtraWpdb();
         // No get_results() expectation: reaching the query at all is the
         // failure. A malformed key must cost neither a round-trip nor any
         // Argon2id time.
         $wpdb->shouldNotReceive('get_results');
 
-        $this->assertNull($this->manager->validateKey($key));
-    }
+        expect($this->manager->validateKey($key))->toBeNull();
+    })->with([
+        'empty'            => [''],
+        'wrong prefix'     => ['key_' . str_repeat('a', 64)],
+        'no prefix'        => [str_repeat('a', 68)],
+        'too short'        => ['int_' . str_repeat('a', 63)],
+        'too long'         => ['int_' . str_repeat('a', 65)],
+        'non-hex body'     => ['int_' . str_repeat('z', 64)],
+        'uppercase hex'    => ['int_' . str_repeat('A', 64)],
+        'sql-ish'          => ["int_' OR 1=1 -- " . str_repeat('a', 48)],
+        'newline injected' => ["int_\n" . str_repeat('a', 63)],
+    ]);
 
-    /**
-     * @return array<string, array{string}>
-     */
-    public static function malformedKeys(): array
-    {
-        return [
-            'empty'            => [''],
-            'wrong prefix'     => ['key_' . str_repeat('a', 64)],
-            'no prefix'        => [str_repeat('a', 68)],
-            'too short'        => ['int_' . str_repeat('a', 63)],
-            'too long'         => ['int_' . str_repeat('a', 65)],
-            'non-hex body'     => ['int_' . str_repeat('z', 64)],
-            'uppercase hex'    => ['int_' . str_repeat('A', 64)],
-            'sql-ish'          => ["int_' OR 1=1 -- " . str_repeat('a', 48)],
-            'newline injected' => ["int_
-" . str_repeat('a', 63)],
-        ];
-    }
-
-    #[Test]
-    public function looks_like_key_accepts_what_generate_key_emits(): void
-    {
+    it('accepts in looksLikeKey what generateKey emits', function () {
         $generated = $this->manager->generateKey();
 
-        $this->assertTrue($this->manager->looksLikeKey($generated['key']));
-    }
+        expect($this->manager->looksLikeKey($generated['key']))->toBeTrue();
+    });
 
-    #[Test]
-    public function a_well_formed_but_unknown_key_still_runs_the_full_verify_loop(): void
-    {
+    it('still runs the full verify loop for a well-formed but unknown key', function () {
         // The structural gate must not become a shortcut for well-formed
         // candidates: that is the timing oracle dummyHash() exists to close.
-        $wpdb = $this->wpdb();
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('get_results')->once()->andReturn([]);
 
-        $this->assertNull($this->manager->validateKey('int_' . str_repeat('e', 64)));
-    }
+        expect($this->manager->validateKey('int_' . str_repeat('e', 64)))->toBeNull();
+    });
 
-    #[Test]
-    public function validate_key_returns_the_row_on_a_match(): void
-    {
+    it('returns the row on a match', function () {
         $key = 'int_' . str_repeat('a', 64);
-        $wpdb = $this->wpdb();
-        $wpdb->shouldReceive('get_results')->andReturn([$this->keyRow($key)]);
+        $wpdb = apiKeyExtraWpdb();
+        $wpdb->shouldReceive('get_results')->andReturn([apiKeyExtraRow($this->manager, $key)]);
         $wpdb->shouldReceive('update')->once()->andReturn(1);
 
         $result = $this->manager->validateKey($key);
-        $this->assertIsArray($result);
-        $this->assertSame(['members:read'], $result['permissions']);
-    }
+        expect($result)->toBeArray()
+            ->and($result['permissions'])->toBe(['members:read']);
+    });
 
-    #[Test]
-    public function validate_key_returns_null_when_no_row_matches(): void
-    {
+    it('returns null when no row matches', function () {
         $key = 'int_' . str_repeat('b', 64);
-        $wpdb = $this->wpdb();
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('get_results')->andReturn([]);
 
-        $this->assertNull($this->manager->validateKey($key));
-    }
+        expect($this->manager->validateKey($key))->toBeNull();
+    });
 
-    #[Test]
-    public function validate_key_returns_null_for_an_expired_key(): void
-    {
+    it('returns null for an expired key', function () {
         $key = 'int_' . str_repeat('c', 64);
-        $wpdb = $this->wpdb();
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('get_results')->andReturn([
-            $this->keyRow($key, ['expires_at' => '2000-01-01 00:00:00']),
+            apiKeyExtraRow($this->manager, $key, ['expires_at' => '2000-01-01 00:00:00']),
         ]);
 
-        $this->assertNull($this->manager->validateKey($key));
-    }
+        expect($this->manager->validateKey($key))->toBeNull();
+    });
 
-    #[Test]
-    public function validate_key_returns_null_when_the_client_ip_is_not_whitelisted(): void
-    {
+    it('returns null when the client IP is not whitelisted', function () {
         $key = 'int_' . str_repeat('d', 64);
-        $wpdb = $this->wpdb();
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('get_results')->andReturn([
-            $this->keyRow($key, ['ip_whitelist' => json_encode(['10.0.0.0/24'])]),
+            apiKeyExtraRow($this->manager, $key, ['ip_whitelist' => json_encode(['10.0.0.0/24'])]),
         ]);
 
-        $this->assertNull($this->manager->validateKey($key, '8.8.8.8'));
-    }
+        expect($this->manager->validateKey($key, '8.8.8.8'))->toBeNull();
+    });
+});
 
-    // ─── CRUD ────────────────────────────────────────────────────────
-    #[Test]
-    public function revoke_key_reports_success_from_wpdb_update(): void
-    {
-        $wpdb = $this->wpdb();
+// ─── CRUD ────────────────────────────────────────────────────────
+describe('CRUD', function () {
+    it('reports revokeKey success from wpdb update', function () {
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('update')->once()->andReturn(1);
-        $this->assertTrue($this->manager->revokeKey(5));
+        expect($this->manager->revokeKey(5))->toBeTrue();
 
-        $wpdb2 = $this->wpdb();
+        $wpdb2 = apiKeyExtraWpdb();
         $wpdb2->shouldReceive('update')->once()->andReturn(false);
-        $this->assertFalse($this->manager->revokeKey(5));
-    }
+        expect($this->manager->revokeKey(5))->toBeFalse();
+    });
 
-    #[Test]
-    public function delete_key_reports_success_from_wpdb_delete(): void
-    {
-        $wpdb = $this->wpdb();
+    it('reports deleteKey success from wpdb delete', function () {
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('delete')->once()->andReturn(1);
-        $this->assertTrue($this->manager->deleteKey(5));
-    }
+        expect($this->manager->deleteKey(5))->toBeTrue();
+    });
 
-    #[Test]
-    public function get_all_keys_decodes_json_columns(): void
-    {
-        $wpdb = $this->wpdb();
+    it('decodes JSON columns in getAllKeys', function () {
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('get_results')->andReturn([
             ['permissions' => json_encode(['a']), 'ip_whitelist' => json_encode(['1.2.3.4'])],
             ['permissions' => json_encode(['b']), 'ip_whitelist' => null],
         ]);
 
         $keys = $this->manager->getAllKeys();
-        $this->assertSame(['a'], $keys[0]['permissions']);
-        $this->assertSame(['1.2.3.4'], $keys[0]['ip_whitelist']);
-        $this->assertNull($keys[1]['ip_whitelist']);
-    }
+        expect($keys[0]['permissions'])->toBe(['a'])
+            ->and($keys[0]['ip_whitelist'])->toBe(['1.2.3.4'])
+            ->and($keys[1]['ip_whitelist'])->toBeNull();
+    });
 
-    #[Test]
-    public function get_key_returns_a_decoded_row_or_null(): void
-    {
-        $wpdb = $this->wpdb();
+    it('returns a decoded row or null from getKey', function () {
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('get_row')->andReturn(['permissions' => json_encode(['x']), 'ip_whitelist' => null]);
-        $this->assertSame(['x'], $this->manager->getKey(1)['permissions']);
+        expect($this->manager->getKey(1)['permissions'])->toBe(['x']);
 
-        $wpdb2 = $this->wpdb();
+        $wpdb2 = apiKeyExtraWpdb();
         $wpdb2->shouldReceive('get_row')->andReturn(null);
-        $this->assertNull($this->manager->getKey(2));
-    }
+        expect($this->manager->getKey(2))->toBeNull();
+    });
 
-    #[Test]
-    public function update_key_maps_every_supported_field(): void
-    {
-        $wpdb = $this->wpdb();
+    it('maps every supported field in updateKey', function () {
+        $wpdb = apiKeyExtraWpdb();
         $wpdb->shouldReceive('update')->once()->andReturn(1);
 
-        $this->assertTrue($this->manager->updateKey(1, [
+        expect($this->manager->updateKey(1, [
             'name' => 'Renamed',
             'permissions' => ['members:read'],
             'rate_limit' => 500,
             'expires_at' => '2027-01-01 00:00:00',
             'is_active' => 1,
             'ip_whitelist' => ['10.0.0.0/8'],
-        ]));
-    }
+        ]))->toBeTrue();
+    });
 
-    #[Test]
-    public function update_key_returns_false_with_no_recognised_fields(): void
-    {
-        $this->wpdb();
-        $this->assertFalse($this->manager->updateKey(1, ['unknown' => 'x']));
-    }
-}
+    it('returns false from updateKey with no recognised fields', function () {
+        apiKeyExtraWpdb();
+        expect($this->manager->updateKey(1, ['unknown' => 'x']))->toBeFalse();
+    });
+});

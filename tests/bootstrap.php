@@ -18,6 +18,16 @@ declare(strict_types=1);
 
 use BleedingDeacons\WpMocks\WpState;
 
+// Pest's launcher does not define PHPUNIT_COMPOSER_INSTALL, which
+// vendor/bin/phpunit does and PHPUnit's separate-process template reads to
+// load Composer in the child. Without it the child has no autoloader at all,
+// and every #[RunInSeparateProcess] test dies before it starts — which is what
+// the WP_DEBUG and INTEGRITY_ALLOW_INSECURE_TRANSPORT tests need, since a
+// defined constant cannot be undone.
+if (!defined('PHPUNIT_COMPOSER_INSTALL')) {
+    define('PHPUNIT_COMPOSER_INSTALL', dirname(__DIR__) . '/vendor/autoload.php');
+}
+
 // Load Composer autoloader
 $autoloader = dirname(__DIR__) . '/vendor/autoload.php';
 if (!file_exists($autoloader)) {

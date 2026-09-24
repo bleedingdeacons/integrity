@@ -4,149 +4,124 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Utils;
 
-use PHPUnit\Framework\Attributes\Test;
-use Integrity\Tests\TestCase;
 use Integrity\Utils\Mask;
 
-/**
+/*
  * Unit tests for Mask utility
  */
-class MaskTest extends TestCase
-{
-    // ─── Email masking ────────────────────────────────────
-    #[Test]
-    public function email_masks_standard_address(): void
-    {
+
+// ─── Email masking ────────────────────────────────────
+describe('email', function () {
+    it('masks a standard address', function () {
         $result = Mask::email('john@example.com');
 
         // First char of local + underscores, first char of domain + underscores, TLD preserved
-        $this->assertStringStartsWith('j', $result);
-        $this->assertStringContainsString('@', $result);
-        $this->assertStringEndsWith('.com', $result);
-        $this->assertStringContainsString('__', $result); // sentinel for isObscuredEmail()
-    }
+        expect($result)
+            ->toStartWith('j')
+            ->toContain('@')
+            ->toEndWith('.com')
+            ->toContain('__'); // sentinel for isObscuredEmail()
+    });
 
-    #[Test]
-    public function email_returns_empty_for_empty_input(): void
-    {
-        $this->assertSame('', Mask::email(''));
-    }
+    it('returns empty for empty input', function () {
+        expect(Mask::email(''))->toBe('');
+    });
 
-    #[Test]
-    public function email_returns_input_without_at_sign(): void
-    {
-        $this->assertSame('notanemail', Mask::email('notanemail'));
-    }
+    it('returns the input unchanged without an at sign', function () {
+        expect(Mask::email('notanemail'))->toBe('notanemail');
+    });
 
-    #[Test]
-    public function email_handles_short_local_part(): void
-    {
+    it('handles a short local part', function () {
         $result = Mask::email('a@b.co');
 
-        $this->assertStringStartsWith('a', $result);
-        $this->assertStringEndsWith('.co', $result);
-        $this->assertStringContainsString('__', $result); // minimum 2 underscores
-    }
+        expect($result)
+            ->toStartWith('a')
+            ->toEndWith('.co')
+            ->toContain('__'); // minimum 2 underscores
+    });
 
-    #[Test]
-    public function email_handles_subdomain(): void
-    {
+    it('handles a subdomain', function () {
         $result = Mask::email('user@mail.example.co.uk');
 
-        $this->assertStringStartsWith('u', $result);
-        $this->assertStringEndsWith('.uk', $result);
-        $this->assertStringContainsString('@', $result);
-    }
+        expect($result)
+            ->toStartWith('u')
+            ->toEndWith('.uk')
+            ->toContain('@');
+    });
 
-    #[Test]
-    public function email_preserves_structure(): void
-    {
+    it('preserves structure', function () {
         $result = Mask::email('longuser@longdomain.org');
 
         // Must contain exactly one @
-        $this->assertSame(1, substr_count($result, '@'));
-        // Must end with the original TLD
-        $this->assertStringEndsWith('.org', $result);
-    }
+        expect(substr_count($result, '@'))->toBe(1)
+            // Must end with the original TLD
+            ->and($result)->toEndWith('.org');
+    });
 
-    #[Test]
-    public function email_output_matches_obscured_sentinel_shape(): void
-    {
+    it('produces output matching the obscured sentinel shape', function () {
         // ControllerTrait::isObscuredEmail uses an anchored regex that matches
         // the exact sentinel shape: <char><2+ underscores>@<char><2+ underscores>.<tld>
         // Verify Mask output conforms.
         $masked = Mask::email('test@example.com');
 
-        $this->assertMatchesRegularExpression('/^.[_]{2,}@.[_]{2,}\.[^._@]+$/', $masked);
-    }
+        expect($masked)->toMatch('/^.[_]{2,}@.[_]{2,}\.[^._@]+$/');
+    });
+});
 
-    // ─── Phone masking ────────────────────────────────────
-    #[Test]
-    public function phone_masks_standard_number(): void
-    {
+// ─── Phone masking ────────────────────────────────────
+describe('phone', function () {
+    it('masks a standard number', function () {
         $result = Mask::phone('(555) 867-5309');
 
         // Last 4 digits visible, preceding digits replaced with *
-        $this->assertStringEndsWith('5309', $result);
-        $this->assertStringContainsString('*', $result);
-        // Non-digit formatting preserved
-        $this->assertStringContainsString('(', $result);
-        $this->assertStringContainsString(')', $result);
-        $this->assertStringContainsString('-', $result);
-    }
+        expect($result)
+            ->toEndWith('5309')
+            ->toContain('*')
+            // Non-digit formatting preserved
+            ->toContain('(')
+            ->toContain(')')
+            ->toContain('-');
+    });
 
-    #[Test]
-    public function phone_returns_empty_for_empty_input(): void
-    {
-        $this->assertSame('', Mask::phone(''));
-    }
+    it('returns empty for empty input', function () {
+        expect(Mask::phone(''))->toBe('');
+    });
 
-    #[Test]
-    public function phone_masks_plain_digits(): void
-    {
-        $result = Mask::phone('5551234567');
+    it('masks plain digits', function () {
+        expect(Mask::phone('5551234567'))->toBe('******4567');
+    });
 
-        $this->assertSame('******4567', $result);
-    }
-
-    #[Test]
-    public function phone_handles_short_number(): void
-    {
+    it('handles a short number', function () {
         // 4 or fewer digits — all visible
-        $this->assertSame('1234', Mask::phone('1234'));
-        $this->assertSame('123', Mask::phone('123'));
-    }
+        expect(Mask::phone('1234'))->toBe('1234')
+            ->and(Mask::phone('123'))->toBe('123');
+    });
 
-    #[Test]
-    public function phone_handles_international_format(): void
-    {
+    it('handles international format', function () {
         $result = Mask::phone('+44 7700 900123');
 
         // Last 4 digits visible
-        $this->assertStringEndsWith('0123', $result);
-        // Plus sign and spaces preserved
-        $this->assertStringStartsWith('+', $result);
-        $this->assertStringContainsString(' ', $result);
-        $this->assertStringContainsString('**', $result);
-    }
+        expect($result)
+            ->toEndWith('0123')
+            // Plus sign and spaces preserved
+            ->toStartWith('+')
+            ->toContain(' ')
+            ->toContain('**');
+    });
 
-    #[Test]
-    public function phone_output_matches_obscured_sentinel_shape(): void
-    {
+    it('produces output matching the obscured sentinel shape', function () {
         // ControllerTrait::isObscuredPhone uses an anchored regex that matches
         // the exact sentinel shape: no digits before a final 1-4 digit suffix,
         // with at least one asterisk present. Verify Mask output conforms.
         $masked = Mask::phone('5551234567');
 
-        $this->assertMatchesRegularExpression('/^[^\d]*\*+[^\d*]*\d{0,4}$/', $masked);
-    }
+        expect($masked)->toMatch('/^[^\d]*\*+[^\d*]*\d{0,4}$/');
+    });
 
-    #[Test]
-    public function phone_preserves_formatting_characters(): void
-    {
+    it('preserves formatting characters', function () {
         $result = Mask::phone('(555) 123-4567');
 
         // Parentheses, space, and dash should all survive
-        $this->assertSame('(***) ***-4567', $result);
-    }
-}
+        expect($result)->toBe('(***) ***-4567');
+    });
+});
