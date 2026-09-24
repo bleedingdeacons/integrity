@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
-use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Test;
 use Integrity\Api\Controllers\ControllerTrait;
-use Integrity\Tests\TestCase;
 
-/**
+/*
  * Tests for ControllerTrait's shared helpers.
  *
  * formatUpdatedTimestamp() lives here because the trait is where it lives in
@@ -27,101 +24,75 @@ use Integrity\Tests\TestCase;
  *   (c) NOT flag real phone numbers, even unusual ones with an embedded
  *       asterisk (e.g. an extension marker).
  */
-class ControllerTraitTest extends TestCase
+
+/**
+ * Anonymous class exposing the protected helpers.
+ */
+function controllerTraitSubject(): object
 {
-    /**
-     * Anonymous subclass exposing the protected detection methods.
-     */
-    private function subject(): object
-    {
-        return new class {
-            use ControllerTrait {
-                isObscuredEmail as public;
-                isObscuredPhone as public;
-                formatUpdatedTimestamp as public;
-            }
-        };
-    }
-
-    // ── Timestamp formatting ──────────────────────────────────────────
-    #[DataProvider('timestampProvider')]
-    #[Test]
-    public function formatUpdatedTimestamp_returns_iso_format(string $input, string $expected): void
-    {
-        $this->assertSame($expected, $this->subject()->formatUpdatedTimestamp($input));
-    }
-
-    public static function timestampProvider(): array
-    {
-        return [
-            'standard WP datetime' => ['2025-03-09 14:30:00', '2025-03-09T14:30:00.000Z'],
-            'empty string'         => ['', ''],
-            'date only'            => ['2025-01-01', '2025-01-01T00:00:00.000Z'],
-        ];
-    }
-
-    // ── Email ─────────────────────────────────────────────────────────
-    #[DataProvider('emailProvider')]
-    #[Test]
-    public function isObscuredEmail_detects_mask_shape(string $input, bool $expected): void
-    {
-        $this->assertSame($expected, $this->subject()->isObscuredEmail($input));
-    }
-
-    public static function emailProvider(): array
-    {
-        return [
-            // Positives: exact Mask::email() output shape
-            'mask shape'                 => ['j___@e______.com', true],
-            'mask shape short domain'    => ['j__@e__.co', true],
-            'mask shape long underscores' => ['a____________@b____.io', true],
-
-            // Negatives: RFC-valid emails that the old /__+/ regex falsely
-            // flagged as masked (M-10)
-            'valid double underscore'    => ['user__name@example.com', false],
-            'valid triple underscore'    => ['j___@example.com', false],
-            'valid dunder style'         => ['__init__@python.org', false],
-            'valid mixed underscores'    => ['a_b__c@example.com', false],
-            'valid short local'          => ['j__n@example.com', false],
-
-            // Negatives: ordinary emails
-            'normal email'               => ['john@example.com', false],
-            'single underscore'          => ['john_doe@example.com', false],
-
-            // Edge cases
-            'empty'                      => ['', false],
-            'no at sign'                 => ['j___e______.com', false],
-            'no tld'                     => ['j___@e______', false],
-        ];
-    }
-
-    // ── Phone ─────────────────────────────────────────────────────────
-    #[DataProvider('phoneProvider')]
-    #[Test]
-    public function isObscuredPhone_detects_mask_shape(string $input, bool $expected): void
-    {
-        $this->assertSame($expected, $this->subject()->isObscuredPhone($input));
-    }
-
-    public static function phoneProvider(): array
-    {
-        return [
-            // Positives: exact Mask::phone() output shape
-            'mask plain'                 => ['***1234', true],
-            'mask formatted'             => ['(***) ***-5309', true],
-            'mask international'         => ['+** **** 0123', true],
-            'mask dashed'                => ['***-***-4567', true],
-
-            // Negatives: real phone numbers, including unusual forms
-            'normal phone'               => ['555-123-4567', false],
-            'normal phone with parens'   => ['(555) 867-5309', false],
-            'normal plain digits'        => ['5551234567', false],
-            'normal international'       => ['+44 7700 900123', false],
-            'real with extension marker' => ['555*1234', false],
-            'real with double star'      => ['55**1234', false],
-
-            // Edge cases
-            'empty'                      => ['', false],
-        ];
-    }
+    return new class {
+        use ControllerTrait {
+            isObscuredEmail as public;
+            isObscuredPhone as public;
+            formatUpdatedTimestamp as public;
+        }
+    };
 }
+
+// ── Timestamp formatting ──────────────────────────────────────────
+it('formats an updated timestamp as ISO 8601', function (string $input, string $expected) {
+    expect(controllerTraitSubject()->formatUpdatedTimestamp($input))->toBe($expected);
+})->with([
+    'standard WP datetime' => ['2025-03-09 14:30:00', '2025-03-09T14:30:00.000Z'],
+    'empty string'         => ['', ''],
+    'date only'            => ['2025-01-01', '2025-01-01T00:00:00.000Z'],
+]);
+
+// ── Email ─────────────────────────────────────────────────────────
+it('detects the masked email shape', function (string $input, bool $expected) {
+    expect(controllerTraitSubject()->isObscuredEmail($input))->toBe($expected);
+})->with([
+    // Positives: exact Mask::email() output shape
+    'mask shape'                 => ['j___@e______.com', true],
+    'mask shape short domain'    => ['j__@e__.co', true],
+    'mask shape long underscores' => ['a____________@b____.io', true],
+
+    // Negatives: RFC-valid emails that the old /__+/ regex falsely
+    // flagged as masked (M-10)
+    'valid double underscore'    => ['user__name@example.com', false],
+    'valid triple underscore'    => ['j___@example.com', false],
+    'valid dunder style'         => ['__init__@python.org', false],
+    'valid mixed underscores'    => ['a_b__c@example.com', false],
+    'valid short local'          => ['j__n@example.com', false],
+
+    // Negatives: ordinary emails
+    'normal email'               => ['john@example.com', false],
+    'single underscore'          => ['john_doe@example.com', false],
+
+    // Edge cases
+    'empty'                      => ['', false],
+    'no at sign'                 => ['j___e______.com', false],
+    'no tld'                     => ['j___@e______', false],
+]);
+
+// ── Phone ─────────────────────────────────────────────────────────
+it('detects the masked phone shape', function (string $input, bool $expected) {
+    expect(controllerTraitSubject()->isObscuredPhone($input))->toBe($expected);
+})->with([
+    // Positives: exact Mask::phone() output shape
+    'mask plain'                 => ['***1234', true],
+    'mask formatted'             => ['(***) ***-5309', true],
+    'mask international'         => ['+** **** 0123', true],
+    'mask dashed'                => ['***-***-4567', true],
+
+    // Negatives: real phone numbers, including unusual forms
+    'normal phone'               => ['555-123-4567', false],
+    'normal phone with parens'   => ['(555) 867-5309', false],
+    'normal plain digits'        => ['5551234567', false],
+    'normal international'       => ['+44 7700 900123', false],
+    'real with extension marker' => ['555*1234', false],
+    'real with double star'      => ['55**1234', false],
+
+    // Edge cases
+    'empty'                      => ['', false],
+]);

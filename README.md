@@ -342,7 +342,7 @@ integrity/
 │       ├── TheBleedingDeacons.Unity.Models/   # .NET model classes
 │       └── TheBleedingDeacons.Unity.Tests/    # .NET unit tests
 ├── templates/                 # Admin page templates
-├── tests/                     # PHP unit tests (PHPUnit + wp-mocks)
+├── tests/                     # PHP unit tests (Pest on PHPUnit, + wp-mocks)
 ├── composer.json
 ├── phpunit.xml
 └── phpstan.neon
@@ -358,7 +358,7 @@ composer install
 
 | Command | Description |
 |---|---|
-| `composer test` | Run the full PHPUnit test suite |
+| `composer test` | Run the full test suite (Pest; `vendor/bin/phpunit` cannot load its closure-based files) |
 | `composer test:unit` | Run unit tests only |
 | `composer test:coverage` | Generate an HTML coverage report |
 | `composer phpstan` | Run PHPStan static analysis |

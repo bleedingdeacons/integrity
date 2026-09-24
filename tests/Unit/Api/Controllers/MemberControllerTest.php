@@ -4,22 +4,16 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\CoversTrait;
-use PHPUnit\Framework\Attributes\PreserveGlobalState;
-use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use Unity\Groups\Interfaces\Group;
-use Unity\Positions\Interfaces\Position;
-use PHPUnit\Framework\Attributes\Test;
-use Mockery\MockInterface;
+use Integrity\Api\Controllers\ControllerTrait;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Api\Controllers\MeetingController;
 use Integrity\Api\Controllers\MemberController;
 use Integrity\Api\Controllers\PositionController;
 use Integrity\Auth\AuditLogger;
-use Integrity\Tests\TestCase;
 use Mockery;
+use Mockery\MockInterface;
 use Unity\Core\Interfaces\Container;
+use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
 use Unity\Meetings\Interfaces\MeetingRepository;
 use Unity\Members\Interfaces\Member;
@@ -27,335 +21,303 @@ use Unity\Members\Interfaces\MemberFactory;
 use Unity\Members\Interfaces\MemberRepository;
 use Unity\Members\Interfaces\MemberRevisor;
 use Unity\Members\PreferredContact;
+use Unity\Plugin as UnityPlugin;
+use Unity\Positions\Interfaces\Position;
 use Unity\Positions\Interfaces\PositionRepository;
 use Unity\PrivacyPolicies\Interfaces\PrivacyPolicyRepository;
 
-/**
+/*
  * Tests for MemberController's REST handlers.
+ *
+ * The controller reaches its repositories through Unity\Plugin::getContainer(),
+ * so each test installs a Plugin around a container double with Unity's own
+ * Plugin::setInstance(), and clears it afterwards. This used to be an alias
+ * mock of Unity\Plugin, which defines the class for the rest of the process
+ * and so forced every test into a process of its own.
  */
-#[CoversClass(\Integrity\Api\Controllers\MemberController::class)]
-#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
-#[PreserveGlobalState(false)]
-#[RunTestsInSeparateProcesses]
-class MemberControllerTest extends TestCase
+
+covers(MemberController::class, ControllerTrait::class);
+
+function memberReadRequest(array $params = []): object
 {
-    /** @var MemberRepository&MockInterface */
-    private $memberRepo;
-    /** @var GroupRepository&MockInterface */
-    private $groupRepo;
-    /** @var PositionRepository&MockInterface */
-    private $positionRepo;
-    /** @var MeetingRepository&MockInterface */
-    private $meetingRepo;
-    /** @var MemberRevisor&MockInterface */
-    private $revisor;
-    /** @var MemberFactory&MockInterface */
-    private $factory;
-    /** @var PrivacyPolicyRepository&MockInterface */
-    private $policyRepo;
+    $params = array_merge([
+        'per_page' => 100,
+        'page' => 1,
+        '_integrity_start_time' => microtime(true),
+        '_integrity_key_data' => ['api_key_id' => 1, 'permissions' => ['members:read']],
+    ], $params);
 
-    private MemberController $controller;
+    $request = Mockery::mock('WP_REST_Request');
+    $request->shouldReceive('get_param')->andReturnUsing(fn ($k) => $params[$k] ?? null);
+    $request->shouldReceive('has_param')->andReturnUsing(fn ($k) => array_key_exists($k, $params));
+    $request->shouldReceive('get_route')->andReturn('/integrity/v1/members');
+    $request->shouldReceive('get_method')->andReturn('GET');
+    return $request;
+}
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        $this->memberRepo = Mockery::mock(MemberRepository::class);
-        $this->groupRepo = Mockery::mock(GroupRepository::class);
-        $this->positionRepo = Mockery::mock(PositionRepository::class);
-        $this->meetingRepo = Mockery::mock(MeetingRepository::class);
-        $this->revisor = Mockery::mock(MemberRevisor::class);
-        $this->factory = Mockery::mock(MemberFactory::class);
-        $this->policyRepo = Mockery::mock(PrivacyPolicyRepository::class);
-
-        $container = Mockery::mock(Container::class);
-        $container->shouldReceive('get')->with(MemberRepository::class)->andReturn($this->memberRepo);
-        $container->shouldReceive('get')->with(GroupRepository::class)->andReturn($this->groupRepo);
-        $container->shouldReceive('get')->with(PositionRepository::class)->andReturn($this->positionRepo);
-        $container->shouldReceive('get')->with(MeetingRepository::class)->andReturn($this->meetingRepo);
-        $container->shouldReceive('get')->with(MemberRevisor::class)->andReturn($this->revisor);
-        $container->shouldReceive('get')->with(MemberFactory::class)->andReturn($this->factory);
-        $container->shouldReceive('get')->with(PrivacyPolicyRepository::class)->andReturn($this->policyRepo);
-
-        $plugin = Mockery::mock('alias:Unity\Plugin');
-        $plugin->shouldReceive('getContainer')->andReturn($container);
-
-        $auditLogger = Mockery::mock(AuditLogger::class);
-        $auditLogger->shouldReceive('log');
-
-        $this->controller = new MemberController(
-            $auditLogger,
-            new GroupController($auditLogger),
-            new PositionController($auditLogger),
-            new MeetingController($auditLogger)
-        );
+/** @return Member&MockInterface */
+function memberReadMemberDouble(array $o = [])
+{
+    $d = [
+        'getId' => 1, 'getAnonymousName' => 'Anon', 'getPersonalEmail' => 'jane@example.com',
+        'getMobileNumber' => '07700 900000', 'getLandlineNumber' => '0117 496 0000',
+        'getPreferredContact' => PreferredContact::Mobile,
+        'showAnonymousName' => true, 'showMemberProfile' => false,
+        'getAnonymousProfile' => '', 'getHomeGroup' => 0, 'isGSR' => false, 'getMeetingPO' => null,
+        'getIntergroupPosition' => 0, 'getIntergroupPositionRotation' => '', 'isGdprAccepted' => false,
+        'getGdprAcceptedAt' => '', 'getGdprAcceptanceVersion' => '', 'getGdprAcceptanceMethod' => '',
+        'getGdprAcceptanceStatement' => '', 'getUpdated' => '2024-06-01 10:00:00',
+    ];
+    $m = Mockery::mock(Member::class);
+    foreach (array_merge($d, $o) as $method => $value) {
+        $m->shouldReceive($method)->andReturn($value);
     }
+    return $m;
+}
 
-    private function request(array $params = []): object
-    {
-        $params = array_merge([
-            'per_page' => 100,
-            'page' => 1,
-            '_integrity_start_time' => microtime(true),
-            '_integrity_key_data' => ['api_key_id' => 1, 'permissions' => ['members:read']],
-        ], $params);
+function memberReadGroupDouble(int $id, string $title): object
+{
+    $g = Mockery::mock(Group::class);
+    $g->shouldReceive('getId')->andReturn($id);
+    $g->shouldReceive('getTitle')->andReturn($title);
+    $g->shouldReceive('isValid')->andReturn(true);
+    return $g;
+}
 
-        $request = Mockery::mock('WP_REST_Request');
-        $request->shouldReceive('get_param')->andReturnUsing(fn ($k) => $params[$k] ?? null);
-        $request->shouldReceive('has_param')->andReturnUsing(fn ($k) => array_key_exists($k, $params));
-        $request->shouldReceive('get_route')->andReturn('/integrity/v1/members');
-        $request->shouldReceive('get_method')->andReturn('GET');
-        return $request;
-    }
+function memberReadPositionDouble(int $id, string $name): object
+{
+    $p = Mockery::mock(Position::class);
+    $p->shouldReceive('getId')->andReturn($id);
+    $p->shouldReceive('getLongName')->andReturn($name);
+    return $p;
+}
 
-    /** @return Member&MockInterface */
-    private function member(array $o = [])
-    {
-        $d = [
-            'getId' => 1, 'getAnonymousName' => 'Anon', 'getPersonalEmail' => 'jane@example.com',
-            'getMobileNumber' => '07700 900000', 'getLandlineNumber' => '0117 496 0000',
-            'getPreferredContact' => PreferredContact::Mobile,
-            'showAnonymousName' => true, 'showMemberProfile' => false,
-            'getAnonymousProfile' => '', 'getHomeGroup' => 0, 'isGSR' => false, 'getMeetingPO' => null,
-            'getIntergroupPosition' => 0, 'getIntergroupPositionRotation' => '', 'isGdprAccepted' => false,
-            'getGdprAcceptedAt' => '', 'getGdprAcceptanceVersion' => '', 'getGdprAcceptanceMethod' => '',
-            'getGdprAcceptanceStatement' => '', 'getUpdated' => '2024-06-01 10:00:00',
-        ];
-        $m = Mockery::mock(Member::class);
-        foreach (array_merge($d, $o) as $method => $value) {
-            $m->shouldReceive($method)->andReturn($value);
-        }
-        return $m;
-    }
+beforeEach(function () {
+    $this->memberRepo = Mockery::mock(MemberRepository::class);
+    $this->groupRepo = Mockery::mock(GroupRepository::class);
+    $this->positionRepo = Mockery::mock(PositionRepository::class);
+    $this->meetingRepo = Mockery::mock(MeetingRepository::class);
+    $this->revisor = Mockery::mock(MemberRevisor::class);
+    $this->factory = Mockery::mock(MemberFactory::class);
+    $this->policyRepo = Mockery::mock(PrivacyPolicyRepository::class);
 
-    private function group(int $id, string $title): object
-    {
-        $g = Mockery::mock(Group::class);
-        $g->shouldReceive('getId')->andReturn($id);
-        $g->shouldReceive('getTitle')->andReturn($title);
-        $g->shouldReceive('isValid')->andReturn(true);
-        return $g;
-    }
+    $container = Mockery::mock(Container::class);
+    $container->shouldReceive('get')->with(MemberRepository::class)->andReturn($this->memberRepo);
+    $container->shouldReceive('get')->with(GroupRepository::class)->andReturn($this->groupRepo);
+    $container->shouldReceive('get')->with(PositionRepository::class)->andReturn($this->positionRepo);
+    $container->shouldReceive('get')->with(MeetingRepository::class)->andReturn($this->meetingRepo);
+    $container->shouldReceive('get')->with(MemberRevisor::class)->andReturn($this->revisor);
+    $container->shouldReceive('get')->with(MemberFactory::class)->andReturn($this->factory);
+    $container->shouldReceive('get')->with(PrivacyPolicyRepository::class)->andReturn($this->policyRepo);
 
-    private function position(int $id, string $name): object
-    {
-        $p = Mockery::mock(Position::class);
-        $p->shouldReceive('getId')->andReturn($id);
-        $p->shouldReceive('getLongName')->andReturn($name);
-        return $p;
-    }
+    UnityPlugin::setInstance(UnityPlugin::create($container));
 
-    // ─── getMembers ─────────────────────────────────────────────────
-    #[Test]
-    public function get_members_masks_contact_details_without_clear_permission(): void
-    {
-        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
+    $auditLogger = Mockery::mock(AuditLogger::class);
+    $auditLogger->shouldReceive('log');
+
+    $this->controller = new MemberController(
+        $auditLogger,
+        new GroupController($auditLogger),
+        new PositionController($auditLogger),
+        new MeetingController($auditLogger)
+    );
+});
+
+afterEach(function () {
+    UnityPlugin::setInstance(null);
+});
+
+// ─── getMembers ─────────────────────────────────────────────────
+describe('getMembers', function () {
+    it('masks contact details without the clear permission', function () {
+        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([memberReadMemberDouble()]);
         $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
 
-        $response = $this->controller->getMembers($this->request());
+        $response = $this->controller->getMembers(memberReadRequest());
 
-        $this->assertSame(200, $response->get_status());
+        expect($response->get_status())->toBe(200);
         $data = $response->get_data()['data'][0];
-        $this->assertSame('Anon', $data['anonymous_name']);
-        // Masked, not the raw address.
-        $this->assertNotSame('jane@example.com', $data['personal_email']);
-        $this->assertSame(1, $response->get_data()['meta']['total']);
-    }
+        expect($data['anonymous_name'])->toBe('Anon')
+            // Masked, not the raw address.
+            ->and($data['personal_email'])->not->toBe('jane@example.com')
+            ->and($response->get_data()['meta']['total'])->toBe(1);
+    });
 
-    #[Test]
-    public function get_members_resolves_related_group_and_position_names(): void
-    {
-        $member = $this->member(['getHomeGroup' => 5, 'getIntergroupPosition' => 7]);
+    it('resolves related group and position names', function () {
+        $member = memberReadMemberDouble(['getHomeGroup' => 5, 'getIntergroupPosition' => 7]);
         $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$member]);
         $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
 
-        $this->groupRepo->shouldReceive('findAll')->once()->andReturn([$this->group(5, 'Tuesday Group')]);
-        $this->positionRepo->shouldReceive('findAll')->once()->andReturn([$this->position(7, 'Chair')]);
+        $this->groupRepo->shouldReceive('findAll')->once()->andReturn([memberReadGroupDouble(5, 'Tuesday Group')]);
+        $this->positionRepo->shouldReceive('findAll')->once()->andReturn([memberReadPositionDouble(7, 'Chair')]);
 
-        $response = $this->controller->getMembers($this->request());
+        $response = $this->controller->getMembers(memberReadRequest());
         $data = $response->get_data()['data'][0];
 
-        $this->assertSame(5, $data['home_group_id']);
-        $this->assertSame('Tuesday Group', $data['home_group_name']);
-        $this->assertSame(7, $data['intergroup_position_id']);
-        $this->assertSame('Chair', $data['intergroup_position_name']);
-    }
+        expect($data['home_group_id'])->toBe(5)
+            ->and($data['home_group_name'])->toBe('Tuesday Group')
+            ->and($data['intergroup_position_id'])->toBe(7)
+            ->and($data['intergroup_position_name'])->toBe('Chair');
+    });
 
-    #[Test]
-    public function get_members_returns_clear_contact_details_with_permission(): void
-    {
-        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
+    it('returns clear contact details with permission', function () {
+        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([memberReadMemberDouble()]);
         $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
 
-        $response = $this->controller->getMembers($this->request([
+        $response = $this->controller->getMembers(memberReadRequest([
             '_integrity_key_data' => ['api_key_id' => 1, 'permissions' => ['members:clear']],
         ]));
 
-        $this->assertSame('jane@example.com', $response->get_data()['data'][0]['personal_email']);
-    }
+        expect($response->get_data()['data'][0]['personal_email'])->toBe('jane@example.com');
+    });
 
     /**
      * A landline is personal data, so it is masked on the way out exactly as
      * the mobile is — and unmasked by the same permission.
      */
-    #[Test]
-    public function get_members_masks_the_landline_without_the_clear_permission(): void
-    {
-        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
+    it('masks the landline without the clear permission', function () {
+        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([memberReadMemberDouble()]);
         $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
 
-        $row = $this->controller->getMembers($this->request())->get_data()['data'][0];
+        $row = $this->controller->getMembers(memberReadRequest())->get_data()['data'][0];
 
-        $this->assertNotSame('0117 496 0000', $row['landline_number']);
-        $this->assertStringContainsString('*', $row['landline_number']);
-    }
+        expect($row['landline_number'])
+            ->not->toBe('0117 496 0000')
+            ->toContain('*');
+    });
 
-    #[Test]
-    public function get_members_returns_the_landline_in_the_clear_with_permission(): void
-    {
-        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([$this->member()]);
+    it('returns the landline in the clear with permission', function () {
+        $this->memberRepo->shouldReceive('findAll')->once()->andReturn([memberReadMemberDouble()]);
         $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
 
-        $response = $this->controller->getMembers($this->request([
+        $response = $this->controller->getMembers(memberReadRequest([
             '_integrity_key_data' => ['api_key_id' => 1, 'permissions' => ['members:clear']],
         ]));
 
-        $this->assertSame('0117 496 0000', $response->get_data()['data'][0]['landline_number']);
-    }
+        expect($response->get_data()['data'][0]['landline_number'])->toBe('0117 496 0000');
+    });
 
     /**
      * The preferred contact names one of two options rather than a number, so
      * it is never masked: a client that cannot read it cannot tell which of
      * the two numbers to ring.
      */
-    #[Test]
-    public function the_preferred_contact_is_returned_in_the_clear_without_permission(): void
-    {
+    it('returns the preferred contact in the clear without permission', function () {
         $this->memberRepo->shouldReceive('findAll')->once()->andReturn([
-            $this->member(['getPreferredContact' => PreferredContact::Landline]),
+            memberReadMemberDouble(['getPreferredContact' => PreferredContact::Landline]),
         ]);
         $this->memberRepo->shouldReceive('count')->once()->andReturn(1);
 
-        $row = $this->controller->getMembers($this->request())->get_data()['data'][0];
+        $row = $this->controller->getMembers(memberReadRequest())->get_data()['data'][0];
 
-        $this->assertSame('Landline', $row['preferred_contact']);
-    }
+        expect($row['preferred_contact'])->toBe('Landline');
+    });
 
-    #[Test]
-    public function get_members_returns_500_on_failure(): void
-    {
+    it('returns 500 on failure', function () {
         $this->memberRepo->shouldReceive('findAll')->andThrow(new \RuntimeException('boom'));
 
-        $response = $this->controller->getMembers($this->request());
+        $response = $this->controller->getMembers(memberReadRequest());
 
-        $this->assertSame(500, $response->get_status());
-    }
+        expect($response->get_status())->toBe(500);
+    });
+});
 
-    // ─── getMember ──────────────────────────────────────────────────
-    #[Test]
-    public function get_member_returns_a_single_member(): void
-    {
-        $this->memberRepo->shouldReceive('findById')->once()->with(1)->andReturn($this->member());
+// ─── getMember ──────────────────────────────────────────────────
+describe('getMember', function () {
+    it('returns a single member', function () {
+        $this->memberRepo->shouldReceive('findById')->once()->with(1)->andReturn(memberReadMemberDouble());
 
-        $response = $this->controller->getMember($this->request(['id' => 1]));
+        $response = $this->controller->getMember(memberReadRequest(['id' => 1]));
 
-        $this->assertSame(200, $response->get_status());
-        $this->assertSame(1, $response->get_data()['data']['id']);
-    }
+        expect($response->get_status())->toBe(200)
+            ->and($response->get_data()['data']['id'])->toBe(1);
+    });
 
-    #[Test]
-    public function get_member_returns_404_when_missing(): void
-    {
+    it('returns 404 when missing', function () {
         $this->memberRepo->shouldReceive('findById')->once()->with(9)->andReturn(null);
 
-        $response = $this->controller->getMember($this->request(['id' => 9]));
+        $response = $this->controller->getMember(memberReadRequest(['id' => 9]));
 
-        $this->assertSame(404, $response->get_status());
-    }
+        expect($response->get_status())->toBe(404);
+    });
+});
 
-    // ─── createMember ───────────────────────────────────────────────
-    #[Test]
-    public function create_member_inserts_and_returns_201(): void
-    {
+// ─── createMember ───────────────────────────────────────────────
+describe('createMember', function () {
+    it('inserts and returns 201', function () {
         $this->memberRepo->shouldReceive('create')->once()->with('New Person')->andReturn(42);
-        $this->factory->shouldReceive('createNew')->once()->andReturn($this->member(['getId' => 42]));
+        $this->factory->shouldReceive('createNew')->once()->andReturn(memberReadMemberDouble(['getId' => 42]));
         $this->memberRepo->shouldReceive('save')->once()->andReturn(true);
-        $this->memberRepo->shouldReceive('findById')->once()->with(42)->andReturn($this->member(['getId' => 42]));
+        $this->memberRepo->shouldReceive('findById')->once()->with(42)->andReturn(memberReadMemberDouble(['getId' => 42]));
 
-        $response = $this->controller->createMember($this->request(['anonymous_name' => 'New Person']));
+        $response = $this->controller->createMember(memberReadRequest(['anonymous_name' => 'New Person']));
 
-        $this->assertSame(201, $response->get_status());
-        $this->assertTrue($response->get_data()['success']);
-        $this->assertSame(42, $response->get_data()['data']['id']);
-    }
+        expect($response->get_status())->toBe(201)
+            ->and($response->get_data()['success'])->toBeTrue()
+            ->and($response->get_data()['data']['id'])->toBe(42);
+    });
 
-    #[Test]
-    public function create_member_rejects_an_unknown_home_group(): void
-    {
+    it('rejects an unknown home group', function () {
         $this->groupRepo->shouldReceive('findById')->once()->with(99)->andReturn(null);
 
-        $response = $this->controller->createMember($this->request([
+        $response = $this->controller->createMember(memberReadRequest([
             'anonymous_name' => 'New Person',
             'home_group_id' => 99,
         ]));
 
-        $this->assertSame(422, $response->get_status());
-        $this->assertSame('invalid_home_group', $response->get_data()['error']['code']);
-    }
+        expect($response->get_status())->toBe(422)
+            ->and($response->get_data()['error']['code'])->toBe('invalid_home_group');
+    });
+});
 
-    // ─── updateMember ───────────────────────────────────────────────
-    #[Test]
-    public function update_member_saves_and_returns_the_updated_member(): void
-    {
-        $existing = $this->member();
-        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($existing, $this->member());
-        $this->revisor->shouldReceive('revise')->once()->andReturn($this->member());
+// ─── updateMember ───────────────────────────────────────────────
+describe('updateMember', function () {
+    it('saves and returns the updated member', function () {
+        $existing = memberReadMemberDouble();
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($existing, memberReadMemberDouble());
+        $this->revisor->shouldReceive('revise')->once()->andReturn(memberReadMemberDouble());
         $this->memberRepo->shouldReceive('save')->once()->andReturn(true);
 
-        $response = $this->controller->updateMember($this->request([
+        $response = $this->controller->updateMember(memberReadRequest([
             'id' => 1,
             'anonymous_name' => 'Renamed',
         ]));
 
-        $this->assertSame(200, $response->get_status());
-        $this->assertTrue($response->get_data()['success']);
-    }
+        expect($response->get_status())->toBe(200)
+            ->and($response->get_data()['success'])->toBeTrue();
+    });
 
-    #[Test]
-    public function update_member_returns_404_for_a_missing_member(): void
-    {
+    it('returns 404 for a missing member', function () {
         $this->memberRepo->shouldReceive('findById')->once()->with(9)->andReturn(null);
 
-        $response = $this->controller->updateMember($this->request(['id' => 9]));
+        $response = $this->controller->updateMember(memberReadRequest(['id' => 9]));
 
-        $this->assertSame(404, $response->get_status());
-    }
+        expect($response->get_status())->toBe(404);
+    });
+});
 
-    // ─── recordCompliance ───────────────────────────────────────────
-    #[Test]
-    public function record_compliance_records_an_acceptance(): void
-    {
-        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn($this->member(), $this->member(['isGdprAccepted' => true]));
-        $this->revisor->shouldReceive('revise')->once()->andReturn($this->member(['isGdprAccepted' => true]));
+// ─── recordCompliance ───────────────────────────────────────────
+describe('recordCompliance', function () {
+    it('records an acceptance', function () {
+        $this->memberRepo->shouldReceive('findById')->with(1)->andReturn(memberReadMemberDouble(), memberReadMemberDouble(['isGdprAccepted' => true]));
+        $this->revisor->shouldReceive('revise')->once()->andReturn(memberReadMemberDouble(['isGdprAccepted' => true]));
         $this->memberRepo->shouldReceive('save')->once()->andReturn(true);
 
-        $response = $this->controller->recordCompliance($this->request([
+        $response = $this->controller->recordCompliance(memberReadRequest([
             'id' => 1,
             'accepted' => true,
             'version' => '2.1',
         ]));
 
-        $this->assertSame(200, $response->get_status());
-        $this->assertTrue($response->get_data()['data']['gdpr_compliance']['accepted']);
-    }
+        expect($response->get_status())->toBe(200)
+            ->and($response->get_data()['data']['gdpr_compliance']['accepted'])->toBeTrue();
+    });
 
-    #[Test]
-    public function record_compliance_returns_404_for_a_missing_member(): void
-    {
+    it('returns 404 for a missing member', function () {
         $this->memberRepo->shouldReceive('findById')->once()->with(9)->andReturn(null);
 
-        $response = $this->controller->recordCompliance($this->request(['id' => 9, 'accepted' => true]));
+        $response = $this->controller->recordCompliance(memberReadRequest(['id' => 9, 'accepted' => true]));
 
-        $this->assertSame(404, $response->get_status());
-    }
-}
+        expect($response->get_status())->toBe(404);
+    });
+});

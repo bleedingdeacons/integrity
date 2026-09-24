@@ -4,16 +4,11 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\CoversTrait;
-use PHPUnit\Framework\Attributes\PreserveGlobalState;
-use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use PHPUnit\Framework\Attributes\Test;
-use Mockery\MockInterface;
+use Integrity\Api\Controllers\ControllerTrait;
 use Integrity\Api\Controllers\IntergroupMeetingController;
 use Integrity\Auth\AuditLogger;
-use Integrity\Tests\TestCase;
 use Mockery;
+use Mockery\MockInterface;
 use Unity\Core\Interfaces\Container;
 use Unity\Groups\Interfaces\Group;
 use Unity\Groups\Interfaces\GroupRepository;
@@ -26,110 +21,109 @@ use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingOfficerAttendanceReposi
 use Unity\IntergroupMeetings\Interfaces\IntergroupMeetingRepository;
 use Unity\Members\Interfaces\Member;
 use Unity\Members\Interfaces\MemberRepository;
+use Unity\Plugin as UnityPlugin;
 use Unity\Positions\Interfaces\PositionViewFactory;
 
-/**
+/*
  * Tests for IntergroupMeetingController's write handlers: registering and
  * unregistering group attendees and officers. Each endpoint is driven through
  * its happy path plus the not-found / conflict / save-failure / exception
  * branches, with the Unity repositories and factories supplied by a mocked
  * container.
+ *
+ * The controller reaches that container through Unity\Plugin::getContainer(),
+ * so each test installs a Plugin around it with Unity's own
+ * Plugin::setInstance(), and clears it afterwards. This used to be an alias
+ * mock of Unity\Plugin, which defines the class for the rest of the process
+ * and so forced every test into a process of its own. The global $wpdb set
+ * below is restored afterwards for the same reason: nothing isolates it now.
  */
-#[CoversClass(\Integrity\Api\Controllers\IntergroupMeetingController::class)]
-#[CoversTrait(\Integrity\Api\Controllers\ControllerTrait::class)]
-#[PreserveGlobalState(false)]
-#[RunTestsInSeparateProcesses]
-class IntergroupMeetingControllerWriteTest extends TestCase
+
+covers(IntergroupMeetingController::class, ControllerTrait::class);
+
+const INTERGROUP_WRITE_GROUP_FACTORY = 'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingGroupAttendanceFactory';
+const INTERGROUP_WRITE_OFFICER_FACTORY = 'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingOfficerAttendanceFactory';
+
+/** @return IntergroupMeeting&MockInterface */
+function intergroupWriteMeetingDouble()
 {
-    private $repo;
-    private $groupRepo;
-    private $memberRepo;
-    private $groupAttendanceRepo;
-    private $officerAttendanceRepo;
-    private $groupAttendanceFactory;
-    private $officerAttendanceFactory;
-    private $groupViewFactory;
-    private $positionViewFactory;
+    $m = Mockery::mock(IntergroupMeeting::class);
+    $m->shouldReceive('getId')->andReturn(1)->byDefault();
+    $m->shouldReceive('getTitle')->andReturn('July Intergroup')->byDefault();
+    $m->shouldReceive('getDate')->andReturn('2026-07-01')->byDefault();
+    $m->shouldReceive('addGroupAttendee')->byDefault();
+    $m->shouldReceive('removeGroupAttendee')->byDefault();
+    $m->shouldReceive('addOfficerAttendee')->byDefault();
+    $m->shouldReceive('hasGroupAttendee')->andReturn(true)->byDefault();
+    $m->shouldReceive('hasOfficerAttendee')->andReturn(true)->byDefault();
+    return $m;
+}
 
-    private IntergroupMeetingController $controller;
+/** @return Member&MockInterface */
+function intergroupWriteOfficerDouble(int $positionId = 5)
+{
+    $m = Mockery::mock(Member::class);
+    $m->shouldReceive('getIntergroupPosition')->andReturn($positionId)->byDefault();
+    return $m;
+}
 
-    private const GROUP_FACTORY = 'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingGroupAttendanceFactory';
-    private const OFFICER_FACTORY = 'Unity\\IntergroupMeetings\\Interfaces\\IntergroupMeetingOfficerAttendanceFactory';
+beforeEach(function () {
+    $this->repo = Mockery::mock(IntergroupMeetingRepository::class);
+    $this->groupRepo = Mockery::mock(GroupRepository::class);
+    $this->memberRepo = Mockery::mock(MemberRepository::class);
+    $this->groupAttendanceRepo = Mockery::mock(IntergroupMeetingGroupAttendanceRepository::class);
+    $this->officerAttendanceRepo = Mockery::mock(IntergroupMeetingOfficerAttendanceRepository::class);
+    $this->groupAttendanceFactory = Mockery::mock(INTERGROUP_WRITE_GROUP_FACTORY);
+    $this->officerAttendanceFactory = Mockery::mock(INTERGROUP_WRITE_OFFICER_FACTORY);
+    $this->groupViewFactory = Mockery::mock(GroupViewFactory::class);
+    $this->positionViewFactory = Mockery::mock(PositionViewFactory::class);
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+    $container = Mockery::mock(Container::class);
+    $container->shouldReceive('get')->with(IntergroupMeetingRepository::class)->andReturn($this->repo)->byDefault();
+    $container->shouldReceive('get')->with(GroupRepository::class)->andReturn($this->groupRepo)->byDefault();
+    $container->shouldReceive('get')->with(MemberRepository::class)->andReturn($this->memberRepo)->byDefault();
+    $container->shouldReceive('get')->with(IntergroupMeetingGroupAttendanceRepository::class)->andReturn($this->groupAttendanceRepo)->byDefault();
+    $container->shouldReceive('get')->with(IntergroupMeetingOfficerAttendanceRepository::class)->andReturn($this->officerAttendanceRepo)->byDefault();
+    $container->shouldReceive('get')->with(INTERGROUP_WRITE_GROUP_FACTORY)->andReturn($this->groupAttendanceFactory)->byDefault();
+    $container->shouldReceive('get')->with(INTERGROUP_WRITE_OFFICER_FACTORY)->andReturn($this->officerAttendanceFactory)->byDefault();
+    $container->shouldReceive('get')->with(GroupViewFactory::class)->andReturn($this->groupViewFactory)->byDefault();
+    $container->shouldReceive('get')->with(PositionViewFactory::class)->andReturn($this->positionViewFactory)->byDefault();
 
-        $this->repo = Mockery::mock(IntergroupMeetingRepository::class);
-        $this->groupRepo = Mockery::mock(GroupRepository::class);
-        $this->memberRepo = Mockery::mock(MemberRepository::class);
-        $this->groupAttendanceRepo = Mockery::mock(IntergroupMeetingGroupAttendanceRepository::class);
-        $this->officerAttendanceRepo = Mockery::mock(IntergroupMeetingOfficerAttendanceRepository::class);
-        $this->groupAttendanceFactory = Mockery::mock(self::GROUP_FACTORY);
-        $this->officerAttendanceFactory = Mockery::mock(self::OFFICER_FACTORY);
-        $this->groupViewFactory = Mockery::mock(GroupViewFactory::class);
-        $this->positionViewFactory = Mockery::mock(PositionViewFactory::class);
+    UnityPlugin::setInstance(UnityPlugin::create($container));
 
-        $container = Mockery::mock(Container::class);
-        $container->shouldReceive('get')->with(IntergroupMeetingRepository::class)->andReturn($this->repo)->byDefault();
-        $container->shouldReceive('get')->with(GroupRepository::class)->andReturn($this->groupRepo)->byDefault();
-        $container->shouldReceive('get')->with(MemberRepository::class)->andReturn($this->memberRepo)->byDefault();
-        $container->shouldReceive('get')->with(IntergroupMeetingGroupAttendanceRepository::class)->andReturn($this->groupAttendanceRepo)->byDefault();
-        $container->shouldReceive('get')->with(IntergroupMeetingOfficerAttendanceRepository::class)->andReturn($this->officerAttendanceRepo)->byDefault();
-        $container->shouldReceive('get')->with(self::GROUP_FACTORY)->andReturn($this->groupAttendanceFactory)->byDefault();
-        $container->shouldReceive('get')->with(self::OFFICER_FACTORY)->andReturn($this->officerAttendanceFactory)->byDefault();
-        $container->shouldReceive('get')->with(GroupViewFactory::class)->andReturn($this->groupViewFactory)->byDefault();
-        $container->shouldReceive('get')->with(PositionViewFactory::class)->andReturn($this->positionViewFactory)->byDefault();
+    $auditLogger = Mockery::mock(AuditLogger::class);
+    $auditLogger->shouldReceive('log')->byDefault();
 
-        $plugin = Mockery::mock('alias:Unity\Plugin');
-        $plugin->shouldReceive('getContainer')->andReturn($container);
+    $this->controller = new IntergroupMeetingController($auditLogger);
 
-        $auditLogger = Mockery::mock(AuditLogger::class);
-        $auditLogger->shouldReceive('log')->byDefault();
+    // buildMeetingLabel and the duplicate-detection branch read a global wpdb.
+    $this->previousWpdb = $GLOBALS['wpdb'] ?? null;
+    $GLOBALS['wpdb'] = (object) ['last_error' => ''];
 
-        $this->controller = new IntergroupMeetingController($auditLogger);
+    $this->makeRequest = fn (array $params = []): object => $this->createMockRequest(array_merge([
+        'id' => 1,
+        'group_id' => 10,
+        'member_id' => 20,
+        'officer_id' => 30,
+        'gsr_name' => 'Alex',
+        'gsr_proxy' => false,
+        'gsr_proxy_name' => '',
+        'position_name' => 'Chair',
+        'officer_name' => 'Sam',
+        '_integrity_start_time' => microtime(true),
+        '_integrity_key_data' => ['api_key_id' => 1, 'permissions' => ['intergroup_meetings:write']],
+    ], $params));
+});
 
-        // buildMeetingLabel and the duplicate-detection branch read a global wpdb.
-        $GLOBALS['wpdb'] = (object) ['last_error' => ''];
-    }
+afterEach(function () {
+    UnityPlugin::setInstance(null);
+    $GLOBALS['wpdb'] = $this->previousWpdb;
+});
 
-    private function request(array $params = []): object
-    {
-        return $this->createMockRequest(array_merge([
-            'id' => 1,
-            'group_id' => 10,
-            'member_id' => 20,
-            'officer_id' => 30,
-            'gsr_name' => 'Alex',
-            'gsr_proxy' => false,
-            'gsr_proxy_name' => '',
-            'position_name' => 'Chair',
-            'officer_name' => 'Sam',
-            '_integrity_start_time' => microtime(true),
-            '_integrity_key_data' => ['api_key_id' => 1, 'permissions' => ['intergroup_meetings:write']],
-        ], $params));
-    }
-
-    /** @return IntergroupMeeting&MockInterface */
-    private function meeting()
-    {
-        $m = Mockery::mock(IntergroupMeeting::class);
-        $m->shouldReceive('getId')->andReturn(1)->byDefault();
-        $m->shouldReceive('getTitle')->andReturn('July Intergroup')->byDefault();
-        $m->shouldReceive('getDate')->andReturn('2026-07-01')->byDefault();
-        $m->shouldReceive('addGroupAttendee')->byDefault();
-        $m->shouldReceive('removeGroupAttendee')->byDefault();
-        $m->shouldReceive('addOfficerAttendee')->byDefault();
-        $m->shouldReceive('hasGroupAttendee')->andReturn(true)->byDefault();
-        $m->shouldReceive('hasOfficerAttendee')->andReturn(true)->byDefault();
-        return $m;
-    }
-
-    // ─── register attendee ───────────────────────────────────────────
-    #[Test]
-    public function register_attendee_happy_path_returns_201(): void
-    {
-        $meeting = $this->meeting();
+// ─── register attendee ───────────────────────────────────────────
+describe('register attendee', function () {
+    it('returns 201 on the happy path', function () {
+        $meeting = intergroupWriteMeetingDouble();
         $this->repo->shouldReceive('findById')->with(1)->andReturn($meeting);
         $group = Mockery::mock(Group::class);
         $group->shouldReceive('getTitle')->andReturn('Tuesday Group');
@@ -140,48 +134,40 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->groupAttendanceRepo->shouldReceive('save')->andReturn(true);
         $this->repo->shouldReceive('save')->with($meeting)->andReturn(true);
 
-        $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
+        $response = $this->controller->registerIntergroupMeetingAttendee(($this->makeRequest)());
 
-        $this->assertSame(201, $response->get_status());
-    }
+        expect($response->get_status())->toBe(201);
+    });
 
-    #[Test]
-    public function register_attendee_returns_404_when_meeting_missing(): void
-    {
+    it('returns 404 when the meeting is missing', function () {
         $this->repo->shouldReceive('findById')->with(1)->andReturn(null);
 
-        $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
-        $this->assertSame(404, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(404);
+    });
 
-    #[Test]
-    public function register_attendee_returns_404_when_group_missing(): void
-    {
-        $this->repo->shouldReceive('findById')->with(1)->andReturn($this->meeting());
+    it('returns 404 when the group is missing', function () {
+        $this->repo->shouldReceive('findById')->with(1)->andReturn(intergroupWriteMeetingDouble());
         $this->groupRepo->shouldReceive('findById')->with(10)->andReturn(null);
 
-        $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
-        $this->assertSame(404, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(404);
+    });
 
-    #[Test]
-    public function register_attendee_returns_409_when_already_registered(): void
-    {
-        $this->repo->shouldReceive('findById')->with(1)->andReturn($this->meeting());
+    it('returns 409 when already registered', function () {
+        $this->repo->shouldReceive('findById')->with(1)->andReturn(intergroupWriteMeetingDouble());
         $group = Mockery::mock(Group::class);
         $group->shouldReceive('getTitle')->andReturn('Tuesday Group');
         $this->groupRepo->shouldReceive('findById')->with(10)->andReturn($group);
         $this->groupViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->groupAttendanceRepo->shouldReceive('existsForMeetingAndGroup')->with(1, 10)->andReturn(true);
 
-        $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
-        $this->assertSame(409, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(409);
+    });
 
-    #[Test]
-    public function register_attendee_returns_500_when_attendance_save_fails(): void
-    {
-        $this->repo->shouldReceive('findById')->with(1)->andReturn($this->meeting());
+    it('returns 500 when the attendance save fails', function () {
+        $this->repo->shouldReceive('findById')->with(1)->andReturn(intergroupWriteMeetingDouble());
         $group = Mockery::mock(Group::class);
         $group->shouldReceive('getTitle')->andReturn('Tuesday Group');
         $this->groupRepo->shouldReceive('findById')->with(10)->andReturn($group);
@@ -190,15 +176,13 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingGroupAttendance::class));
         $this->groupAttendanceRepo->shouldReceive('save')->andReturn(false);
 
-        $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
-        $this->assertSame(500, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(500);
+    });
 
-    #[Test]
-    public function register_attendee_returns_409_on_duplicate_entry_race(): void
-    {
+    it('returns 409 on a duplicate-entry race', function () {
         $GLOBALS['wpdb']->last_error = 'Duplicate entry for key';
-        $this->repo->shouldReceive('findById')->with(1)->andReturn($this->meeting());
+        $this->repo->shouldReceive('findById')->with(1)->andReturn(intergroupWriteMeetingDouble());
         $group = Mockery::mock(Group::class);
         $group->shouldReceive('getTitle')->andReturn('Tuesday Group');
         $this->groupRepo->shouldReceive('findById')->with(10)->andReturn($group);
@@ -207,14 +191,12 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->groupAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingGroupAttendance::class));
         $this->groupAttendanceRepo->shouldReceive('save')->andReturn(false);
 
-        $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
-        $this->assertSame(409, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(409);
+    });
 
-    #[Test]
-    public function register_attendee_returns_500_when_meeting_save_fails(): void
-    {
-        $meeting = $this->meeting();
+    it('returns 500 when the meeting save fails', function () {
+        $meeting = intergroupWriteMeetingDouble();
         $this->repo->shouldReceive('findById')->with(1)->andReturn($meeting);
         $group = Mockery::mock(Group::class);
         $group->shouldReceive('getTitle')->andReturn('Tuesday Group');
@@ -225,163 +207,133 @@ class IntergroupMeetingControllerWriteTest extends TestCase
         $this->groupAttendanceRepo->shouldReceive('save')->andReturn(true);
         $this->repo->shouldReceive('save')->andReturn(false);
 
-        $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
-        $this->assertSame(500, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(500);
+    });
 
-    #[Test]
-    public function register_attendee_returns_500_on_unexpected_exception(): void
-    {
+    it('returns 500 on an unexpected exception', function () {
         $this->repo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));
 
-        $response = $this->controller->registerIntergroupMeetingAttendee($this->request());
-        $this->assertSame(500, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(500);
+    });
+});
 
-    // ─── unregister attendee ─────────────────────────────────────────
-    #[Test]
-    public function unregister_attendee_happy_path_returns_200(): void
-    {
-        $meeting = $this->meeting();
+// ─── unregister attendee ─────────────────────────────────────────
+describe('unregister attendee', function () {
+    it('returns 200 on the happy path', function () {
+        $meeting = intergroupWriteMeetingDouble();
         $this->repo->shouldReceive('findById')->with(1)->andReturn($meeting);
         $this->repo->shouldReceive('save')->with($meeting)->andReturn(true);
         $this->groupAttendanceRepo->shouldReceive('deleteByIntergroupMeetingAndGroup')->with(1, 10);
 
-        $response = $this->controller->unregisterIntergroupMeetingAttendee($this->request());
-        $this->assertSame(200, $response->get_status());
-    }
+        $response = $this->controller->unregisterIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(200);
+    });
 
-    #[Test]
-    public function unregister_attendee_returns_404_when_meeting_missing(): void
-    {
+    it('returns 404 when the meeting is missing', function () {
         $this->repo->shouldReceive('findById')->andReturn(null);
-        $response = $this->controller->unregisterIntergroupMeetingAttendee($this->request());
-        $this->assertSame(404, $response->get_status());
-    }
+        $response = $this->controller->unregisterIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(404);
+    });
 
-    #[Test]
-    public function unregister_attendee_returns_404_when_not_registered(): void
-    {
-        $meeting = $this->meeting();
+    it('returns 404 when not registered', function () {
+        $meeting = intergroupWriteMeetingDouble();
         $meeting->shouldReceive('hasGroupAttendee')->with(10)->andReturn(false);
         $this->repo->shouldReceive('findById')->andReturn($meeting);
 
-        $response = $this->controller->unregisterIntergroupMeetingAttendee($this->request());
-        $this->assertSame(404, $response->get_status());
-    }
+        $response = $this->controller->unregisterIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(404);
+    });
 
-    #[Test]
-    public function unregister_attendee_returns_500_when_save_fails(): void
-    {
-        $meeting = $this->meeting();
+    it('returns 500 when the save fails', function () {
+        $meeting = intergroupWriteMeetingDouble();
         $this->repo->shouldReceive('findById')->andReturn($meeting);
         $this->repo->shouldReceive('save')->andReturn(false);
 
-        $response = $this->controller->unregisterIntergroupMeetingAttendee($this->request());
-        $this->assertSame(500, $response->get_status());
-    }
+        $response = $this->controller->unregisterIntergroupMeetingAttendee(($this->makeRequest)());
+        expect($response->get_status())->toBe(500);
+    });
+});
 
-    // ─── register officer ────────────────────────────────────────────
-    /** @return Member&MockInterface */
-    private function officer(int $positionId = 5)
-    {
-        $m = Mockery::mock(Member::class);
-        $m->shouldReceive('getIntergroupPosition')->andReturn($positionId)->byDefault();
-        return $m;
-    }
-
-    #[Test]
-    public function register_officer_happy_path_returns_201(): void
-    {
-        $meeting = $this->meeting();
+// ─── register officer ────────────────────────────────────────────
+describe('register officer', function () {
+    it('returns 201 on the happy path', function () {
+        $meeting = intergroupWriteMeetingDouble();
         $this->repo->shouldReceive('findById')->with(1)->andReturn($meeting);
-        $this->memberRepo->shouldReceive('findById')->with(30)->andReturn($this->officer(5));
+        $this->memberRepo->shouldReceive('findById')->with(30)->andReturn(intergroupWriteOfficerDouble(5));
         $this->positionViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->officerAttendanceRepo->shouldReceive('existsForMeetingAndOfficer')->with(1, 5)->andReturn(false);
         $this->officerAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingOfficerAttendance::class));
         $this->officerAttendanceRepo->shouldReceive('save')->andReturn(true);
         $this->repo->shouldReceive('save')->with($meeting)->andReturn(true);
 
-        $response = $this->controller->registerIntergroupMeetingOfficer($this->request());
-        $this->assertSame(201, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(201);
+    });
 
-    #[Test]
-    public function register_officer_returns_404_when_meeting_missing(): void
-    {
+    it('returns 404 when the meeting is missing', function () {
         $this->repo->shouldReceive('findById')->andReturn(null);
-        $response = $this->controller->registerIntergroupMeetingOfficer($this->request());
-        $this->assertSame(404, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(404);
+    });
 
-    #[Test]
-    public function register_officer_returns_404_when_officer_missing(): void
-    {
-        $this->repo->shouldReceive('findById')->andReturn($this->meeting());
+    it('returns 404 when the officer is missing', function () {
+        $this->repo->shouldReceive('findById')->andReturn(intergroupWriteMeetingDouble());
         $this->memberRepo->shouldReceive('findById')->with(30)->andReturn(null);
 
-        $response = $this->controller->registerIntergroupMeetingOfficer($this->request());
-        $this->assertSame(404, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(404);
+    });
 
-    #[Test]
-    public function register_officer_returns_422_without_an_intergroup_position(): void
-    {
-        $this->repo->shouldReceive('findById')->andReturn($this->meeting());
-        $this->memberRepo->shouldReceive('findById')->with(30)->andReturn($this->officer(0));
+    it('returns 422 without an intergroup position', function () {
+        $this->repo->shouldReceive('findById')->andReturn(intergroupWriteMeetingDouble());
+        $this->memberRepo->shouldReceive('findById')->with(30)->andReturn(intergroupWriteOfficerDouble(0));
 
-        $response = $this->controller->registerIntergroupMeetingOfficer($this->request());
-        $this->assertSame(422, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(422);
+    });
 
-    #[Test]
-    public function register_officer_returns_409_when_already_registered(): void
-    {
-        $this->repo->shouldReceive('findById')->andReturn($this->meeting());
-        $this->memberRepo->shouldReceive('findById')->with(30)->andReturn($this->officer(5));
+    it('returns 409 when already registered', function () {
+        $this->repo->shouldReceive('findById')->andReturn(intergroupWriteMeetingDouble());
+        $this->memberRepo->shouldReceive('findById')->with(30)->andReturn(intergroupWriteOfficerDouble(5));
         $this->positionViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->officerAttendanceRepo->shouldReceive('existsForMeetingAndOfficer')->with(1, 5)->andReturn(true);
 
-        $response = $this->controller->registerIntergroupMeetingOfficer($this->request());
-        $this->assertSame(409, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(409);
+    });
 
-    #[Test]
-    public function register_officer_returns_500_when_attendance_save_fails(): void
-    {
-        $this->repo->shouldReceive('findById')->andReturn($this->meeting());
-        $this->memberRepo->shouldReceive('findById')->with(30)->andReturn($this->officer(5));
+    it('returns 500 when the attendance save fails', function () {
+        $this->repo->shouldReceive('findById')->andReturn(intergroupWriteMeetingDouble());
+        $this->memberRepo->shouldReceive('findById')->with(30)->andReturn(intergroupWriteOfficerDouble(5));
         $this->positionViewFactory->shouldReceive('createFrom')->andReturn(null);
         $this->officerAttendanceRepo->shouldReceive('existsForMeetingAndOfficer')->andReturn(false);
         $this->officerAttendanceFactory->shouldReceive('createNew')->andReturn(Mockery::mock(IntergroupMeetingOfficerAttendance::class));
         $this->officerAttendanceRepo->shouldReceive('save')->andReturn(false);
 
-        $response = $this->controller->registerIntergroupMeetingOfficer($this->request());
-        $this->assertSame(500, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(500);
+    });
 
-    #[Test]
-    public function register_officer_returns_500_on_exception(): void
-    {
+    it('returns 500 on an exception', function () {
         $this->repo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));
-        $response = $this->controller->registerIntergroupMeetingOfficer($this->request());
-        $this->assertSame(500, $response->get_status());
-    }
+        $response = $this->controller->registerIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(500);
+    });
+});
 
-    // ─── unregister officer ──────────────────────────────────────────
-    #[Test]
-    public function unregister_officer_returns_404_when_meeting_missing(): void
-    {
+// ─── unregister officer ──────────────────────────────────────────
+describe('unregister officer', function () {
+    it('returns 404 when the meeting is missing', function () {
         $this->repo->shouldReceive('findById')->andReturn(null);
-        $response = $this->controller->unregisterIntergroupMeetingOfficer($this->request());
-        $this->assertSame(404, $response->get_status());
-    }
+        $response = $this->controller->unregisterIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(404);
+    });
 
-    #[Test]
-    public function unregister_officer_returns_500_on_exception(): void
-    {
+    it('returns 500 on an exception', function () {
         $this->repo->shouldReceive('findById')->andThrow(new \RuntimeException('boom'));
-        $response = $this->controller->unregisterIntergroupMeetingOfficer($this->request());
-        $this->assertSame(500, $response->get_status());
-    }
-}
+        $response = $this->controller->unregisterIntergroupMeetingOfficer(($this->makeRequest)());
+        expect($response->get_status())->toBe(500);
+    });
+});

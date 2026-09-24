@@ -359,7 +359,7 @@ integrity/
 │       ├── TheBleedingDeacons.Unity.Models/   # .NET model classes
 │       └── TheBleedingDeacons.Unity.Tests/    # .NET unit tests
 ├── templates/                 # Admin page templates
-├── tests/                     # PHP unit tests (PHPUnit + wp-mocks)
+├── tests/                     # PHP unit tests (Pest on PHPUnit, + wp-mocks)
 ├── composer.json
 ├── phpunit.xml
 └── phpstan.neon

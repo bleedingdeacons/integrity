@@ -4,36 +4,34 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Auth;
 
-use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\Attributes\DataProvider;
-use function Brain\Monkey\Functions\when;
 use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Integrity\Auth\AuditLogger;
-use Integrity\Tests\TestCase;
 use Mockery;
 
-/**
+/*
  * Unit tests for AuditLogger
  *
  * Options are seeded into WpState rather than stubbed one expectation at a
  * time: wp-mocks' get_option() is a real function over that store, so a test
  * says what the site is configured to do and the class reads it back.
  */
-class AuditLoggerTest extends TestCase
-{
-    private AuditLogger $auditLogger;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+beforeEach(function () {
+    // Instance methods now; static when these tests were written.
+    $this->auditLogger = new AuditLogger();
+});
 
-        // Instance methods now; static when these tests were written.
-        $this->auditLogger = new AuditLogger();
-    }
+afterEach(function () {
+    unset($_SERVER['REMOTE_ADDR']);
+    unset($_SERVER['HTTP_X_FORWARDED_FOR']);
+    unset($_SERVER['HTTP_CF_CONNECTING_IP']);
+    unset($_SERVER['HTTP_X_REAL_IP']);
+    unset($_SERVER['HTTP_USER_AGENT']);
+});
 
-    #[Test]
-    public function log_inserts_record_when_enabled(): void
-    {
+describe('log', function () {
+    it('inserts a record when enabled', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -48,6 +46,7 @@ class AuditLoggerTest extends TestCase
         $_SERVER['REMOTE_ADDR'] = '192.168.1.100';
         $_SERVER['HTTP_USER_AGENT'] = 'TestAgent/1.0';
 
+        // The insert is the assertion: verified by this Mockery expectation.
         $wpdb->shouldReceive('insert')
             ->once()
             ->andReturn(1);
@@ -60,14 +59,9 @@ class AuditLoggerTest extends TestCase
             200,
             0.125
         );
+    });
 
-        // Assert insert was called (verified by Mockery expectations)
-        $this->assertTrue(true);
-    }
-
-    #[Test]
-    public function log_does_not_insert_when_disabled(): void
-    {
+    it('does not insert when disabled', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -85,13 +79,9 @@ class AuditLoggerTest extends TestCase
             200,
             0.125
         );
+    });
 
-        $this->assertTrue(true);
-    }
-
-    #[Test]
-    public function log_sanitizes_sensitive_params(): void
-    {
+    it('sanitises sensitive params', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -104,7 +94,7 @@ class AuditLoggerTest extends TestCase
         // The redaction happens before encoding, so intercept the encoder to
         // see the array as the logger built it.
         $capturedParams = null;
-        when('wp_json_encode')->alias(
+        Functions\when('wp_json_encode')->alias(
             static function ($data) use (&$capturedParams) {
                 $capturedParams = $data;
 
@@ -131,15 +121,16 @@ class AuditLoggerTest extends TestCase
         );
 
         // Verify sensitive fields were redacted
-        $this->assertEquals('[REDACTED]', $capturedParams['password']);
-        $this->assertEquals('[REDACTED]', $capturedParams['api_key']);
-        $this->assertEquals('testuser', $capturedParams['username']);
-        $this->assertEquals('normal_data', $capturedParams['data']);
-    }
+        expect($capturedParams)
+            ->toHaveKey('password', '[REDACTED]')
+            ->toHaveKey('api_key', '[REDACTED]')
+            ->toHaveKey('username', 'testuser')
+            ->toHaveKey('data', 'normal_data');
+    });
+});
 
-    #[Test]
-    public function getClientIp_returns_remote_addr_when_no_trusted_proxies(): void
-    {
+describe('getClientIp', function () {
+    it('returns REMOTE_ADDR when there are no trusted proxies', function () {
         $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.50';
         $_SERVER['HTTP_CF_CONNECTING_IP'] = '198.51.100.25';
@@ -150,12 +141,10 @@ class AuditLoggerTest extends TestCase
         $ip = $logger->getClientIp();
 
         // Without trusted proxies, proxy headers are ignored
-        $this->assertEquals('10.0.0.1', $ip);
-    }
+        expect($ip)->toEqual('10.0.0.1');
+    });
 
-    #[Test]
-    public function getClientIp_reads_proxy_header_when_remote_addr_is_trusted(): void
-    {
+    it('reads the proxy header when REMOTE_ADDR is trusted', function () {
         $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.50, 10.0.0.1';
 
@@ -165,12 +154,10 @@ class AuditLoggerTest extends TestCase
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
 
-        $this->assertEquals('203.0.113.50', $ip);
-    }
+        expect($ip)->toEqual('203.0.113.50');
+    });
 
-    #[Test]
-    public function getClientIp_reads_cloudflare_header_when_configured(): void
-    {
+    it('reads the Cloudflare header when configured', function () {
         $_SERVER['REMOTE_ADDR'] = '172.70.100.5';
         $_SERVER['HTTP_CF_CONNECTING_IP'] = '198.51.100.25';
 
@@ -180,12 +167,10 @@ class AuditLoggerTest extends TestCase
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
 
-        $this->assertEquals('198.51.100.25', $ip);
-    }
+        expect($ip)->toEqual('198.51.100.25');
+    });
 
-    #[Test]
-    public function getClientIp_ignores_proxy_header_when_remote_addr_not_trusted(): void
-    {
+    it('ignores the proxy header when REMOTE_ADDR is not trusted', function () {
         $_SERVER['REMOTE_ADDR'] = '192.168.1.100';
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '10.10.10.10';
 
@@ -196,12 +181,10 @@ class AuditLoggerTest extends TestCase
 
         // REMOTE_ADDR is not in the trusted proxies list, so proxy
         // headers are not consulted — prevents spoofing
-        $this->assertEquals('192.168.1.100', $ip);
-    }
+        expect($ip)->toEqual('192.168.1.100');
+    });
 
-    #[Test]
-    public function getClientIp_supports_cidr_trusted_proxies(): void
-    {
+    it('supports CIDR trusted proxies', function () {
         $_SERVER['REMOTE_ADDR'] = '10.0.5.42';
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.99';
 
@@ -211,12 +194,10 @@ class AuditLoggerTest extends TestCase
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
 
-        $this->assertEquals('203.0.113.99', $ip);
-    }
+        expect($ip)->toEqual('203.0.113.99');
+    });
 
-    #[Test]
-    public function getClientIp_validates_ip_format(): void
-    {
+    it('validates the IP format', function () {
         $_SERVER['REMOTE_ADDR'] = 'invalid-ip';
         unset($_SERVER['HTTP_X_FORWARDED_FOR']);
         unset($_SERVER['HTTP_CF_CONNECTING_IP']);
@@ -224,12 +205,10 @@ class AuditLoggerTest extends TestCase
         $logger = new AuditLogger();
         $ip = $logger->getClientIp();
 
-        $this->assertEquals('0.0.0.0', $ip);
-    }
+        expect($ip)->toEqual('0.0.0.0');
+    });
 
-    #[Test]
-    public function getClientIp_falls_back_to_remote_addr_when_proxy_header_empty(): void
-    {
+    it('falls back to REMOTE_ADDR when the proxy header is empty', function () {
         $_SERVER['REMOTE_ADDR'] = '10.0.0.1';
         unset($_SERVER['HTTP_X_FORWARDED_FOR']);
 
@@ -240,12 +219,12 @@ class AuditLoggerTest extends TestCase
         $ip = $logger->getClientIp();
 
         // Proxy header is not set, so falls back to REMOTE_ADDR
-        $this->assertEquals('10.0.0.1', $ip);
-    }
+        expect($ip)->toEqual('10.0.0.1');
+    });
+});
 
-    #[Test]
-    public function getLogs_returns_paginated_results(): void
-    {
+describe('getLogs', function () {
+    it('returns paginated results', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -281,15 +260,13 @@ class AuditLoggerTest extends TestCase
 
         $result = $this->auditLogger->getLogs(['page' => 1, 'per_page' => 50]);
 
-        $this->assertArrayHasKey('logs', $result);
-        $this->assertArrayHasKey('total', $result);
-        $this->assertEquals(1, $result['total']);
-        $this->assertCount(1, $result['logs']);
-    }
+        expect($result)
+            ->toHaveKey('logs')
+            ->toHaveKey('total', 1)
+            ->and($result['logs'])->toHaveCount(1);
+    });
 
-    #[Test]
-    public function getLogs_decodes_json_params(): void
-    {
+    it('decodes JSON params', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -320,14 +297,15 @@ class AuditLoggerTest extends TestCase
 
         $result = $this->auditLogger->getLogs();
 
-        $this->assertIsArray($result['logs'][0]['request_params']);
-        $this->assertEquals('bar', $result['logs'][0]['request_params']['foo']);
-        $this->assertEquals(42, $result['logs'][0]['request_params']['num']);
-    }
+        expect($result['logs'][0]['request_params'])
+            ->toBeArray()
+            ->toHaveKey('foo', 'bar')
+            ->toHaveKey('num', 42);
+    });
+});
 
-    #[Test]
-    public function getStats_returns_expected_metrics(): void
-    {
+describe('getStats', function () {
+    it('returns the expected metrics', function () {
         global $wpdb;
         $wpdb = Mockery::mock('wpdb');
         $wpdb->prefix = 'wp_';
@@ -348,34 +326,21 @@ class AuditLoggerTest extends TestCase
 
         $stats = $this->auditLogger->getStats(30);
 
-        $this->assertArrayHasKey('total_requests', $stats);
-        $this->assertArrayHasKey('successful_requests', $stats);
-        $this->assertArrayHasKey('failed_auth', $stats);
-        $this->assertArrayHasKey('rate_limited', $stats);
-        $this->assertArrayHasKey('avg_response_time', $stats);
-        $this->assertArrayHasKey('top_endpoints', $stats);
-        $this->assertArrayHasKey('top_ips', $stats);
-        $this->assertArrayHasKey('period_days', $stats);
+        expect($stats)
+            ->toHaveKey('total_requests')
+            ->toHaveKey('successful_requests')
+            ->toHaveKey('failed_auth')
+            ->toHaveKey('rate_limited')
+            ->toHaveKey('avg_response_time')
+            ->toHaveKey('top_endpoints')
+            ->toHaveKey('top_ips')
+            ->toHaveKey('period_days', 30);
+    });
+});
 
-        $this->assertEquals(30, $stats['period_days']);
-    }
-
-    protected function tearDown(): void
-    {
-        unset($_SERVER['REMOTE_ADDR']);
-        unset($_SERVER['HTTP_X_FORWARDED_FOR']);
-        unset($_SERVER['HTTP_CF_CONNECTING_IP']);
-        unset($_SERVER['HTTP_X_REAL_IP']);
-        unset($_SERVER['HTTP_USER_AGENT']);
-
-        parent::tearDown();
-    }
-
-    // ── Personal data redaction (F6) ───────────────────────────────────
-    #[DataProvider('personalDataKeys')]
-    #[Test]
-    public function redact_removes_personal_data(string $key): void
-    {
+// ── Personal data redaction (F6) ───────────────────────────────────
+describe('redact', function () {
+    it('removes personal data', function (string $key) {
         // The list knew about credentials but not about the two fields
         // Scrutiny exists to obscure. logFailedRequest() passes
         // $request->get_params() wholesale, so a 401/403/429 on
@@ -383,30 +348,20 @@ class AuditLoggerTest extends TestCase
         // request_params for the whole retention window.
         $out = (new AuditLogger())->redact([$key => 'sensitive-value']);
 
-        $this->assertSame('[REDACTED]', $out[$key], $key . ' must not be logged in the clear');
-    }
+        expect($out[$key])->toBe('[REDACTED]', $key . ' must not be logged in the clear');
+    })->with([
+        'personal_email' => ['personal_email'],
+        'email'          => ['email'],
+        'email_address'  => ['email_address'],
+        'mobile_number'  => ['mobile_number'],
+        'mobile'         => ['mobile'],
+        'telephone'      => ['telephone'],
+        'landline'       => ['landline'],
+        'phone'          => ['phone'],
+        'home_phone'     => ['home_phone'],
+    ]);
 
-    /**
-     * @return array<string, array{string}>
-     */
-    public static function personalDataKeys(): array
-    {
-        return [
-            'personal_email' => ['personal_email'],
-            'email'          => ['email'],
-            'email_address'  => ['email_address'],
-            'mobile_number'  => ['mobile_number'],
-            'mobile'         => ['mobile'],
-            'telephone'      => ['telephone'],
-            'landline'       => ['landline'],
-            'phone'          => ['phone'],
-            'home_phone'     => ['home_phone'],
-        ];
-    }
-
-    #[Test]
-    public function redact_leaves_ordinary_parameters_alone(): void
-    {
+    it('leaves ordinary parameters alone', function () {
         $out = (new AuditLogger())->redact([
             'page'     => 2,
             'per_page' => 50,
@@ -414,29 +369,24 @@ class AuditLoggerTest extends TestCase
             'title'    => 'Tuesday Group',
         ]);
 
-        $this->assertSame(
+        expect($out)->toBe(
             ['page' => 2, 'per_page' => 50, 'expand' => 'meetings', 'title' => 'Tuesday Group'],
-            $out,
             'Redaction must not eat the parameters that make a log entry useful.'
         );
-    }
+    });
 
-    #[Test]
-    public function redact_reaches_into_nested_parameters(): void
-    {
+    it('reaches into nested parameters', function () {
         $out = (new AuditLogger())->redact([
             'member' => ['name' => 'A Person', 'personal_email' => 'a@example.com'],
         ]);
 
-        $this->assertSame('A Person', $out['member']['name']);
-        $this->assertSame('[REDACTED]', $out['member']['personal_email']);
-    }
+        expect($out['member']['name'])->toBe('A Person')
+            ->and($out['member']['personal_email'])->toBe('[REDACTED]');
+    });
 
-    #[Test]
-    public function redact_still_removes_credentials(): void
-    {
+    it('still removes credentials', function () {
         $out = (new AuditLogger())->redact(['password' => 'p', 'api_key' => 'k', 'token' => 't']);
 
-        $this->assertSame(['password' => '[REDACTED]', 'api_key' => '[REDACTED]', 'token' => '[REDACTED]'], $out);
-    }
-}
+        expect($out)->toBe(['password' => '[REDACTED]', 'api_key' => '[REDACTED]', 'token' => '[REDACTED]']);
+    });
+});
