@@ -52,7 +52,7 @@ describe('isValid', function () {
         'not hex' => 'zzzzzzzz-9d8e-4c7b-a6f5-0e1d2c3b4a59',
         'number' => 42,
         'null' => null,
-        'array' => [CLIENT_REFERENCE],
+        'array' => [[CLIENT_REFERENCE]],
     ]);
 });
 
