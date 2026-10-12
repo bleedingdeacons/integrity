@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Integrity\Tests\Unit\Api;
 
 use BleedingDeacons\WpMocks\WpState;
+use Brain\Monkey\Functions;
 use Integrity\Api\ClientReferences;
 use Mockery;
 
@@ -21,7 +22,6 @@ beforeEach(function () {
     $this->previousWpdb = $GLOBALS['wpdb'] ?? null;
 
     $this->wpdb = Mockery::mock();
-    $this->wpdb->postmeta = 'wp_postmeta';
     // Hand the query back with its arguments so the assertions can see both.
     $this->wpdb->shouldReceive('prepare')->andReturnUsing(
         fn (string $query, ...$args) => ['query' => $query, 'args' => $args]
@@ -57,18 +57,27 @@ describe('isValid', function () {
 });
 
 describe('findMemberId', function () {
-    it('looks the reference up in post meta and returns the member id', function () {
-        $this->wpdb->shouldReceive('get_var')->once()->andReturnUsing(function (array $prepared) {
-            expect($prepared['query'])->toContain('wp_postmeta')
-                ->and($prepared['args'])->toBe([ClientReferences::META_KEY, CLIENT_REFERENCE]);
-            return '123';
-        });
+    beforeEach(function () {
+        Functions\when('get_post_types')->justReturn(['post' => 'post', 'member' => 'member']);
+    });
+
+    it('finds the member carrying the reference in post meta', function () {
+        WpState::$queryPosts = [(object) ['ID' => 123, 'post_type' => 'member']];
 
         expect($this->references->findMemberId(CLIENT_REFERENCE))->toBe(123);
+
+        $args = WpState::$options['__last_get_posts_args'];
+        expect($args['meta_key'])->toBe(ClientReferences::META_KEY)
+            ->and($args['meta_value'])->toBe(CLIENT_REFERENCE)
+            ->and($args['fields'])->toBe('ids')
+            ->and($args['posts_per_page'])->toBe(1)
+            ->and($args['post_status'])->toBe('any')
+            // Named, not 'any': 'any' skips types excluded from search.
+            ->and($args['post_type'])->toBe(['post', 'member']);
     });
 
     it('returns null when no member carries the reference', function () {
-        $this->wpdb->shouldReceive('get_var')->once()->andReturn(null);
+        WpState::$queryPosts = [];
 
         expect($this->references->findMemberId(CLIENT_REFERENCE))->toBeNull();
     });
@@ -113,10 +122,10 @@ describe('lock and release', function () {
     });
 
     it('releases the lock it took', function () {
-        $this->wpdb->shouldReceive('query')->once()->andReturnUsing(function (array $prepared) {
+        $this->wpdb->shouldReceive('get_var')->once()->andReturnUsing(function (array $prepared) {
             expect($prepared['query'])->toContain('RELEASE_LOCK')
                 ->and($prepared['args'][0])->toContain(CLIENT_REFERENCE);
-            return 1;
+            return '1';
         });
 
         $this->references->release(CLIENT_REFERENCE);

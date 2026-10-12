@@ -26,7 +26,7 @@ if (!defined('ABSPATH')) {
  * left behind by a request that died is released when its connection closes;
  * nothing is left to expire.
  *
- * The lookup goes straight to postmeta rather than through Unity's member
+ * The lookup is a plain meta query rather than a call into Unity's member
  * repository: the repository's query arguments are its implementation's to
  * interpret, and this needs one exact-match read whatever that is.
  */
@@ -57,15 +57,25 @@ class ClientReferences
      */
     public function findMemberId(string $reference): ?int
     {
-        $wpdb = $this->wpdb();
+        $ids = get_posts([
+            // Every registered type, named explicitly. Unity's member post
+            // type is configurable, and 'any' would silently skip a type
+            // registered with exclude_from_search — as a private member
+            // type may well be. The reference is unique to one post
+            // whatever its type.
+            'post_type' => array_values(get_post_types()),
+            'post_status' => 'any',
+            'meta_key' => self::META_KEY,
+            'meta_value' => $reference,
+            'fields' => 'ids',
+            'posts_per_page' => 1,
+            'orderby' => 'ID',
+            'order' => 'DESC',
+            'no_found_rows' => true,
+            'suppress_filters' => true,
+        ]);
 
-        $id = $wpdb->get_var($wpdb->prepare(
-            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %s ORDER BY post_id DESC LIMIT 1",
-            self::META_KEY,
-            $reference
-        ));
-
-        return $id === null ? null : (int) $id;
+        return $ids === [] ? null : (int) $ids[0];
     }
 
     /**
@@ -105,7 +115,7 @@ class ClientReferences
     {
         $wpdb = $this->wpdb();
 
-        $wpdb->query($wpdb->prepare('SELECT RELEASE_LOCK(%s)', self::lockName($reference)));
+        $wpdb->get_var($wpdb->prepare('SELECT RELEASE_LOCK(%s)', self::lockName($reference)));
     }
 
     private static function lockName(string $reference): string
