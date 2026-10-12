@@ -174,11 +174,17 @@ class Plugin
 
     /**
      * Add security headers to REST API responses
+     *
+     * Core's /batch/v1 is covered too: the write routes accept batching, and
+     * a batch response carries their member records inside a body served
+     * under core's route, not ours. Only the outer response reaches this
+     * filter, so it is the one place the no-store headers can go.
      */
     public static function addSecurityHeaders(): void
     {
         add_filter('rest_pre_serve_request', function ($served, $result, $request) {
-            if (strpos($request->get_route(), '/integrity/') === 0) {
+            $route = (string) $request->get_route();
+            if (strpos($route, '/integrity/') === 0 || $route === '/batch/v1') {
                 header('X-Content-Type-Options: nosniff');
                 header('X-Frame-Options: DENY');
                 header('X-XSS-Protection: 1; mode=block');
