@@ -9,6 +9,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+use Integrity\Api\ClientReferences;
 use Integrity\Auth\AuditLogger;
 use Integrity\Utils\Mask;
 use Unity\Groups\Interfaces\Group;
@@ -37,17 +38,20 @@ class MemberController
     private GroupController $groupController;
     private PositionController $positionController;
     private MeetingController $meetingController;
+    private ClientReferences $clientReferences;
 
     public function __construct(
         AuditLogger $auditLogger,
         GroupController $groupController,
         PositionController $positionController,
-        MeetingController $meetingController
+        MeetingController $meetingController,
+        ?ClientReferences $clientReferences = null
     ) {
         $this->auditLogger = $auditLogger;
         $this->groupController = $groupController;
         $this->positionController = $positionController;
         $this->meetingController = $meetingController;
+        $this->clientReferences = $clientReferences ?? new ClientReferences();
     }
 
     /**
@@ -286,6 +290,18 @@ class MemberController
                     return $date && $date->format('Y-m-d') === $param;
                 },
                 'sanitize_callback' => 'sanitize_text_field',
+            ],
+            // A UUID the client chose for this create. Repeating a create
+            // with the same reference returns the member made the first
+            // time instead of making another; see ClientReferences.
+            'client_reference' => [
+                'required' => false,
+                'validate_callback' => function ($param) {
+                    return ClientReferences::isValid($param);
+                },
+                'sanitize_callback' => function ($param) {
+                    return is_string($param) ? strtolower($param) : $param;
+                },
             ],
         ];
     }
@@ -583,8 +599,101 @@ class MemberController
 
     /**
      * Create a new member.
+     *
+     * A create that names a client_reference is safe to repeat: it runs
+     * under a lock held for that reference, and a member already created
+     * under it is returned (200, replayed) instead of a new one being made.
+     * A create without one behaves exactly as it always has.
      */
     public function createMember(WP_REST_Request $request): WP_REST_Response
+    {
+        $reference = $request->get_param('client_reference');
+        if (!is_string($reference) || $reference === '') {
+            return $this->insertMember($request, null);
+        }
+
+        ['start_time' => $startTime, 'key_data' => $keyData] = $this->extractRequestContext($request);
+
+        try {
+            $locked = $this->clientReferences->lock($reference);
+        } catch (\Throwable $e) {
+            \Integrity\Plugin::logError('Integrity: createMember could not take the client-reference lock: ' . $e->getMessage(), ['exception' => $e->getMessage()]);
+            $this->logRequest($keyData['api_key_id'], $request, null, 500, $startTime);
+
+            return $this->internalErrorResponse();
+        }
+
+        if (!$locked) {
+            // Another copy of this create held the lock for the whole wait.
+            // Nothing was made here; the client's next attempt will find
+            // whatever the other copy made.
+            $this->logRequest($keyData['api_key_id'], $request, ['client_reference' => $reference], 409, $startTime);
+
+            return $this->errorResponse(
+                'create_in_progress',
+                'This member is already being created by another request; try again shortly',
+                409
+            );
+        }
+
+        try {
+            return $this->replayCreate($request, $reference) ?? $this->insertMember($request, $reference);
+        } finally {
+            try {
+                $this->clientReferences->release($reference);
+            } catch (\Throwable $e) {
+                // The connection releases it when the request ends anyway.
+                \Integrity\Plugin::logError('Integrity: createMember could not release the client-reference lock: ' . $e->getMessage(), ['exception' => $e->getMessage()]);
+            }
+        }
+    }
+
+    /**
+     * Returns the member already created under this reference, or null when
+     * there is none (or it no longer exists) and the create should go ahead.
+     */
+    private function replayCreate(WP_REST_Request $request, string $reference): ?WP_REST_Response
+    {
+        ['start_time' => $startTime, 'key_data' => $keyData] = $this->extractRequestContext($request);
+
+        try {
+            $existingId = $this->clientReferences->findMemberId($reference);
+            if ($existingId === null) {
+                return null;
+            }
+
+            $container = Plugin::getContainer();
+            $existing = $container->get(MemberRepository::class)->findById($existingId);
+            if ($existing === null) {
+                return null;
+            }
+
+            $this->logRequest(
+                $keyData['api_key_id'],
+                $request,
+                ['id' => $existingId, 'client_reference' => $reference, 'replayed' => true],
+                200,
+                $startTime
+            );
+
+            return new WP_REST_Response([
+                'success' => true,
+                'replayed' => true,
+                'data' => $this->buildMemberResponse($container, $existing, $this->hasClearPermission($keyData)),
+            ], 200);
+        } catch (\Throwable $e) {
+            \Integrity\Plugin::logError('Integrity: createMember replay lookup error: ' . $e->getMessage(), ['exception' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            $this->logRequest($keyData['api_key_id'], $request, null, 500, $startTime);
+
+            return $this->internalErrorResponse();
+        }
+    }
+
+    /**
+     * Inserts a new member, storing the client reference against it when
+     * one was given.
+     */
+    private function insertMember(WP_REST_Request $request, ?string $reference): WP_REST_Response
     {
         ['start_time' => $startTime, 'key_data' => $keyData] = $this->extractRequestContext($request);
 
@@ -651,6 +760,16 @@ class MemberController
                 $this->logRequest($keyData['api_key_id'], $request, ['anonymous_name' => $anonymousName], 500, $startTime);
 
                 return $this->errorResponse('create_failed', 'Failed to create member', 500);
+            }
+
+            // Stored before the fields are filled so a repeat that arrives
+            // while this one is still saving cannot miss it. A save failure
+            // below deletes the post, and its meta with it.
+            if ($reference !== null && !$this->clientReferences->remember($postId, $reference)) {
+                \Integrity\Plugin::logError('Integrity: could not store client reference for new member', [
+                    'post_id' => $postId,
+                    'client_reference' => $reference,
+                ]);
             }
 
             // Build the member object with all fields via the factory.

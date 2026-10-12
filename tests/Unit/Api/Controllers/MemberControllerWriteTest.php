@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Integrity\Tests\Unit\Api\Controllers;
 
+use Integrity\Api\ClientReferences;
 use Integrity\Api\Controllers\ControllerTrait;
 use Integrity\Api\Controllers\GroupController;
 use Integrity\Api\Controllers\MeetingController;
@@ -347,6 +348,151 @@ describe('createMember', function () {
         $this->memberRepo->shouldReceive('create')->andThrow(new \RuntimeException('boom'));
         $r = $this->controller->createMember(memberWriteRequest(['anonymous_name' => 'Newbie']));
         expect($r->get_status())->toBe(500);
+    });
+});
+
+// ─── createMember with a client reference ─────────────────────────
+describe('createMember with a client reference', function () {
+    beforeEach(function () {
+        $this->reference = '3f1c2b4a-9d8e-4c7b-a6f5-0e1d2c3b4a59';
+
+        $this->references = Mockery::mock(ClientReferences::class);
+        $this->references->shouldReceive('lock')->with($this->reference)->andReturn(true)->byDefault();
+        $this->references->shouldReceive('release')->with($this->reference)->byDefault();
+        $this->references->shouldReceive('findMemberId')->andReturn(null)->byDefault();
+        $this->references->shouldReceive('remember')->andReturn(true)->byDefault();
+
+        $auditLogger = Mockery::mock(AuditLogger::class);
+        $auditLogger->shouldReceive('log')->byDefault();
+
+        $this->controller = new MemberController(
+            $auditLogger,
+            new GroupController($auditLogger),
+            new PositionController($auditLogger),
+            new MeetingController($auditLogger),
+            $this->references
+        );
+
+        $this->request = fn (array $params = []) => memberWriteRequest(array_merge(
+            ['anonymous_name' => 'Newbie', 'client_reference' => $this->reference],
+            $params
+        ));
+    });
+
+    it('returns the member made the first time instead of making another', function () {
+        $this->references->shouldReceive('findMemberId')->with($this->reference)->andReturn(123);
+        $this->memberRepo->shouldReceive('findById')->with(123)->andReturn(memberWriteMemberDouble());
+        $this->memberRepo->shouldNotReceive('create');
+        $this->references->shouldReceive('release')->with($this->reference)->once();
+
+        $r = $this->controller->createMember(($this->request)());
+
+        expect($r->get_status())->toBe(200)
+            ->and($r->get_data()['success'])->toBeTrue()
+            ->and($r->get_data()['replayed'])->toBeTrue()
+            ->and($r->get_data()['data']['id'])->toBe(1);
+    });
+
+    it('creates the member and stores the reference against it when none matches', function () {
+        $this->memberRepo->shouldReceive('create')->once()->andReturn(123);
+        $this->references->shouldReceive('remember')->with(123, $this->reference)->once()->andReturn(true);
+        $this->factory->shouldReceive('createNew')->andReturn(memberWriteMemberDouble());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+        $this->memberRepo->shouldReceive('findById')->with(123)->andReturn(memberWriteMemberDouble());
+        $this->references->shouldReceive('release')->with($this->reference)->once();
+
+        $r = $this->controller->createMember(($this->request)());
+
+        expect($r->get_status())->toBe(201)
+            ->and($r->get_data())->not->toHaveKey('replayed');
+    });
+
+    it('creates afresh when the member the reference points at no longer exists', function () {
+        $this->references->shouldReceive('findMemberId')->andReturn(55);
+        $this->memberRepo->shouldReceive('findById')->with(55)->andReturn(null);
+        $this->memberRepo->shouldReceive('create')->once()->andReturn(124);
+        $this->factory->shouldReceive('createNew')->andReturn(memberWriteMemberDouble());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+        $this->memberRepo->shouldReceive('findById')->with(124)->andReturn(memberWriteMemberDouble());
+
+        $r = $this->controller->createMember(($this->request)());
+
+        expect($r->get_status())->toBe(201);
+    });
+
+    it('still creates the member when the reference cannot be stored', function () {
+        $this->memberRepo->shouldReceive('create')->andReturn(123);
+        $this->references->shouldReceive('remember')->andReturn(false);
+        $this->factory->shouldReceive('createNew')->andReturn(memberWriteMemberDouble());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+        $this->memberRepo->shouldReceive('findById')->with(123)->andReturn(memberWriteMemberDouble());
+
+        $r = $this->controller->createMember(($this->request)());
+
+        expect($r->get_status())->toBe(201);
+    });
+
+    it('answers 409 and makes nothing while another copy of the create holds the lock', function () {
+        $this->references->shouldReceive('lock')->andReturn(false);
+        $this->references->shouldNotReceive('findMemberId');
+        $this->references->shouldNotReceive('release');
+        $this->memberRepo->shouldNotReceive('create');
+
+        $r = $this->controller->createMember(($this->request)());
+
+        expect($r->get_status())->toBe(409)
+            ->and($r->get_data()['error']['code'])->toBe('create_in_progress');
+    });
+
+    it('answers 500 when the lock cannot be taken at all', function () {
+        $this->references->shouldReceive('lock')->andThrow(new \RuntimeException('no database'));
+        $this->memberRepo->shouldNotReceive('create');
+
+        $r = $this->controller->createMember(($this->request)());
+
+        expect($r->get_status())->toBe(500);
+    });
+
+    it('releases the lock when the create fails', function () {
+        $this->memberRepo->shouldReceive('create')->andThrow(new \RuntimeException('boom'));
+        $this->references->shouldReceive('release')->with($this->reference)->once();
+
+        $r = $this->controller->createMember(($this->request)());
+
+        expect($r->get_status())->toBe(500);
+    });
+
+    it('answers 500 when the replay lookup fails, and makes nothing', function () {
+        $this->references->shouldReceive('findMemberId')->andThrow(new \RuntimeException('no database'));
+        $this->memberRepo->shouldNotReceive('create');
+        $this->references->shouldReceive('release')->with($this->reference)->once();
+
+        $r = $this->controller->createMember(($this->request)());
+
+        expect($r->get_status())->toBe(500);
+    });
+
+    it('leaves a create without a reference exactly as it was', function () {
+        $this->references->shouldNotReceive('lock');
+        $this->references->shouldNotReceive('findMemberId');
+        $this->references->shouldNotReceive('remember');
+        $this->memberRepo->shouldReceive('create')->once()->andReturn(123);
+        $this->factory->shouldReceive('createNew')->andReturn(memberWriteMemberDouble());
+        $this->memberRepo->shouldReceive('save')->andReturn(true);
+        $this->memberRepo->shouldReceive('findById')->with(123)->andReturn(memberWriteMemberDouble());
+
+        $r = $this->controller->createMember(memberWriteRequest(['anonymous_name' => 'Newbie']));
+
+        expect($r->get_status())->toBe(201);
+    });
+
+    it('accepts only a UUID as a reference, and stores it lower-case', function () {
+        $arg = $this->controller->getCreateMemberArgs()['client_reference'];
+
+        expect(($arg['validate_callback'])(strtoupper($this->reference)))->toBeTrue()
+            ->and(($arg['validate_callback'])('member-7'))->toBeFalse()
+            ->and(($arg['sanitize_callback'])(strtoupper($this->reference)))->toBe($this->reference)
+            ->and($arg['required'])->toBeFalse();
     });
 });
 
