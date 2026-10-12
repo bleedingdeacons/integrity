@@ -99,6 +99,27 @@ All endpoints are served under `/wp-json/integrity/v1/`. Every authenticated res
 | `POST` | `/intergroup-meetings/{id}/register-officer` | `intergroup-meetings:write` | Register an officer's attendance |
 | `POST` | `/intergroup-meetings/{id}/unregister-officer` | `intergroup-meetings:write` | Remove an officer's registration |
 
+### Batch Requests
+
+Every `POST` endpoint above can be sent through WordPress core's batch endpoint, `POST /wp-json/batch/v1` (WordPress 5.6+). Core only batches `POST`, `PUT`, `PATCH` and `DELETE`, so the `GET` endpoints are not batchable. The default limit is 25 requests per batch (core's `rest_get_max_batch_size` filter).
+
+Authenticate the batch itself — sub-requests that carry no key inherit it. A sub-request may name its own key in its `headers`, and is then held to that key. The key is validated once per batch; each sub-request is still checked against its own required permission and counts once against the key's rate limit. Each sub-response carries its own `X-RateLimit-*` headers.
+
+```bash
+curl -X POST -H "Authorization: Bearer int_..." \
+     -H "Content-Type: application/json" \
+     -d '{
+       "validation": "require-all-validate",
+       "requests": [
+         {"path": "/integrity/v1/members/5/update", "body": {"anonymous_name": "Jane S."}},
+         {"path": "/integrity/v1/intergroup-meetings/7/register-group", "body": {"group_id": 12, "gsr_name": "John D."}}
+       ]
+     }' \
+     https://example.com/wp-json/batch/v1
+```
+
+The response is `207 Multi-Status` with one entry per request, in order. With `"validation": "require-all-validate"`, nothing runs unless every sub-request passes argument validation.
+
 ## Authentication
 
 Pass your API key via the `Authorization` header (preferred) or the `X-API-Key` header:

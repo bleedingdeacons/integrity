@@ -56,8 +56,41 @@ class RestController
         'meetings' => 'meetings:read',
     ];
 
+    /**
+     * Opt-in for WordPress core's batch endpoint (`POST /wp-json/batch/v1`).
+     *
+     * Core only lets POST, PUT, PATCH and DELETE into a batch, so this is set
+     * on the write routes alone. Reads stay on their own paginated endpoints.
+     */
+    private const ALLOW_BATCH = ['v1' => true];
+
+    /** Core's batch route, as WP_REST_Request::get_route() reports it. */
+    private const BATCH_ROUTE = '/batch/v1';
+
     private ApiKeyManager $apiKeyManager;
     private AuditLogger $auditLogger;
+
+    /**
+     * The outer `/batch/v1` request while one is being served, else null.
+     *
+     * Core builds each sub-request from the batch body alone, so the HTTP
+     * headers the client actually sent — Authorization among them — never
+     * reach the sub-request. Holding the outer request lets checkPermission()
+     * fall back to its credentials. See extractApiKey().
+     */
+    private ?WP_REST_Request $batchRequest = null;
+
+    /**
+     * validateKey() results for the batch in progress, keyed by key hash.
+     *
+     * validateKey() is a fixed eight Argon2id verifies at 64 MiB each. Without
+     * this a 25-item batch would run two hundred of them for one credential.
+     * Cleared when the batch ends, so nothing outlives the request that
+     * proved it.
+     *
+     * @var array<string, array<string, mixed>|false>
+     */
+    private array $batchKeyCache = [];
     private RateLimiter $rateLimiter;
     private PreAuthThrottle $preAuthThrottle;
 
@@ -116,6 +149,78 @@ class RestController
         $this->registerMemberRoutes();
         $this->registerIntergroupMeetingRoutes();
         $this->registerHealthRoute();
+
+        // Bracket core's batch handler. Both filters run inside
+        // respond_to_request(), which serve_request() and rest_do_request()
+        // share, so the window opens and closes on either path. Sub-requests
+        // pass through the same filters with their own routes and are ignored.
+        add_filter('rest_request_before_callbacks', [$this, 'beginBatch'], 10, 3);
+        add_filter('rest_request_after_callbacks', [$this, 'endBatch'], 10, 3);
+    }
+
+    // ── Batch Requests ──────────────────────────────────────────────────
+
+    /**
+     * Record the outer request when core starts serving `/batch/v1`.
+     *
+     * @param mixed $response Passed through unchanged
+     * @param mixed $handler
+     * @param mixed $request
+     * @return mixed
+     */
+    public function beginBatch($response, $handler = null, $request = null)
+    {
+        if ($request instanceof WP_REST_Request && $request->get_route() === self::BATCH_ROUTE) {
+            $this->batchRequest = $request;
+            $this->batchKeyCache = [];
+        }
+
+        return $response;
+    }
+
+    /**
+     * Forget the outer request and its cached key once the batch is served.
+     *
+     * @param mixed $response Passed through unchanged
+     * @param mixed $handler
+     * @param mixed $request
+     * @return mixed
+     */
+    public function endBatch($response, $handler = null, $request = null)
+    {
+        if ($request instanceof WP_REST_Request && $request->get_route() === self::BATCH_ROUTE) {
+            $this->batchRequest = null;
+            $this->batchKeyCache = [];
+        }
+
+        return $response;
+    }
+
+    /**
+     * Validate a key, once per batch.
+     *
+     * Outside a batch this is validateKey() and nothing more. Inside one, the
+     * first sub-request pays for the verify and the rest reuse its answer —
+     * a rejection included, so a batch of bad keys costs one verify too.
+     *
+     * @return array{0: array<string, mixed>|null, 1: bool} Key data or null, and whether it came from the cache
+     */
+    private function validateKeyForRequest(string $apiKey, ?string $clientIp): array
+    {
+        if ($this->batchRequest === null) {
+            return [$this->apiKeyManager->validateKey($apiKey, $clientIp), false];
+        }
+
+        $cacheKey = hash('sha256', $apiKey);
+        if (array_key_exists($cacheKey, $this->batchKeyCache)) {
+            $cached = $this->batchKeyCache[$cacheKey];
+            return [$cached === false ? null : $cached, true];
+        }
+
+        $keyData = $this->apiKeyManager->validateKey($apiKey, $clientIp);
+        $this->batchKeyCache[$cacheKey] = $keyData ?? false;
+
+        return [$keyData, false];
     }
 
     private function registerGroupRoutes(): void
@@ -224,6 +329,7 @@ class RestController
 
         register_rest_route(self::NAMESPACE, '/members/(?P<id>\d+)/update', [
             'methods' => 'POST',
+            'allow_batch' => self::ALLOW_BATCH,
             'callback' => [$this->memberController, 'updateMember'],
             'permission_callback' => [$this, 'checkPermission'],
             'args' => $this->memberController->getUpdateMemberArgs(),
@@ -231,6 +337,7 @@ class RestController
 
         register_rest_route(self::NAMESPACE, '/members/create', [
             'methods' => 'POST',
+            'allow_batch' => self::ALLOW_BATCH,
             'callback' => [$this->memberController, 'createMember'],
             'permission_callback' => [$this, 'checkPermission'],
             'args' => $this->memberController->getCreateMemberArgs(),
@@ -238,6 +345,7 @@ class RestController
 
         register_rest_route(self::NAMESPACE, '/members/(?P<id>\d+)/compliance', [
             'methods' => 'POST',
+            'allow_batch' => self::ALLOW_BATCH,
             'callback' => [$this->memberController, 'recordCompliance'],
             'permission_callback' => [$this, 'checkPermission'],
             'args' => $this->memberController->getRecordComplianceArgs(),
@@ -269,6 +377,7 @@ class RestController
 
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/register-group', [
             'methods' => 'POST',
+            'allow_batch' => self::ALLOW_BATCH,
             'callback' => [$this->intergroupMeetingController, 'registerIntergroupMeetingAttendee'],
             'permission_callback' => [$this, 'checkPermission'],
             'args' => $this->intergroupMeetingController->getRegisterAttendeeArgs(),
@@ -276,6 +385,7 @@ class RestController
 
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/unregister-group', [
             'methods' => 'POST',
+            'allow_batch' => self::ALLOW_BATCH,
             'callback' => [$this->intergroupMeetingController, 'unregisterIntergroupMeetingAttendee'],
             'permission_callback' => [$this, 'checkPermission'],
             'args' => $this->intergroupMeetingController->getUnregisterAttendeeArgs(),
@@ -283,6 +393,7 @@ class RestController
 
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/register-officer', [
             'methods' => 'POST',
+            'allow_batch' => self::ALLOW_BATCH,
             'callback' => [$this->intergroupMeetingController, 'registerIntergroupMeetingOfficer'],
             'permission_callback' => [$this, 'checkPermission'],
             'args' => $this->intergroupMeetingController->getRegisterOfficerArgs(),
@@ -290,6 +401,7 @@ class RestController
 
         register_rest_route(self::NAMESPACE, '/intergroup-meetings/(?P<id>\d+)/unregister-officer', [
             'methods' => 'POST',
+            'allow_batch' => self::ALLOW_BATCH,
             'callback' => [$this->intergroupMeetingController, 'unregisterIntergroupMeetingOfficer'],
             'permission_callback' => [$this, 'checkPermission'],
             'args' => $this->intergroupMeetingController->getUnregisterOfficerArgs(),
@@ -402,14 +514,20 @@ class RestController
 
         self::logDebug('API key extracted, validating', $baseContext);
 
-        // Validate API key
-        $keyData = $this->apiKeyManager->validateKey($apiKey, $clientIp);
+        // Validate API key (once per batch — see validateKeyForRequest())
+        [$keyData, $fromBatchCache] = $this->validateKeyForRequest($apiKey, $clientIp);
+        if ($this->batchRequest !== null) {
+            $baseContext['batch'] = true;
+        }
 
         if (!$keyData) {
             // Charge the failure before returning, so a caller working
             // through candidate keys exhausts the budget rather than the
-            // server's CPU.
-            $this->preAuthThrottle->penalise($clientIp);
+            // server's CPU. A cached rejection inside a batch cost nothing
+            // to produce, so it is charged once, not once per sub-request.
+            if (!$fromBatchCache) {
+                $this->preAuthThrottle->penalise($clientIp);
+            }
             self::logWarning('Auth rejected: API key invalid, expired, or IP not allowlisted', $baseContext);
             $this->logFailedRequest($request, 401, $startTime);
             return new WP_Error(
@@ -649,6 +767,22 @@ class RestController
      * Extract API key from request.
      */
     private function extractApiKey(WP_REST_Request $request): ?string
+    {
+        $apiKey = $this->extractApiKeyFromHeaders($request);
+
+        // Inside a batch, a sub-request carries only the headers listed for it
+        // in the batch body. One that names no key of its own is sent with the
+        // credential on the outer HTTP request, which is the one the client
+        // actually authenticated. A sub-request that does name a key is held
+        // to that key, so mixing credentials in one batch still works.
+        if ($apiKey === null && $this->batchRequest !== null && $this->batchRequest !== $request) {
+            $apiKey = $this->extractApiKeyFromHeaders($this->batchRequest);
+        }
+
+        return $apiKey;
+    }
+
+    private function extractApiKeyFromHeaders(WP_REST_Request $request): ?string
     {
         // Try Authorization header first (preferred)
         $authHeader = $request->get_header('Authorization');
