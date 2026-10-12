@@ -85,7 +85,7 @@ All endpoints are served under `/wp-json/integrity/v1/`. Every authenticated res
 |--------|----------|------------|-------------|
 | `GET` | `/members` | `members:read` | List members — `per_page`, `page`, `search`, `home_group_id` |
 | `GET` | `/members/{id}` | `members:read` | Single member |
-| `POST` | `/members/create` | `members:write` | Create a new member (`anonymous_name` required) |
+| `POST` | `/members/create` | `members:write` | Create a new member (`anonymous_name` required; optional `client_reference` makes it safe to repeat — see below) |
 | `POST` | `/members/{id}/update` | `members:write` | Partial update — only supplied fields are changed |
 
 ### Intergroup Meetings
@@ -119,6 +119,16 @@ curl -X POST -H "Authorization: Bearer int_..." \
 ```
 
 The response is `207 Multi-Status` with one entry per request, in order. With `"validation": "require-all-validate"`, nothing runs unless every sub-request passes argument validation.
+
+### Repeating a Create Safely
+
+A batch, or a single create, may be retried after a response that never arrived — by which time the member may already exist. To make `POST /members/create` safe to repeat, send a `client_reference`: a UUID the client generates once, when it first records the new member, and sends unchanged on every attempt.
+
+- The first create with a given reference makes the member and stores the reference against it (`201`).
+- Any later create with the same reference makes nothing and returns the member made the first time, with `"replayed": true` (`200`).
+- Two copies of one create arriving together are serialised: the second waits up to 10 seconds for the first to finish, then gets its member. If the first is still running after that, the second answers `409 create_in_progress` and makes nothing; try again shortly.
+
+A create without `client_reference` behaves exactly as before.
 
 ## Authentication
 
