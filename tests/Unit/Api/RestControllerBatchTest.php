@@ -110,6 +110,16 @@ it('opts every write route into batch v1 and leaves every read route out', funct
     }
 });
 
+// ── Batch size ─────────────────────────────────────────────────────
+it('raises core\'s batch limit to 256', function () {
+    expect(RestController::raiseBatchLimit(25))->toBe(256)
+        ->and(RestController::MAX_BATCH_SIZE)->toBe(256);
+});
+
+it('never lowers a batch limit something else has already raised', function () {
+    expect(RestController::raiseBatchLimit(1000))->toBe(1000);
+});
+
 // ── Batch lifecycle ────────────────────────────────────────────────
 it('passes the response through untouched at both ends of a batch', function () {
     $response = new \stdClass();

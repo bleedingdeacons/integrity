@@ -101,7 +101,7 @@ All endpoints are served under `/wp-json/integrity/v1/`. Every authenticated res
 
 ### Batch Requests
 
-Every `POST` endpoint above can be sent through WordPress core's batch endpoint, `POST /wp-json/batch/v1` (WordPress 5.6+). Core only batches `POST`, `PUT`, `PATCH` and `DELETE`, so the `GET` endpoints are not batchable. The default limit is 25 requests per batch (core's `rest_get_max_batch_size` filter).
+Every `POST` endpoint above can be sent through WordPress core's batch endpoint, `POST /wp-json/batch/v1` (WordPress 5.6+). Core only batches `POST`, `PUT`, `PATCH` and `DELETE`, so the `GET` endpoints are not batchable. Integrity raises core's batch limit from 25 to 256 requests (via the `rest_get_max_batch_size` filter, which is site-wide; a higher limit set elsewhere is kept).
 
 Authenticate the batch itself — sub-requests that carry no key inherit it. A sub-request may name its own key in its `headers`, and is then held to that key. The key is validated once per batch; each sub-request is still checked against its own required permission and counts once against the key's rate limit. Each sub-response carries its own `X-RateLimit-*` headers.
 

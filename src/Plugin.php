@@ -26,6 +26,7 @@ use RuntimeException;
 use Unity\Core\Interfaces\Container;
 
 use function add_action;
+use function add_filter;
 use function is_admin;
 
 /**
@@ -65,6 +66,10 @@ class Plugin
         // Resolved through getContainer() rather than the property because this
         // closure runs later, on rest_api_init — the accessor throws if the
         // plugin was somehow never initialised.
+        // Raise core's batch limit. Added here rather than on rest_api_init:
+        // WP_REST_Server reads it in its constructor, before that action fires.
+        add_filter('rest_get_max_batch_size', [RestController::class, 'raiseBatchLimit']);
+
         add_action('rest_api_init', function () {
             self::getContainer()->get(RestController::class)->register();
             // Diagnostic only; hooks rest_request_before_callbacks.

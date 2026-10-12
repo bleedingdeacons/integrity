@@ -69,6 +69,10 @@ it('registers the rest_api_init action on init', function () {
     $this->assertActionAdded('rest_api_init');
     $this->assertActionAdded('rest_api_init', [Plugin::class, 'addSecurityHeaders']);
 
+    // Added at init, not on rest_api_init: core reads the batch limit in
+    // WP_REST_Server's constructor, before that action fires.
+    $this->assertFilterAdded('rest_get_max_batch_size', [\Integrity\Api\RestController::class, 'raiseBatchLimit']);
+
     expect(Plugin::getContainer())->toBe($this->container);
 });
 

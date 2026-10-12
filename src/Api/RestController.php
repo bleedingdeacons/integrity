@@ -67,6 +67,16 @@ class RestController
     /** Core's batch route, as WP_REST_Request::get_route() reports it. */
     private const BATCH_ROUTE = '/batch/v1';
 
+    /**
+     * Requests allowed in one batch, raised from core's default of 25.
+     *
+     * Cheap to allow because the key is validated once per batch (see
+     * validateKeyForRequest()); every sub-request still counts against the
+     * key's rate limit, so a batch cannot spend more than the key could
+     * spend one request at a time.
+     */
+    public const MAX_BATCH_SIZE = 256;
+
     private ApiKeyManager $apiKeyManager;
     private AuditLogger $auditLogger;
 
@@ -159,6 +169,24 @@ class RestController
     }
 
     // ── Batch Requests ──────────────────────────────────────────────────
+
+    /**
+     * Raise core's batch limit to MAX_BATCH_SIZE.
+     *
+     * The filter is site-wide — core has one batch limit for every route — so
+     * this only ever raises it: a site, or another plugin, that already allows
+     * more keeps its own figure.
+     *
+     * Hooked from Plugin::init(), not register(): core reads the limit in
+     * WP_REST_Server's constructor, which runs before rest_api_init fires, so
+     * a filter added from a rest_api_init callback would never be consulted.
+     *
+     * @param mixed $size The limit so far
+     */
+    public static function raiseBatchLimit($size): int
+    {
+        return max((int) $size, self::MAX_BATCH_SIZE);
+    }
 
     /**
      * Record the outer request when core starts serving `/batch/v1`.
