@@ -408,6 +408,19 @@ class IntergroupMeetingController
                 return $this->errorResponse('group_not_found', 'Group not found', 404);
             }
 
+            // The member a group is registered under must be one of that
+            // group's own, or the attendance record names someone from
+            // another group as its GSR. 0 is "no member", which is allowed.
+            if ($memberId > 0) {
+                $member = $container->get(MemberRepository::class)->findById($memberId);
+
+                if (!$member || $member->getHomeGroup() !== $groupId) {
+                    $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'group_id' => $groupId, 'member_id' => $memberId], 422, $startTime);
+
+                    return $this->errorResponse('member_not_in_group', 'Member is not a member of this group', 422);
+                }
+            }
+
             $meetingGroup = $group->getTitle();
 
             // Resolve all GSR names for this group using the group view
@@ -431,6 +444,19 @@ class IntergroupMeetingController
 
             // Check if group is already registered
             if ($attendanceRepo->existsForMeetingAndGroup($meetingId, $groupId)) {
+                // A record without the relationship is what a registration
+                // that failed half-way used to leave. The caller takes 409 as
+                // done, so make it so before saying it.
+                if (!$intergroupMeeting->hasGroupAttendee($groupId)) {
+                    $intergroupMeeting->addGroupAttendee($groupId);
+
+                    if (!$intergroupMeetingRepo->save($intergroupMeeting)) {
+                        $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'group_id' => $groupId], 500, $startTime);
+
+                        return $this->errorResponse('save_failed', 'Failed to register attendee', 500);
+                    }
+                }
+
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'group_id' => $groupId], 409, $startTime);
 
                 return $this->errorResponse('already_registered', 'Group is already registered for this intergroup meeting', 409);
@@ -464,12 +490,19 @@ class IntergroupMeetingController
                 return $this->errorResponse('attendance_save_failed', 'Failed to save attendance record', 500);
             }
 
-            // Add the group to the ACF relationship field (post meta)
-            $intergroupMeeting->addGroupAttendee($groupId);
-
-            $saved = $intergroupMeetingRepo->save($intergroupMeeting);
+            // Add the group to the ACF relationship field (post meta). If that
+            // fails, the record goes too: left behind, it would answer the
+            // retry with 409, which the caller takes as registered.
+            try {
+                $intergroupMeeting->addGroupAttendee($groupId);
+                $saved = $intergroupMeetingRepo->save($intergroupMeeting);
+            } catch (\Throwable $e) {
+                $attendanceRepo->deleteByIntergroupMeetingAndGroup($meetingId, $groupId);
+                throw $e;
+            }
 
             if (!$saved) {
+                $attendanceRepo->deleteByIntergroupMeetingAndGroup($meetingId, $groupId);
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'group_id' => $groupId], 500, $startTime);
 
                 return $this->errorResponse('save_failed', 'Failed to register attendee', 500);
@@ -618,6 +651,17 @@ class IntergroupMeetingController
 
             // Check if officer's position is already registered
             if ($attendanceRepo->existsForMeetingAndOfficer($meetingId, $positionId)) {
+                // As for groups: mend what a half-failed registration left.
+                if (!$intergroupMeeting->hasOfficerAttendee($positionId)) {
+                    $intergroupMeeting->addOfficerAttendee($positionId);
+
+                    if (!$intergroupMeetingRepo->save($intergroupMeeting)) {
+                        $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'officer_id' => $officerId], 500, $startTime);
+
+                        return $this->errorResponse('save_failed', 'Failed to register officer', 500);
+                    }
+                }
+
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'officer_id' => $officerId], 409, $startTime);
 
                 return $this->errorResponse('already_registered', 'Officer is already registered for this intergroup meeting', 409);
@@ -649,12 +693,18 @@ class IntergroupMeetingController
                 return $this->errorResponse('attendance_save_failed', 'Failed to save officer attendance record', 500);
             }
 
-            // Add the officer's position to the ACF relationship field (post meta)
-            $intergroupMeeting->addOfficerAttendee($positionId);
-
-            $saved = $intergroupMeetingRepo->save($intergroupMeeting);
+            // Add the officer's position to the ACF relationship field (post
+            // meta), and take the record back out if that fails, as for groups.
+            try {
+                $intergroupMeeting->addOfficerAttendee($positionId);
+                $saved = $intergroupMeetingRepo->save($intergroupMeeting);
+            } catch (\Throwable $e) {
+                $attendanceRepo->deleteByIntergroupMeetingAndOfficer($meetingId, $positionId);
+                throw $e;
+            }
 
             if (!$saved) {
+                $attendanceRepo->deleteByIntergroupMeetingAndOfficer($meetingId, $positionId);
                 $this->logRequest($keyData['api_key_id'], $request, ['id' => $meetingId, 'officer_id' => $officerId], 500, $startTime);
 
                 return $this->errorResponse('save_failed', 'Failed to register officer', 500);

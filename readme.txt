@@ -190,6 +190,7 @@ All API responses include:
 | `not_registered` | 404 | Group/officer not registered for meeting |
 | `invalid_home_group` | 422 | Referenced home group does not exist |
 | `invalid_intergroup_position` | 422 | Referenced position does not exist |
+| `member_not_in_group` | 422 | A group registration's `member_id` is not a member of that group |
 | `already_registered` | 409 | Group/officer already registered for meeting |
 | `create_failed` | 500 | Failed to create a new member post |
 | `save_failed` | 500 | Failed to save data |
